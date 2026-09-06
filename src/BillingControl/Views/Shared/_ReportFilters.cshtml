@@ -1,0 +1,36 @@
+@model ReportFilter
+<form method="get" class="report-filters">
+<div>
+<label for="CustomerId">Customer</label>
+<select id="CustomerId" name="CustomerId" asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-select">
+<option value="">All customers</option>
+</select>
+</div>
+<div>
+<label for="ServiceId">Service</label>
+<select asp-for="ServiceId" asp-items="ViewBag.Services" class="form-select">
+<option value="">All services</option>
+</select>
+</div>
+<div>
+<label for="WorkerId">Worker</label>
+<select asp-for="WorkerId" asp-items="ViewBag.Workers" class="form-select">
+<option value="">All workers</option>
+</select>
+</div>
+<div>
+<label for="From">Service period from</label>
+<input asp-for="From" type="date" class="form-control" />
+</div>
+<div>
+<label for="To">Through</label>
+<input asp-for="To" type="date" class="form-control" />
+</div>
+<div>
+<label for="Status">Status</label>
+<select asp-for="Status" class="form-select">
+<option value="">All statuses</option>@foreach(var s in Enum.GetValues<BillingStatus>()) { <option value="@s">@Finance.Label(s)</option> }</select>
+</div>
+<button class="btn btn-primary">Apply</button>
+<a class="btn btn-outline-secondary" href="@Context.Request.Path">Reset</a>
+</form>

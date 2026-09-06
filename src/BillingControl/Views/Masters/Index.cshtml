@@ -1,0 +1,38 @@
+@model List<Master>
+@{ string kind = ViewBag.Kind; ViewData["Title"] = kind; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">DIRECTORY</p>
+<h1>@kind</h1>
+<p>Maintain the people and services behind your engagements.</p>
+</div>
+<a class="btn btn-primary" asp-action="Edit" asp-route-kind="@kind">+ Add record</a>
+</div>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Name</th>
+<th>Status</th>
+<th>Details</th>
+<th>Notes</th>
+<th data-type="date">Updated</th>
+<th data-nosort>Action</th>
+</tr>
+</thead>
+<tbody>
+@foreach (var m in Model) { <tr>
+<td class="fw-semibold">@m.Name</td>
+<td>
+<span class="badge @(m.IsActive ? "status-active" : "status-muted")">@(m.IsActive ? "Active" : "Inactive")</span>
+</td>
+<td>@(m is Customer c ? c.Email : m is Worker w ? Finance.Label(w.Type) : "—")</td>
+<td>@m.Notes</td>
+<td>@m.UpdatedAt.ToString("yyyy-MM-dd")</td>
+<td>
+<a asp-action="Edit" asp-route-kind="@kind" asp-route-id="@m.Id">Edit</a>
+</td>
+</tr> }
+</tbody>
+</table>
+</div>

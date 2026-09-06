@@ -1,0 +1,22 @@
+@model UserForm
+@{ ViewData["Title"]="New user"; }<a class="back-link" href="/Users">← User management</a>
+<h1>New user</h1>
+<form asp-action="Create" method="post" class="panel form-panel">
+<div asp-validation-summary="All" class="text-danger">
+</div>
+<label asp-for="Email" class="form-label">
+</label>
+<input asp-for="Email" class="form-control" required />
+<label asp-for="Password" class="form-label">Initial password</label>
+<input asp-for="Password" class="form-control" autocomplete="new-password" minlength="12" required />
+<p class="hint">At least 12 characters, including uppercase, lowercase, a number and a symbol. Share securely with the user.</p>
+<label asp-for="Role" class="form-label">
+</label>
+<select asp-for="Role" class="form-select">
+<option>User</option>
+<option>Admin</option>
+</select>
+<div class="form-actions">
+<button class="btn btn-primary">Create user</button>
+</div>
+</form>

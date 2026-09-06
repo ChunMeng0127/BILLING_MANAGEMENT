@@ -1,0 +1,47 @@
+@model List<WorkerPayment>
+@{ ViewData["Title"]="Worker payments"; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">PAYMENT REGISTER</p>
+<h1>Worker payments</h1>
+<p>Actual payments and their assignment allocations.</p>
+</div>
+<a class="btn btn-primary" href="/Payments/Create">+ Record payment</a>
+</div>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Payment</th>
+<th data-type="date">Date</th>
+<th>Worker</th>
+<th>Reference</th>
+<th data-type="amount">Amount (RM)</th>
+<th>Allocations</th>
+<th>Status</th>
+<th data-nosort>Action</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var p in Model) { <tr>
+<td>P-@p.Id.ToString("D5")</td>
+<td>@p.PaymentDate.ToString("yyyy-MM-dd")</td>
+<td>@p.Worker.Name</td>
+<td>@p.Reference</td>
+<td class="money">@p.Amount.ToString("N2")</td>
+<td>@foreach(var a in p.Allocations) { <div>
+<a href="/Work/Details/@a.WorkerAssignment.WorkItemId">A-@a.WorkerAssignmentId · @a.WorkerAssignment.WorkItem.BillingRecord.CustomerName</a> : RM @a.Amount.ToString("N2")</div> }</td>
+<td>@(p.IsCancelled ? "Cancelled: "+p.CancellationReason : "Recorded")</td>
+<td>@if(User.IsInRole("Admin") && !p.IsCancelled) { <details>
+<summary>Cancel payment</summary>
+<form asp-controller="Billing" asp-action="Cancel" method="post">
+<input type="hidden" name="kind" value="payment" />
+<input type="hidden" name="id" value="@p.Id" />
+<input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
+<button class="btn btn-outline-danger btn-sm">Cancel payment</button>
+</form>
+</details> }</td>
+</tr> }
+</tbody>
+</table>
+</div>

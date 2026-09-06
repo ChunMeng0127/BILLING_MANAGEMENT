@@ -1,0 +1,9 @@
+@model ReportModel
+<div class="metrics">
+@foreach (var m in new[] { ("Customer billing", Model.Total, "All active service periods"), ("Accounting firm share", Model.Share(ShareKind.Firm), "Historical allocation"), ("Manager share", Model.Share(ShareKind.Manager), "Historical allocation"), ("LCM MGT gross share", Model.Share(ShareKind.Lcm), "Before worker costs"), ("Worker entitlement", Model.WorkerCost, "Agreed assignment costs"), ("LCM MGT retained", Model.Share(ShareKind.Lcm)-Model.WorkerCost, "Gross share less entitlement"), ("Billing outstanding", Model.BillingOutstanding, "Posted bills less receipts"), ("Worker payments due", Model.WorkerCost-Model.WorkerPaid, "Entitlements less payments") }) { <div class="metric">
+<span>@m.Item1</span>
+<strong>
+<small>RM</small> @m.Item2.ToString("N2")</strong>
+<p>@m.Item3</p>
+</div> }
+</div>

@@ -1,0 +1,83 @@
+@model EngagementForm
+@{ ViewData["Title"] = Model.Id == 0 ? "New engagement" : "Edit engagement"; }
+<a class="back-link" href="/Engagements">← Engagements</a>
+<h1>@ViewData["Title"]</h1>
+<p class="text-muted">Changes apply to future billing. Existing snapshots are preserved.</p>
+<form method="post" asp-action="Edit" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger">
+</div>
+<input asp-for="Id" type="hidden" />
+<input asp-for="Version" type="hidden" />
+<div class="form-grid">
+<div>
+<label asp-for="CustomerId" class="form-label">Customer</label>
+<select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-select" required>
+<option value="">Select customer</option>
+</select>
+</div>
+<div>
+<label asp-for="ServiceId" class="form-label">Service</label>
+<select asp-for="ServiceId" asp-items="ViewBag.Services" class="form-select" required>
+<option value="">Select service</option>
+</select>
+</div>
+<div>
+<label asp-for="BusinessPartyId" class="form-label">Accounting firm</label>
+<select asp-for="BusinessPartyId" asp-items="ViewBag.Firms" class="form-select" required>
+<option value="">Select firm</option>
+</select>
+</div>
+<div>
+<label asp-for="ManagerId" class="form-label">Manager</label>
+<select asp-for="ManagerId" asp-items="ViewBag.Managers" class="form-select" required>
+<option value="">Select manager</option>
+</select>
+</div>
+<div>
+<label asp-for="StartDate" class="form-label">Start date</label>
+<input asp-for="StartDate" class="form-control" required />
+</div>
+<div>
+<label asp-for="EndDate" class="form-label">End date</label>
+<input asp-for="EndDate" class="form-control" />
+</div>
+<div>
+<label asp-for="BillingAmount" class="form-label">Billing amount (RM)</label>
+<input asp-for="BillingAmount" type="number" step="0.01" min="0.01" class="form-control" required />
+</div>
+<div>
+<label asp-for="Frequency" class="form-label">Billing frequency</label>
+<select asp-for="Frequency" class="form-select">@foreach (var f in Enum.GetValues<Frequency>()) { <option value="@f">@Finance.Label(f)</option> }</select>
+</div>
+</div>
+<h2 class="section-title">Revenue sharing</h2>
+<div class="form-grid thirds">@foreach (var key in new[] { ("FirmPercent", "Accounting firm %", Model.FirmPercent), ("ManagerPercent", "Manager %", Model.ManagerPercent), ("LcmPercent", "LCM MGT %", Model.LcmPercent) }) { <div>
+<label class="form-label" for="@key.Item1">@key.Item2</label>
+<input id="@key.Item1" name="@key.Item1" value="@key.Item3" type="number" step="0.0001" min="0" max="100" class="form-control" required />
+</div> }</div>
+<p class="hint">The three percentages must total exactly 100%.</p>
+<div class="form-grid">
+<div>
+<label asp-for="NextPeriodStart" class="form-label">Next service period start</label>
+<input asp-for="NextPeriodStart" class="form-control" />
+<p class="hint">New schedules default to the start date. Blank pauses generation for an existing schedule. Ad-Hoc uses manual periods.</p>
+</div>
+<div>
+<label asp-for="AnchorDay" class="form-label">Recurring day of month</label>
+<input asp-for="AnchorDay" type="number" min="1" max="31" class="form-control" />
+<p class="hint">Use 31 for month-end schedules; shorter months adjust automatically.</p>
+</div>
+</div>
+<label asp-for="Status" class="form-label">
+</label>
+<select asp-for="Status" asp-items="Html.GetEnumSelectList<EngagementStatus>()" class="form-select">
+</select>
+<label asp-for="Notes" class="form-label">
+</label>
+<textarea asp-for="Notes" rows="3" class="form-control">
+</textarea>
+<div class="form-actions">
+<button class="btn btn-primary">Save engagement</button>
+<a class="btn btn-outline-secondary" href="/Engagements">Cancel</a>
+</div>
+</form>

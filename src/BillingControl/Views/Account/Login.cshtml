@@ -1,0 +1,23 @@
+@model LoginForm
+@{ ViewData["Title"] = "Sign in"; }
+<div class="login-card">
+<div class="brand-mark">bc</div>
+<p class="eyebrow">LCM MGT WORKSPACE</p>
+<h1>Welcome back.</h1>
+<p class="text-muted">Sign in to manage your work and billing.</p>
+<form method="post" asp-action="Login">
+<div asp-validation-summary="All" class="text-danger" role="alert">
+</div>
+<input asp-for="ReturnUrl" type="hidden" />
+<label asp-for="Email" class="form-label">
+</label>
+<input asp-for="Email" class="form-control" autocomplete="username" required />
+<label asp-for="Password" class="form-label">
+</label>
+<input asp-for="Password" class="form-control" autocomplete="current-password" required />
+<label class="check-line">
+<input asp-for="RememberMe" /> Remember me</label>
+<button class="btn btn-primary w-100">Sign in</button>
+</form>
+<p class="login-note">Need access? Contact your workspace administrator.</p>
+</div>

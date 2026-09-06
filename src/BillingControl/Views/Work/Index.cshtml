@@ -1,0 +1,40 @@
+@model List<WorkItem>
+@{ ViewData["Title"]="Work items"; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">DELIVERY</p>
+<h1>Work items</h1>
+<p>Accounting work by customer, service and period. Created with each billing period.</p>
+</div>
+<a class="btn btn-primary" href="/Billing/Schedule">+ Plan work period</a>
+</div>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Work item</th>
+<th>Customer</th>
+<th>Service</th>
+<th data-type="date">Period start</th>
+<th data-type="date">Period end</th>
+<th>Work status</th>
+<th>Billing status</th>
+<th>Workers</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var w in Model) { <tr>
+<td>
+<a href="/Work/Details/@w.Id">W-@w.Id.ToString("D5")</a>
+</td>
+<td>@w.BillingRecord.CustomerName</td>
+<td>@w.BillingRecord.ServiceName</td>
+<td>@w.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</td>
+<td>@w.BillingRecord.PeriodEnd.ToString("yyyy-MM-dd")</td>
+<td>@Finance.Label(w.Status)</td>
+<td>@Finance.Label(w.BillingRecord.Status)</td>
+<td>@string.Join(", ",w.Assignments.Where(x=>!x.IsCancelled).Select(x=>x.WorkerName))</td>
+</tr> }
+</tbody>
+</table>
+</div>

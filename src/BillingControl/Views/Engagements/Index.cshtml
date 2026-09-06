@@ -1,0 +1,44 @@
+@model List<Engagement>
+@{ ViewData["Title"] = "Engagements"; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">CUSTOMER SERVICES</p>
+<h1>Engagements</h1>
+<p>Agreed fees, service schedules and revenue-sharing terms.</p>
+</div>
+<a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a>
+</div>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Customer</th>
+<th>Service</th>
+<th>Frequency</th>
+<th data-type="amount">Fee (RM)</th>
+<th>Firm / Manager / LCM %</th>
+<th>Status</th>
+<th data-type="date">Start</th>
+<th data-type="date">End</th>
+<th data-nosort>Action</th>
+</tr>
+</thead>
+<tbody>
+@foreach (var e in Model) { <tr>
+<td class="fw-semibold">@e.Customer.Name</td>
+<td>@e.Service.Name</td>
+<td>@Finance.Label(e.Schedule.Frequency)</td>
+<td class="money">@e.BillingAmount.ToString("N2")</td>
+<td>@e.FirmPercent.ToString("0.####") / @e.ManagerPercent.ToString("0.####") / @e.LcmPercent.ToString("0.####")</td>
+<td>
+<span class="badge status-active">@e.Status</span>
+</td>
+<td>@e.StartDate.ToString("yyyy-MM-dd")</td>
+<td>@e.EndDate?.ToString("yyyy-MM-dd")</td>
+<td>
+<a href="/Engagements/Edit/@e.Id">Edit</a>
+</td>
+</tr> }
+</tbody>
+</table>
+</div>

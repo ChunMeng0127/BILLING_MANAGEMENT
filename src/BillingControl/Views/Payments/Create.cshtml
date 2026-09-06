@@ -1,0 +1,57 @@
+@model List<WorkerAssignment>
+@{ ViewData["Title"]="New worker payment"; int? workerId=ViewBag.WorkerId; }
+<a class="back-link" href="/Payments">← Worker payments</a>
+<h1>New worker payment</h1>
+<p class="text-muted">Allocate one payment across one or more assignments for the same worker.</p>
+<form method="get" class="panel form-panel">
+<label for="worker">Worker</label>
+<div class="inline-form">
+<select id="worker" name="workerId" class="form-select" required>
+<option value="">Select worker</option>@foreach(Worker w in ViewBag.Workers) { <option value="@w.Id" selected="@(workerId==w.Id)">@w.Name</option> }</select>
+<button class="btn btn-outline-secondary">Load assignments</button>
+</div>
+</form>
+@if(workerId!=null) { <form asp-action="Create" method="post" class="panel form-panel wide">
+<input type="hidden" name="workerId" value="@workerId" />
+<input type="hidden" name="requestId" value="@Guid.NewGuid()" />
+<div class="form-grid">
+<div>
+<label class="form-label">Payment date<input name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required class="form-control" />
+</label>
+</div>
+<div>
+<label class="form-label">Bank / payment reference<input name="reference" maxlength="160" required class="form-control" />
+</label>
+</div>
+</div>
+<h2 class="section-title">Allocate payment</h2>
+<p class="hint">Enter only the amount paid now. Leave other assignments at zero. The payment total is calculated on the server.</p>
+<div class="table-scroll">
+<table class="table">
+<thead>
+<tr>
+<th>Assignment / customer / period</th>
+<th>Entitlement (RM)</th>
+<th>Outstanding (RM)</th>
+<th>Pay now (RM)</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var a in Model) { var due=a.Entitlement-a.Allocations.Where(x=>!x.WorkerPayment.IsCancelled).Sum(x=>x.Amount); if(due>0) { <tr>
+<td>A-@a.Id · @a.WorkItem.BillingRecord.CustomerName<br/>
+<small>@a.WorkItem.BillingRecord.PeriodStart — @a.WorkItem.BillingRecord.PeriodEnd</small>
+</td>
+<td>@a.Entitlement.ToString("N2")</td>
+<td>@due.ToString("N2")</td>
+<td>
+<input name="amounts[@a.Id]" aria-label="Payment for assignment @a.Id" type="number" value="0" min="0" max="@due" step="0.01" class="form-control" />
+</td>
+</tr> } }
+</tbody>
+</table>
+</div>
+<div class="form-actions">
+<button class="btn btn-primary">Record & allocate payment</button>
+<a class="btn btn-outline-secondary" href="/Payments">Cancel</a>
+</div>
+</form> }

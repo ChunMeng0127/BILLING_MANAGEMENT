@@ -1,0 +1,46 @@
+@model WorkItem
+@{ ViewData["Title"]="W-"+Model.Id.ToString("D5"); var gross=Model.BillingRecord.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; }
+<a class="back-link" href="/Work">← Work items</a>
+<div class="page-heading">
+<div>
+<p class="eyebrow">@ViewData["Title"]</p>
+<h1>@Model.BillingRecord.CustomerName</h1>
+<p>@Model.BillingRecord.ServiceName · @Model.BillingRecord.PeriodStart.ToString("dd MMM yyyy") — @Model.BillingRecord.PeriodEnd.ToString("dd MMM yyyy")</p>
+</div>
+<a class="btn btn-outline-secondary" href="/Billing/Details/@Model.BillingRecordId">View billing →</a>
+</div>
+@if(Model.BillingRecord.Status!=BillingStatus.Cancelled) {
+<form method="post" asp-action="Update" class="panel form-panel wide">
+<h2>Work progress</h2>
+<input type="hidden" name="id" value="@Model.Id" />
+<input type="hidden" name="version" value="@Model.Version" />
+<label class="form-label">Status<select name="status" class="form-select">@foreach(var s in Enum.GetValues<WorkStatus>()) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select>
+</label>
+<label class="form-label" for="notes">Work notes</label>
+<textarea id="notes" name="notes" class="form-control" rows="3" maxlength="2000">@Model.Notes</textarea>
+<div class="form-actions">
+<button class="btn btn-primary">Save progress</button>
+</div>
+</form>
+<section class="panel form-panel wide">
+<h2>Assign worker</h2>
+<p>LCM gross share: <strong>RM @gross.ToString("N2")</strong> · Remaining percentage: <strong>@((100-Model.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Percent)).ToString("0.####"))%</strong>
+</p>
+<form method="post" asp-action="Assign" class="inline-form">
+<input type="hidden" name="id" value="@Model.Id" />
+<label>Worker<select name="workerId" required class="form-select">
+<option value="">Select worker</option>@foreach(Worker w in ViewBag.Workers) { <option value="@w.Id">@w.Name</option> }</select>
+</label>
+<label>Share of LCM gross (%)<input name="percent" type="number" min="0.0001" max="100" step="0.0001" value="70" required class="form-control" list="worker-rates" />
+</label>
+<datalist id="worker-rates">
+<option value="40"/>
+<option value="50"/>
+<option value="70"/>
+<option value="80"/>
+</datalist>
+<button class="btn btn-primary">Assign worker</button>
+</form>
+<p class="hint">Combined active assignments cannot exceed 100% of LCM's share. Entitlements are saved as historical amounts.</p>
+</section> }
+<partial name="_Assignments" model="Model.Assignments" />

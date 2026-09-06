@@ -1,0 +1,15 @@
+name: billing-control-dev
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: billing_dev
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - dev_postgres:/var/lib/postgresql/data
+volumes:
+  dev_postgres:

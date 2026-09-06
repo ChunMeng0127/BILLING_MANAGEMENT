@@ -1,0 +1,51 @@
+@model ReportModel
+@{ ViewData["Title"] = "Reports"; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">FINANCIAL VISIBILITY</p>
+<h1>Revenue & worker costs</h1>
+<p>Historical billing allocations, entitlements and balances.</p>
+</div>
+<a class="btn btn-outline-secondary" href="/Home/Export@Context.Request.QueryString">Export CSV</a>
+</div>
+<partial name="_ReportFilters" model="Model.Filter" />
+<partial name="_Metrics" model="Model" />
+<p class="hint">Date filters include overlapping service periods. Worker filters select whole billing records; totals include all assignments on those records. Cancelled rows remain visible for audit but do not contribute to totals.</p>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Customer</th>
+<th>Service</th>
+<th data-type="date">Period start</th>
+<th data-type="date">Period end</th>
+<th>Status</th>
+<th data-type="amount">Billing (RM)</th>
+<th data-type="amount">Firm (RM)</th>
+<th data-type="amount">Manager (RM)</th>
+<th data-type="amount">LCM gross (RM)</th>
+<th data-type="amount">Worker cost (RM)</th>
+<th data-type="amount">Retained (RM)</th>
+<th data-nosort>Record</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var b in Model.Bills) { var gross=b.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; var cost=b.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement); <tr>
+<td>@b.CustomerName</td>
+<td>@b.ServiceName</td>
+<td>@b.PeriodStart.ToString("yyyy-MM-dd")</td>
+<td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td>
+<td>@Finance.Label(b.Status)</td>
+<td class="money">@b.Amount.ToString("N2")</td>
+<td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Firm).Amount.ToString("N2")</td>
+<td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Manager).Amount.ToString("N2")</td>
+<td class="money">@gross.ToString("N2")</td>
+<td class="money">@cost.ToString("N2")</td>
+<td class="money">@((gross-cost).ToString("N2"))</td>
+<td>
+<a href="/Billing/Details/@b.Id">Open</a>
+</td>
+</tr> }
+</tbody>
+</table>
+</div>

@@ -1,0 +1,60 @@
+@model List<BillingRecord>
+@{ ViewData["Title"] = "Billing records"; ReportFilter f = ViewBag.Filter; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">BILLING REGISTER</p>
+<h1>Billing records</h1>
+<p>Service periods, invoice dates and customer balances.</p>
+</div>
+<a href="/Billing/Schedule" class="btn btn-primary">+ Generate billing</a>
+</div>
+<form class="report-filters" method="get">
+<div>
+<label for="from">Service period from</label>
+<input id="from" name="From" type="date" value="@f.From?.ToString("yyyy-MM-dd")" class="form-control" />
+</div>
+<div>
+<label for="to">Through</label>
+<input id="to" name="To" type="date" value="@f.To?.ToString("yyyy-MM-dd")" class="form-control" />
+</div>
+<button class="btn btn-outline-secondary">Apply dates</button>
+<a href="/Billing">Reset</a>
+</form>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Record</th>
+<th>Customer</th>
+<th>Service</th>
+<th data-type="date">Period start</th>
+<th data-type="date">Period end</th>
+<th data-type="date">Billing date</th>
+<th>Invoice</th>
+<th>Status</th>
+<th data-type="amount">Amount (RM)</th>
+<th data-type="amount">Received (RM)</th>
+<th data-type="amount">Outstanding (RM)</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var b in Model) { var paid=b.Receipts.Where(x=>!x.IsCancelled).Sum(x=>x.Amount); <tr>
+<td>
+<a href="/Billing/Details/@b.Id">B-@b.Id.ToString("D5")</a>
+</td>
+<td class="fw-semibold">@b.CustomerName</td>
+<td>@b.ServiceName</td>
+<td>@b.PeriodStart.ToString("yyyy-MM-dd")</td>
+<td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td>
+<td>@b.BillingDate?.ToString("yyyy-MM-dd")</td>
+<td>@b.InvoiceNumber</td>
+<td>
+<span class="badge status-@b.Status.ToString().ToLowerInvariant()">@Finance.Label(b.Status)</span>
+</td>
+<td class="money">@b.Amount.ToString("N2")</td>
+<td class="money">@paid.ToString("N2")</td>
+<td class="money">@((b.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid or BillingStatus.Paid ? b.Amount-paid : 0).ToString("N2"))</td>
+</tr> }
+</tbody>
+</table>
+</div>

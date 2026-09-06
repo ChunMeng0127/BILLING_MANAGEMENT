@@ -1,0 +1,52 @@
+@model List<AppUser>
+@{ ViewData["Title"]="User management"; Dictionary<string,string> roles=ViewBag.Roles; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">ADMINISTRATION</p>
+<h1>User management</h1>
+<p>Control workspace access. Users can manage operations; only administrators manage access and cancellations.</p>
+</div>
+<a class="btn btn-primary" href="/Users/Create">+ New user</a>
+</div>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Email</th>
+<th>Role</th>
+<th>Status</th>
+<th data-nosort>Access</th>
+<th data-nosort>Password reset</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var u in Model) { <tr>
+<td>@u.Email</td>
+<td>@roles[u.Id]</td>
+<td>@(u.IsActive ? "Active" : "Disabled") @(u.LockoutEnd > DateTimeOffset.UtcNow ? "· Temporarily locked" : "")</td>
+<td>
+<form asp-action="Update" method="post" class="inline-form">
+<input type="hidden" name="id" value="@u.Id" />
+<select name="role" aria-label="Role for @u.Email" class="form-select form-select-sm">
+<option selected="@(roles[u.Id]=="User")">User</option>
+<option selected="@(roles[u.Id]=="Admin")">Admin</option>
+</select>
+<label>
+<input type="checkbox" name="active" value="true" checked="@u.IsActive" /> Active</label>
+<button class="btn btn-outline-secondary btn-sm">Save access</button>
+</form>
+</td>
+<td>
+<details>
+<summary>Reset password</summary>
+<form asp-action="ResetPassword" method="post">
+<input type="hidden" name="id" value="@u.Id" />
+<input type="password" name="password" aria-label="New password for @u.Email" autocomplete="new-password" minlength="12" required class="form-control form-control-sm" />
+<button class="btn btn-outline-secondary btn-sm">Reset & unlock</button>
+</form>
+</details>
+</td>
+</tr> }
+</tbody>
+</table>
+</div>

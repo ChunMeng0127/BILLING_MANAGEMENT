@@ -1,0 +1,47 @@
+@model List<WorkerAssignment>
+<div class="panel">
+<table class="table data-grid">
+<thead>
+<tr>
+<th>Assignment</th>
+<th>Worker</th>
+<th>Customer</th>
+<th>Service</th>
+<th data-type="date">Period start</th>
+<th data-type="amount">Share %</th>
+<th data-type="amount">LCM gross (RM)</th>
+<th data-type="amount">Entitlement (RM)</th>
+<th data-type="amount">Paid (RM)</th>
+<th data-type="amount">Due (RM)</th>
+<th>Status</th>
+<th data-nosort>Action</th>
+</tr>
+</thead>
+<tbody>
+@foreach(var a in Model) { var paid=a.Allocations.Where(x=>!x.WorkerPayment.IsCancelled).Sum(x=>x.Amount); <tr>
+<td>
+<a href="/Work/Details/@a.WorkItemId">A-@a.Id.ToString("D5")</a>
+</td>
+<td>@a.WorkerName</td>
+<td>@a.WorkItem.BillingRecord.CustomerName</td>
+<td>@a.WorkItem.BillingRecord.ServiceName</td>
+<td>@a.WorkItem.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</td>
+<td>@a.Percent.ToString("0.####")</td>
+<td class="money">@a.LcmGrossSnapshot.ToString("N2")</td>
+<td class="money">@a.Entitlement.ToString("N2")</td>
+<td class="money">@paid.ToString("N2")</td>
+<td class="money">@((a.IsCancelled?0:a.Entitlement-paid).ToString("N2"))</td>
+<td>@(a.IsCancelled?"Cancelled: "+a.CancellationReason:"Active")</td>
+<td>@if(!a.IsCancelled) { <a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a> @if(User.IsInRole("Admin")) { <details>
+<summary>Cancel</summary>
+<form asp-controller="Billing" asp-action="Cancel" method="post">
+<input type="hidden" name="kind" value="assignment" />
+<input type="hidden" name="id" value="@a.Id" />
+<input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
+<button class="btn btn-outline-danger btn-sm">Cancel assignment</button>
+</form>
+</details> } }</td>
+</tr> }
+</tbody>
+</table>
+</div>

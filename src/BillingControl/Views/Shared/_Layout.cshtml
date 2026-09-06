@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>@ViewData["Title"] · Billing Control</title>
+<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+@if (User.Identity?.IsAuthenticated == true) {
+<aside class="sidebar">
+<a class="brand" href="/">
+<span class="brand-mark">bc</span>
+<span>Billing Control<small>LCM MGT · Workspace</small>
+</span>
+</a>
+<div class="nav-label">WORKSPACE</div>
+<nav>
+@foreach (var link in new[] { ("/", "Overview"), ("/Billing/Schedule", "Upcoming billing"), ("/Billing", "Billing records"), ("/Work", "Work items"), ("/Work/Assignments", "Worker assignments"), ("/Payments", "Worker payments"), ("/Home/Reports", "Reports") }) { <a class="@(Context.Request.Path.Value == link.Item1 ? "active" : "")" href="@link.Item1">@link.Item2</a> }
+</nav>
+<div class="nav-label">DIRECTORY</div>
+<nav>
+@foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { <a href="/Masters?kind=@kind">@(kind == "Firms" ? "Accounting firms" : kind)</a> }
+<a href="/Engagements">Engagements</a>
+@if (User.IsInRole("Admin")) { <a href="/Users">User management</a> }
+</nav>
+<div class="sidebar-foot">
+<span class="live-dot">
+</span> Internal accounting workspace</div>
+</aside>
+<div class="app-shell">
+<header class="topbar">
+<span>Accounting operations <span class="text-muted">/ @ViewData["Title"]</span>
+</span>
+<div class="account">
+<a href="/Account/Password">@User.Identity.Name</a>
+<form asp-controller="Account" asp-action="Logout" method="post">
+<button class="btn btn-sm btn-outline-secondary">Sign out</button>
+</form>
+</div>
+</header>
+<main>
+@if (TempData["Success"] is string success) { <div class="alert alert-success" role="status">@success</div> }
+@if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
+@RenderBody()</main>
+<footer>Billing Control <span>MYR · Financial records retain their original snapshots</span>
+</footer>
+</div>
+} else { <main class="login-shell">@RenderBody()</main> }
+<script src="~/js/site.js" asp-append-version="true">
+</script>@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

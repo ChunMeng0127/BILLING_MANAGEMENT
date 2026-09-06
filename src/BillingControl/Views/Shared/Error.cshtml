@@ -1,0 +1,9 @@
+@model ErrorViewModel
+@{ ViewData["Title"] = "Request failed"; }
+<h1>We could not complete your request.</h1>
+<p>Return to the overview and try again. If the problem continues, give your administrator the reference below.</p>
+@if (Model.ShowRequestId)
+{
+    <p><strong>Request reference:</strong> <code>@Model.RequestId</code></p>
+}
+<a class="btn btn-primary" href="/">Return to overview</a>

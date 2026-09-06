@@ -1,0 +1,10 @@
+@model List<WorkerAssignment>
+@{ ViewData["Title"]="Worker assignments"; }<div class="page-heading">
+<div>
+<p class="eyebrow">TEAM ENTITLEMENTS</p>
+<h1>Worker assignments</h1>
+<p>Agreed worker shares and unpaid balances, independent of actual payments.</p>
+</div>
+<a class="btn btn-primary" href="/Work">Assign from work items</a>
+</div>
+<partial name="_Assignments" model="Model" />

@@ -1,0 +1,47 @@
+@model ReportModel
+@{ ViewData["Title"] = "Overview"; }
+<div class="page-heading">
+<div>
+<p class="eyebrow">YOUR WORKSPACE AT A GLANCE</p>
+<h1>Business overview</h1>
+<p>Keep your accounting work, billing and team payments in view.</p>
+</div>
+<a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a>
+</div>
+<partial name="_ReportFilters" model="Model.Filter" />
+<partial name="_Metrics" model="Model" />
+<div class="dashboard-grid">
+<section class="panel">
+<div class="panel-heading">
+<div>
+<h2>Upcoming billing</h2>
+<p>Next scheduled service periods · all engagements</p>
+</div>
+<a href="/Billing/Schedule">View schedule →</a>
+</div>
+@if (Model.Upcoming.Count == 0) { <div class="empty-state">
+<h3>Your schedule starts here</h3>
+<p>Add a customer, service and engagement to plan your first billing period.</p>
+<a href="/Engagements/Edit">Create engagement →</a>
+</div> }
+@foreach(var s in Model.Upcoming) { <a class="upcoming-row" href="/Billing/Schedule">
+<div class="date-chip">@s.NextPeriodStart?.ToString("dd")<small>@s.NextPeriodStart?.ToString("MMM")</small>
+</div>
+<div class="grow">
+<strong>@s.Engagement.Customer.Name</strong>
+<small>@s.Engagement.Service.Name · @Finance.Label(s.Frequency)</small>
+</div>
+<strong class="money">RM @s.Engagement.BillingAmount.ToString("N2")</strong>
+</a> }
+</section>
+<section class="panel">
+<div class="panel-heading">
+<h2>Work & billing flow</h2>
+</div>
+<div class="flow-list">@foreach (var s in new[] { BillingStatus.Upcoming, BillingStatus.WorkInProgress, BillingStatus.Completed, BillingStatus.ReadyToBill, BillingStatus.Billed, BillingStatus.PartiallyPaid, BillingStatus.Paid }) { <div>
+<span>@Finance.Label(s)</span>
+<strong>@Model.Bills.Count(x => x.Status == s)</strong>
+</div> }</div>
+<p class="panel-note">Totals follow the selected service periods. Cancelled records are excluded. Worker filters select whole billing records.</p>
+</section>
+</div>

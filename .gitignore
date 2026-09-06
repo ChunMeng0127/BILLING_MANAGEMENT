@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+.vs/
+.env
+.env.*
+!.env.example
+TestResults/
+artifacts/
+.local/
+*.user
+*.log
+
+backups/
+deploy/tls/
