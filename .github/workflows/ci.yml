@@ -27,6 +27,29 @@ jobs:
       - run: dotnet build --no-restore -c Release
       - run: dotnet test --no-build -c Release --logger trx --results-directory artifacts/test-results
       - run: docker build -t billing-control:ci .
+      - name: Verify production Compose over HTTPS
+        env:
+          POSTGRES_PASSWORD: ci-compose-only-password
+          ADMIN_EMAIL: ci@example.com
+          ADMIN_PASSWORD: CI-Compose-Password!123
+          APP_HOST: localhost
+          SMOKE_BASE_URL: https://localhost
+          SMOKE_CA_CERT: deploy/tls/fullchain.pem
+        run: |
+          mkdir -p deploy/tls
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout deploy/tls/privkey.pem -out deploy/tls/fullchain.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost
+          docker compose config --quiet
+          docker compose up -d --build
+          curl --cacert deploy/tls/fullchain.pem --fail --retry 20 --retry-delay 3 --retry-connrefused https://localhost/Account/Login -o /dev/null
+          python3 scripts/smoke_https.py
+      - name: Stop production smoke stack
+        if: always()
+        env:
+          POSTGRES_PASSWORD: ci-compose-only-password
+          ADMIN_EMAIL: ci@example.com
+          ADMIN_PASSWORD: CI-Compose-Password!123
+          APP_HOST: localhost
+        run: docker compose down
       - uses: actions/upload-artifact@v4
         if: always()
         with:
