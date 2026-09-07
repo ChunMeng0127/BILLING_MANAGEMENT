@@ -87,6 +87,7 @@ services:
     image: mcr.microsoft.com/dotnet/aspnet:10.0
     restart: unless-stopped
     command: ["dotnet", "/app/BillingControl.dll"]
+    working_dir: /app
     environment:
       TZ: Asia/Kuala_Lumpur
       ASPNETCORE_ENVIRONMENT: Production
@@ -95,6 +96,7 @@ services:
       ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       DataProtection__Path: /keys
       ReverseProxy__Address: 172.17.0.1
+      ReverseProxy__Network: 172.16.0.0/12
       AllowedHosts: ${APP_HOST:?Set APP_HOST}
     volumes:
       - app_publish:/app:ro

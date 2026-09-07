@@ -40,6 +40,9 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     if (IPAddress.TryParse(builder.Configuration["ReverseProxy:Address"], out var proxy)) o.KnownProxies.Add(proxy);
+    var network = builder.Configuration["ReverseProxy:Network"]?.Split('/', 2, StringSplitOptions.TrimEntries);
+    if (network is [var prefix, var length] && IPAddress.TryParse(prefix, out var networkAddress) && int.TryParse(length, out var prefixLength) && prefixLength is >= 0 and <= 32)
+        o.KnownIPNetworks.Add(new System.Net.IPNetwork(networkAddress, prefixLength));
 });
 var keys = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrWhiteSpace(keys)) builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keys)).SetApplicationName("BillingControl");
