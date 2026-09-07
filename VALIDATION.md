@@ -19,6 +19,6 @@
 
 ## Deployment verification
 
-Docker is not installed on this Windows PC, so the local Docker image and Nginx/TLS stack were not executed here. GitHub CI is configured to build the image and run the same PostgreSQL integration tests. Production HTTPS, certificate renewal, VPS proxy/network compatibility and the deployed end-to-end workflow must be checked during deployment. The entity-scoped changes documented here have not been deployed to Hostinger.
+Docker is not installed on this Windows PC, so the local Docker image and Nginx/TLS stack were not executed here. GitHub CI is configured to build the image and run the same PostgreSQL integration tests. Hostinger MCP project update action **113460048** completed successfully for `billing-control` on VM `1910481`: the builder exited 0, the migration container exited 0, the application is running, and PostgreSQL is healthy. `https://billing.lcmmgt.com/Account/Login` returned 200 over HTTPS; the protected `/Invoices` route returned the expected unauthenticated redirect. Production certificate renewal and the authenticated end-to-end invoice workflow should still be exercised by an operator with the production account.
 
 The local database contains explicitly marked demonstration records. Credentials, database binaries/data, backups, key material and build outputs are excluded from Git.
