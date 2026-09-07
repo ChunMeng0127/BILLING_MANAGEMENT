@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body>
+@{ var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser); var firm = User.IsInRole(AppRoles.AccountingFirm); var manager = User.IsInRole(AppRoles.Manager); var worker = User.IsInRole(AppRoles.Worker); }
 @if (User.Identity?.IsAuthenticated == true) {
 <aside class="sidebar">
 <a class="brand" href="/">
@@ -17,13 +18,18 @@
 </a>
 <div class="nav-label">WORKSPACE</div>
 <nav>
-@foreach (var link in new[] { ("/", "Overview"), ("/Billing/Schedule", "Upcoming billing"), ("/Billing", "Billing records"), ("/Work", "Work items"), ("/Work/Assignments", "Worker assignments"), ("/Payments", "Worker payments"), ("/Home/Reports", "Reports") }) { <a class="@(Context.Request.Path.Value == link.Item1 ? "active" : "")" href="@link.Item1">@link.Item2</a> }
+<a class="@(Context.Request.Path.Value == "/" ? "active" : "")" href="/">Overview</a>
+@if (staff || firm || manager) { <a class="@(Context.Request.Path.Value == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule">Upcoming billing</a><a class="@(Context.Request.Path.Value == "/Billing" ? "active" : "")" href="/Billing">Billing records</a> }
+@if (staff || manager || worker) { <a class="@(Context.Request.Path.Value == "/Work" ? "active" : "")" href="/Work">Work items</a> }
+@if (staff || worker) { <a class="@(Context.Request.Path.Value == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments">Worker assignments</a><a class="@(Context.Request.Path.Value == "/Payments" ? "active" : "")" href="/Payments">Worker payments</a> }
+<a class="@(Context.Request.Path.Value == "/Home/Reports" ? "active" : "")" href="/Home/Reports">Reports</a>
 </nav>
 <div class="nav-label">DIRECTORY</div>
 <nav>
-@foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { <a href="/Masters?kind=@kind">@(kind == "Firms" ? "Accounting firms" : kind)</a> }
-<a href="/Engagements">Engagements</a>
-@if (User.IsInRole("Admin")) { <a href="/Users">User management</a> }
+@if (staff) { @foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { <a href="/Masters?kind=@kind">@(kind == "Firms" ? "Accounting firms" : kind)</a> } }
+@if (firm || manager) { <a href="/Masters?kind=Customers">Customers</a><a href="/Masters?kind=Services">Services</a> }
+@if (staff || firm || manager) { <a href="/Engagements">Engagements</a> }
+@if (User.IsInRole(AppRoles.Admin)) { <a href="/Users">User management</a> }
 </nav>
 <div class="sidebar-foot">
 <span class="live-dot">

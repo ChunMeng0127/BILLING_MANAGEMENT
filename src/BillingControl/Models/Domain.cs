@@ -3,7 +3,16 @@ using Microsoft.AspNetCore.Identity;
 
 namespace BillingControl.Models;
 
-public class AppUser : IdentityUser { public bool IsActive { get; set; } = true; }
+public class AppUser : IdentityUser
+{
+    public bool IsActive { get; set; } = true;
+    public int? BusinessPartyId { get; set; }
+    public BusinessParty? BusinessParty { get; set; }
+    public int? ManagerId { get; set; }
+    public Manager? Manager { get; set; }
+    public int? WorkerId { get; set; }
+    public Worker? Worker { get; set; }
+}
 public abstract class Record
 {
     public int Id { get; set; }

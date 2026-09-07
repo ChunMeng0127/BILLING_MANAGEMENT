@@ -1,30 +1,75 @@
 using BillingControl.Data;
 using BillingControl.Models;
 using BillingControl.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace BillingControl.Controllers;
 
-public class WorkController(AppDbContext db, BillingService billing) : AppController
+public class WorkController(AppDbContext db, BillingService billing, AccessScope access) : AppController
 {
-    public async Task<IActionResult> Index() => View(await db.WorkItems.Include(x => x.BillingRecord).Include(x => x.Assignments).OrderByDescending(x => x.Id).ToListAsync());
+    [Authorize(Roles = AppRoles.WorkReaders)]
+    public async Task<IActionResult> Index()
+    {
+        var a = await access.CurrentAsync();
+        var staff = a.IsStaff;
+        var worker = a.IsWorker;
+        ViewBag.Access = a;
+        return View(await access.WorkItems(a).Include(x => x.BillingRecord).Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && y.WorkerId == a.WorkerId))).OrderByDescending(x => x.Id).ToListAsync());
+    }
+
+    [Authorize(Roles = AppRoles.WorkReaders)]
     public async Task<IActionResult> Details(int id)
     {
-        var item = await db.WorkItems.Include(x => x.BillingRecord).ThenInclude(x => x.Shares).Include(x => x.Assignments).ThenInclude(x => x.Allocations).ThenInclude(x => x.WorkerPayment).AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id);
-        ViewBag.Workers = await db.Workers.Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync();
-        return item == null ? NotFound() : View(item);
+        var a = await access.CurrentAsync();
+        var staff = a.IsStaff;
+        var worker = a.IsWorker;
+        var item = await access.WorkItems(a)
+            .Include(x => x.BillingRecord).ThenInclude(x => x.Shares.Where(_ => staff))
+            .Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && y.WorkerId == a.WorkerId)))
+            .ThenInclude(x => x.Allocations)
+            .ThenInclude(x => x.WorkerPayment)
+            .AsSplitQuery()
+            .SingleOrDefaultAsync(x => x.Id == id);
+        if (item == null) return NotFound();
+        ViewBag.Access = a;
+        ViewBag.Workers = staff ? await db.Workers.Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync() : [];
+        return View(item);
     }
-    [HttpPost]
+
+    [HttpPost, Authorize(Roles = AppRoles.WorkEditors)]
     public async Task<IActionResult> Update(int id, WorkStatus status, string? notes, long version)
     {
-        ValidForm(); Finance.Require(Enum.IsDefined(status) && (notes?.Length ?? 0) <= 2000, "Select a valid status and notes up to 2,000 characters.");
-        var item = await db.WorkItems.Include(x => x.BillingRecord).SingleAsync(x => x.Id == id);
+        ValidForm();
+        Finance.Require(Enum.IsDefined(status) && (notes?.Length ?? 0) <= 2000, "Select a valid status and notes up to 2,000 characters.");
+        var a = await access.CurrentAsync();
+        var item = await access.WorkItems(a).Include(x => x.BillingRecord).SingleOrDefaultAsync(x => x.Id == id);
+        if (item == null) return NotFound();
         Finance.Require(item.Version == version && item.BillingRecord.Status != BillingStatus.Cancelled, "Record changed or billing was cancelled. Refresh before saving.");
-        item.Status = status; item.Notes = notes; await db.SaveChangesAsync(); TempData["Success"] = "Work item updated."; return RedirectToAction(nameof(Details), new { id });
+        item.Status = status;
+        item.Notes = notes;
+        await db.SaveChangesAsync();
+        TempData["Success"] = "Work item updated.";
+        return RedirectToAction(nameof(Details), new { id });
     }
-    [HttpPost]
+
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Assign(int id, int workerId, decimal percent)
-    { ValidForm(); await billing.Assign(id, workerId, percent); TempData["Success"] = "Worker assigned with a fixed entitlement snapshot."; return RedirectToAction(nameof(Details), new { id }); }
-    public async Task<IActionResult> Assignments() => View(await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment).AsSplitQuery().OrderByDescending(x => x.Id).ToListAsync());
+    {
+        ValidForm();
+        var a = await access.CurrentAsync();
+        if (!await access.WorkItems(a).AnyAsync(x => x.Id == id)) return NotFound();
+        await billing.Assign(id, workerId, percent);
+        TempData["Success"] = "Worker assigned with a fixed entitlement snapshot.";
+        return RedirectToAction(nameof(Details), new { id });
+    }
+
+    [Authorize(Roles = AppRoles.PaymentReaders)]
+    public async Task<IActionResult> Assignments()
+    {
+        var a = await access.CurrentAsync();
+        ViewBag.Access = a;
+        return View(await access.WorkerAssignments(a).Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment).AsSplitQuery().OrderByDescending(x => x.Id).ToListAsync());
+    }
 }

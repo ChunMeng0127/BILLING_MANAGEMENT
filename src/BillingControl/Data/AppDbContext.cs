@@ -25,6 +25,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<AppUser>().HasOne(x => x.BusinessParty).WithMany().HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<AppUser>().HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<AppUser>().HasOne(x => x.Worker).WithMany().HasForeignKey(x => x.WorkerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<AppUser>().ToTable(t => t.HasCheckConstraint("CK_User_AtMostOneLink", "(CASE WHEN \"BusinessPartyId\" IS NULL THEN 0 ELSE 1 END) + (CASE WHEN \"ManagerId\" IS NULL THEN 0 ELSE 1 END) + (CASE WHEN \"WorkerId\" IS NULL THEN 0 ELSE 1 END) <= 1"));
         foreach (var type in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).ToList())
         {
             b.Entity(type.ClrType).HasKey("Id");
@@ -36,6 +40,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         }
         b.Entity<Customer>().HasIndex(x => x.Name);
         b.Entity<Worker>().HasIndex(x => x.Name);
+        b.Entity<AppUser>().HasIndex(x => x.BusinessPartyId);
+        b.Entity<AppUser>().HasIndex(x => x.ManagerId);
+        b.Entity<AppUser>().HasIndex(x => x.WorkerId);
         b.Entity<Engagement>().HasIndex(x => new { x.CustomerId, x.ServiceId, x.Status });
         b.Entity<Engagement>().HasOne(x => x.Schedule).WithOne(x => x.Engagement).HasForeignKey<BillingSchedule>(x => x.EngagementId);
         b.Entity<Engagement>().ToTable(t =>

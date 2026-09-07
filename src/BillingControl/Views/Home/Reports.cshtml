@@ -3,49 +3,30 @@
 <div class="page-heading">
 <div>
 <p class="eyebrow">FINANCIAL VISIBILITY</p>
-<h1>Revenue & worker costs</h1>
-<p>Historical billing allocations, entitlements and balances.</p>
+<h1>@(Model.Access.IsWorker ? "Your work & payments" : Model.Access.IsAccountingFirm ? "Your firm billing" : Model.Access.IsManager ? "Your managed work" : "Revenue & worker costs")</h1>
+<p>Figures and records are limited to your linked entity and role.</p>
 </div>
 <a class="btn btn-outline-secondary" href="/Home/Export@Context.Request.QueryString">Export CSV</a>
 </div>
 <partial name="_ReportFilters" model="Model.Filter" />
 <partial name="_Metrics" model="Model" />
-<p class="hint">Date filters include overlapping service periods. Worker filters select whole billing records; totals include all assignments on those records. Cancelled rows remain visible for audit but do not contribute to totals.</p>
+<p class="hint">Date filters include overlapping service periods. Cancelled rows remain visible where permitted but do not contribute to totals.</p>
 <div class="panel">
-<table class="table data-grid">
-<thead>
-<tr>
-<th>Customer</th>
-<th>Service</th>
-<th data-type="date">Period start</th>
-<th data-type="date">Period end</th>
-<th>Status</th>
-<th data-type="amount">Billing (RM)</th>
-<th data-type="amount">Firm (RM)</th>
-<th data-type="amount">Manager (RM)</th>
-<th data-type="amount">LCM gross (RM)</th>
-<th data-type="amount">Worker cost (RM)</th>
-<th data-type="amount">Retained (RM)</th>
-<th data-nosort>Record</th>
-</tr>
-</thead>
-<tbody>
-@foreach(var b in Model.Bills) { var gross=b.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; var cost=b.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement); <tr>
-<td>@b.CustomerName</td>
-<td>@b.ServiceName</td>
-<td>@b.PeriodStart.ToString("yyyy-MM-dd")</td>
-<td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td>
-<td>@Finance.Label(b.Status)</td>
-<td class="money">@b.Amount.ToString("N2")</td>
-<td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Firm).Amount.ToString("N2")</td>
-<td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Manager).Amount.ToString("N2")</td>
-<td class="money">@gross.ToString("N2")</td>
-<td class="money">@cost.ToString("N2")</td>
-<td class="money">@((gross-cost).ToString("N2"))</td>
-<td>
-<a href="/Billing/Details/@b.Id">Open</a>
-</td>
-</tr> }
-</tbody>
-</table>
+@if (Model.Access.IsWorker) {
+<table class="table data-grid"><thead><tr><th>Customer</th><th>Service</th><th data-type="date">Period start</th><th data-type="date">Period end</th><th>Work status</th><th data-type="amount">Your %</th><th data-type="amount">Entitlement (RM)</th><th data-type="amount">Paid (RM)</th><th data-type="amount">Due (RM)</th><th data-nosort>Work</th></tr></thead><tbody>
+@foreach(var b in Model.Bills) { @foreach(var a in b.WorkItem.Assignments.Where(x=>!x.IsCancelled && x.WorkerId==Model.Access.WorkerId)) { var paid=a.Allocations.Where(x=>!x.WorkerPayment.IsCancelled).Sum(x=>x.Amount); <tr><td>@b.CustomerName</td><td>@b.ServiceName</td><td>@b.PeriodStart.ToString("yyyy-MM-dd")</td><td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td><td>@Finance.Label(b.WorkItem.Status)</td><td>@a.Percent.ToString("0.####")</td><td class="money">@a.Entitlement.ToString("N2")</td><td class="money">@paid.ToString("N2")</td><td class="money">@((a.Entitlement-paid).ToString("N2"))</td><td><a href="/Work/Details/@b.WorkItem.Id">Open</a></td></tr> } }
+</tbody></table>
+} else if (Model.Access.IsAccountingFirm) {
+<table class="table data-grid"><thead><tr><th>Customer</th><th>Service</th><th data-type="date">Period start</th><th data-type="date">Period end</th><th>Status</th><th data-type="amount">Billing (RM)</th><th data-type="amount">Your %</th><th data-type="amount">Your share (RM)</th><th data-type="amount">Received (RM)</th><th data-type="amount">Outstanding (RM)</th><th data-nosort>Record</th></tr></thead><tbody>
+@foreach(var b in Model.Bills) { var share=b.Shares.Single(x=>x.Kind==ShareKind.Firm); var received=b.Receipts.Where(x=>!x.IsCancelled).Sum(x=>x.Amount); <tr><td>@b.CustomerName</td><td>@b.ServiceName</td><td>@b.PeriodStart.ToString("yyyy-MM-dd")</td><td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td><td>@Finance.Label(b.Status)</td><td class="money">@b.Amount.ToString("N2")</td><td>@share.Percent.ToString("0.####")</td><td class="money">@share.Amount.ToString("N2")</td><td class="money">@received.ToString("N2")</td><td class="money">@(Math.Max(0,b.Amount-received).ToString("N2"))</td><td><a href="/Billing/Details/@b.Id">Open</a></td></tr> }
+</tbody></table>
+} else if (Model.Access.IsManager) {
+<table class="table data-grid"><thead><tr><th>Customer</th><th>Service</th><th data-type="date">Period start</th><th data-type="date">Period end</th><th>Billing status</th><th>Work status</th><th data-type="amount">Billing (RM)</th><th data-type="amount">Your %</th><th data-type="amount">Your share (RM)</th><th data-nosort>Record</th></tr></thead><tbody>
+@foreach(var b in Model.Bills) { var share=b.Shares.Single(x=>x.Kind==ShareKind.Manager); <tr><td>@b.CustomerName</td><td>@b.ServiceName</td><td>@b.PeriodStart.ToString("yyyy-MM-dd")</td><td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td><td>@Finance.Label(b.Status)</td><td>@Finance.Label(b.WorkItem.Status)</td><td class="money">@b.Amount.ToString("N2")</td><td>@share.Percent.ToString("0.####")</td><td class="money">@share.Amount.ToString("N2")</td><td><a href="/Billing/Details/@b.Id">Billing</a> · <a href="/Work/Details/@b.WorkItem.Id">Work</a></td></tr> }
+</tbody></table>
+} else {
+<table class="table data-grid"><thead><tr><th>Customer</th><th>Service</th><th data-type="date">Period start</th><th data-type="date">Period end</th><th>Status</th><th data-type="amount">Billing (RM)</th><th data-type="amount">Firm (RM)</th><th data-type="amount">Manager (RM)</th><th data-type="amount">LCM gross (RM)</th><th data-type="amount">Worker cost (RM)</th><th data-type="amount">Retained (RM)</th><th data-nosort>Record</th></tr></thead><tbody>
+@foreach(var b in Model.Bills) { var gross=b.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; var cost=b.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement); <tr><td>@b.CustomerName</td><td>@b.ServiceName</td><td>@b.PeriodStart.ToString("yyyy-MM-dd")</td><td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td><td>@Finance.Label(b.Status)</td><td class="money">@b.Amount.ToString("N2")</td><td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Firm).Amount.ToString("N2")</td><td class="money">@b.Shares.Single(x=>x.Kind==ShareKind.Manager).Amount.ToString("N2")</td><td class="money">@gross.ToString("N2")</td><td class="money">@cost.ToString("N2")</td><td class="money">@((gross-cost).ToString("N2"))</td><td><a href="/Billing/Details/@b.Id">Open</a></td></tr> }
+</tbody></table>
+}
 </div>

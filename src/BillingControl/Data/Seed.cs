@@ -1,4 +1,5 @@
 using BillingControl.Models;
+using BillingControl.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,14 +10,14 @@ public static class Seed
     public static async Task Initialize(IServiceProvider services, IConfiguration config)
     {
         var roles = services.GetRequiredService<RoleManager<IdentityRole>>();
-        foreach (var role in new[] { "Admin", "User" }) if (!await roles.RoleExistsAsync(role)) Check(await roles.CreateAsync(new(role)));
+        foreach (var role in AppRoles.All) if (!await roles.RoleExistsAsync(role)) Check(await roles.CreateAsync(new(role)));
         var users = services.GetRequiredService<UserManager<AppUser>>();
         if (!await users.Users.AnyAsync())
         {
             var email = config["BootstrapAdmin:Email"] ?? throw new InvalidOperationException("Set BootstrapAdmin__Email for the first migration.");
             var password = config["BootstrapAdmin:Password"] ?? throw new InvalidOperationException("Set BootstrapAdmin__Password for the first migration.");
             var admin = new AppUser { UserName = email, Email = email, EmailConfirmed = true };
-            Check(await users.CreateAsync(admin, password)); Check(await users.AddToRoleAsync(admin, "Admin"));
+            Check(await users.CreateAsync(admin, password)); Check(await users.AddToRoleAsync(admin, AppRoles.Admin));
         }
         if (!config.GetValue<bool>("Seed:Demo")) return;
         var db = services.GetRequiredService<AppDbContext>();

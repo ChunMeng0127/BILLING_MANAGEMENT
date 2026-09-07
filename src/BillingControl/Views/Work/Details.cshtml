@@ -1,5 +1,5 @@
 @model WorkItem
-@{ ViewData["Title"]="W-"+Model.Id.ToString("D5"); var gross=Model.BillingRecord.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; }
+@{ ViewData["Title"]="W-"+Model.Id.ToString("D5"); AccessProfile access=ViewBag.Access; var gross=access.IsStaff ? Model.BillingRecord.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount : 0m; }
 <a class="back-link" href="/Work">← Work items</a>
 <div class="page-heading">
 <div>
@@ -7,7 +7,7 @@
 <h1>@Model.BillingRecord.CustomerName</h1>
 <p>@Model.BillingRecord.ServiceName · @Model.BillingRecord.PeriodStart.ToString("dd MMM yyyy") — @Model.BillingRecord.PeriodEnd.ToString("dd MMM yyyy")</p>
 </div>
-<a class="btn btn-outline-secondary" href="/Billing/Details/@Model.BillingRecordId">View billing →</a>
+@if(access.IsStaff || access.IsManager) { <a class="btn btn-outline-secondary" href="/Billing/Details/@Model.BillingRecordId">View billing →</a> }
 </div>
 @if(Model.BillingRecord.Status!=BillingStatus.Cancelled) {
 <form method="post" asp-action="Update" class="panel form-panel wide">
@@ -22,7 +22,7 @@
 <button class="btn btn-primary">Save progress</button>
 </div>
 </form>
-<section class="panel form-panel wide">
+@if(access.IsStaff) { <section class="panel form-panel wide">
 <h2>Assign worker</h2>
 <p>LCM gross share: <strong>RM @gross.ToString("N2")</strong> · Remaining percentage: <strong>@((100-Model.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Percent)).ToString("0.####"))%</strong>
 </p>
@@ -42,5 +42,5 @@
 <button class="btn btn-primary">Assign worker</button>
 </form>
 <p class="hint">Combined active assignments cannot exceed 100% of LCM's share. Entitlements are saved as historical amounts.</p>
-</section> }
-<partial name="_Assignments" model="Model.Assignments" />
+</section> } }
+@if(access.IsStaff || access.IsWorker) { <partial name="_Assignments" model="Model.Assignments" /> }

@@ -1,12 +1,12 @@
 @model List<WorkItem>
-@{ ViewData["Title"]="Work items"; }
+@{ ViewData["Title"]="Work items"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">DELIVERY</p>
 <h1>Work items</h1>
 <p>Accounting work by customer, service and period. Created with each billing period.</p>
 </div>
-<a class="btn btn-primary" href="/Billing/Schedule">+ Plan work period</a>
+@if(access.IsStaff) { <a class="btn btn-primary" href="/Billing/Schedule">+ Plan work period</a> }
 </div>
 <div class="panel">
 <table class="table data-grid">
@@ -19,7 +19,7 @@
 <th data-type="date">Period end</th>
 <th>Work status</th>
 <th>Billing status</th>
-<th>Workers</th>
+@if(access.IsStaff) { <th>Workers</th> }
 </tr>
 </thead>
 <tbody>
@@ -33,7 +33,7 @@
 <td>@w.BillingRecord.PeriodEnd.ToString("yyyy-MM-dd")</td>
 <td>@Finance.Label(w.Status)</td>
 <td>@Finance.Label(w.BillingRecord.Status)</td>
-<td>@string.Join(", ",w.Assignments.Where(x=>!x.IsCancelled).Select(x=>x.WorkerName))</td>
+@if(access.IsStaff) { <td>@string.Join(", ",w.Assignments.Where(x=>!x.IsCancelled).Select(x=>x.WorkerName))</td> }
 </tr> }
 </tbody>
 </table>

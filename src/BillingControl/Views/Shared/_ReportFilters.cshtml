@@ -12,12 +12,12 @@
 <option value="">All services</option>
 </select>
 </div>
-<div>
+@if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser)) { <div>
 <label for="WorkerId">Worker</label>
 <select asp-for="WorkerId" asp-items="ViewBag.Workers" class="form-select">
 <option value="">All workers</option>
 </select>
-</div>
+</div> }
 <div>
 <label for="From">Service period from</label>
 <input asp-for="From" type="date" class="form-control" />

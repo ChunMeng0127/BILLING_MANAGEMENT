@@ -25,7 +25,7 @@ public class AccountController(SignInManager<AppUser> signIn, UserManager<AppUse
         return View(model);
     }
     [HttpPost] public async Task<IActionResult> Logout() { await signIn.SignOutAsync(); return RedirectToAction(nameof(Login)); }
-    public IActionResult Denied() { Response.StatusCode = 403; return View(); }
+    [AllowAnonymous] public IActionResult Denied() { Response.StatusCode = 403; return View(); }
     [HttpGet] public IActionResult Password() => View();
     [HttpPost]
     public async Task<IActionResult> Password(string currentPassword, string newPassword)

@@ -1,4 +1,5 @@
 @model List<WorkerAssignment>
+@{ AccessProfile access=ViewBag.Access; }
 <div class="panel">
 <table class="table data-grid">
 <thead>
@@ -9,12 +10,12 @@
 <th>Service</th>
 <th data-type="date">Period start</th>
 <th data-type="amount">Share %</th>
-<th data-type="amount">LCM gross (RM)</th>
+@if(access.IsStaff) { <th data-type="amount">LCM gross (RM)</th> }
 <th data-type="amount">Entitlement (RM)</th>
 <th data-type="amount">Paid (RM)</th>
 <th data-type="amount">Due (RM)</th>
 <th>Status</th>
-<th data-nosort>Action</th>
+@if(access.IsStaff) { <th data-nosort>Action</th> }
 </tr>
 </thead>
 <tbody>
@@ -27,12 +28,12 @@
 <td>@a.WorkItem.BillingRecord.ServiceName</td>
 <td>@a.WorkItem.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</td>
 <td>@a.Percent.ToString("0.####")</td>
-<td class="money">@a.LcmGrossSnapshot.ToString("N2")</td>
+@if(access.IsStaff) { <td class="money">@a.LcmGrossSnapshot.ToString("N2")</td> }
 <td class="money">@a.Entitlement.ToString("N2")</td>
 <td class="money">@paid.ToString("N2")</td>
 <td class="money">@((a.IsCancelled?0:a.Entitlement-paid).ToString("N2"))</td>
 <td>@(a.IsCancelled?"Cancelled: "+a.CancellationReason:"Active")</td>
-<td>@if(!a.IsCancelled) { <a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a> @if(User.IsInRole("Admin")) { <details>
+@if(access.IsStaff) { <td>@if(!a.IsCancelled) { <a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a> @if(access.IsAdmin) { <details>
 <summary>Cancel</summary>
 <form asp-controller="Billing" asp-action="Cancel" method="post">
 <input type="hidden" name="kind" value="assignment" />
@@ -40,7 +41,7 @@
 <input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
 <button class="btn btn-outline-danger btn-sm">Cancel assignment</button>
 </form>
-</details> } }</td>
+</details> } }</td> }
 </tr> }
 </tbody>
 </table>

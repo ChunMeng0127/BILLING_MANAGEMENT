@@ -1,114 +1,35 @@
 @model BillingRecord
-@{ ViewData["Title"] = "B-"+Model.Id.ToString("D5"); var cost=Model.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement); var gross=Model.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount; var paid=Model.Receipts.Where(x=>!x.IsCancelled).Sum(x=>x.Amount); }
+@{ ViewData["Title"] = "B-"+Model.Id.ToString("D5"); AccessProfile access=ViewBag.Access; var paid=Model.Receipts.Where(x=>!x.IsCancelled).Sum(x=>x.Amount); var cost=access.IsStaff ? Model.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement) : 0m; var gross=access.IsStaff ? Model.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount : 0m; }
 <a class="back-link" href="/Billing">← Billing records</a>
-<div class="page-heading">
-<div>
-<p class="eyebrow">@ViewData["Title"] · @Finance.Label(Model.Status)</p>
-<h1>@Model.CustomerName</h1>
-<p>@Model.ServiceName · @Model.PeriodStart.ToString("dd MMM yyyy") — @Model.PeriodEnd.ToString("dd MMM yyyy")</p>
-</div>
-<a href="/Work/Details/@Model.WorkItem.Id" class="btn btn-outline-secondary">Open work item →</a>
+<div class="page-heading"><div><p class="eyebrow">@ViewData["Title"] · @Finance.Label(Model.Status)</p><h1>@Model.CustomerName</h1><p>@Model.ServiceName · @Model.PeriodStart.ToString("dd MMM yyyy") — @Model.PeriodEnd.ToString("dd MMM yyyy")</p></div>
+@if(access.IsStaff || access.IsManager) { <a href="/Work/Details/@Model.WorkItem.Id" class="btn btn-outline-secondary">Open work item →</a> }
 </div>
 <div class="metrics compact">
-<div class="metric">
-<span>Customer billing</span>
-<strong>RM @Model.Amount.ToString("N2")</strong>
-</div>@foreach(var s in Model.Shares.OrderBy(x=>x.Kind)) { <div class="metric">
-<span>@s.PartyName · @s.Percent.ToString("0.####")%</span>
-<strong>RM @s.Amount.ToString("N2")</strong>
-</div> }</div>
+<div class="metric"><span>Customer billing</span><strong>RM @Model.Amount.ToString("N2")</strong></div>
+@if(access.IsStaff) { @foreach(var s in Model.Shares.OrderBy(x=>x.Kind)) { <div class="metric"><span>@s.PartyName · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div> } }
+@if(access.IsAccountingFirm) { var s=Model.Shares.Single(x=>x.Kind==ShareKind.Firm); <div class="metric"><span>Your firm share · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div> }
+@if(access.IsManager) { var s=Model.Shares.Single(x=>x.Kind==ShareKind.Manager); <div class="metric"><span>Your manager share · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div><div class="metric"><span>Work status</span><strong>@Finance.Label(Model.WorkItem.Status)</strong></div> }
+</div>
 <div class="panel summary-strip">
-<span>Worker entitlement <strong>RM @cost.ToString("N2")</strong>
-</span>
-<span>LCM retained <strong>RM @((gross-cost).ToString("N2"))</strong>
-</span>
-<span>Customer receipts <strong>RM @paid.ToString("N2")</strong>
-</span>
-<span>Invoice <strong>@(Model.InvoiceNumber ?? "Not posted") · @Model.BillingDate?.ToString("dd MMM yyyy")</strong>
-</span>
+@if(access.IsStaff) { <span>Worker entitlement <strong>RM @cost.ToString("N2")</strong></span><span>LCM retained <strong>RM @((gross-cost).ToString("N2"))</strong></span> }
+@if(access.IsStaff || access.IsAccountingFirm) { <span>Customer receipts <strong>RM @paid.ToString("N2")</strong></span> }
+<span>Invoice <strong>@(Model.InvoiceNumber ?? "Not posted") · @Model.BillingDate?.ToString("dd MMM yyyy")</strong></span>
 </div>
-@if (Model.Status < BillingStatus.Billed) { <section class="panel form-panel wide">
-<h2>Update billing status</h2>
-<form method="post" asp-action="Status" class="form-grid">
-<input type="hidden" name="id" value="@Model.Id" />
-<input type="hidden" name="version" value="@Model.Version" />
-<div>
-<label class="form-label" for="status">Status</label>
-<select name="status" id="status" class="form-select">@foreach(var s in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.Billed)) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select>
-</div>
-<div>
-<label class="form-label" for="date">Billing date (required to post)</label>
-<input id="date" name="date" type="date" class="form-control" />
-</div>
-<div>
-<label class="form-label" for="invoice">Invoice reference (required to post)</label>
-<input id="invoice" name="invoice" maxlength="100" class="form-control" />
-</div>
-<div class="align-end">
-<button class="btn btn-primary">Save status</button>
-</div>
-</form>
-</section> }
-@if (Model.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid) { <section class="panel form-panel wide">
-<h2>Record customer receipt</h2>
-<p>Outstanding: RM @((Model.Amount-paid).ToString("N2"))</p>
-<form method="post" asp-action="Receive" class="form-grid">
-<input type="hidden" name="id" value="@Model.Id" />
-<input type="hidden" name="requestId" value="@Guid.NewGuid()" />
-<div>
-<label class="form-label">Receipt date<input name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required class="form-control" />
-</label>
-</div>
-<div>
-<label class="form-label">Amount (RM)<input name="amount" type="number" step="0.01" min="0.01" required class="form-control" />
-</label>
-</div>
-<div>
-<label class="form-label">Reference<input name="reference" maxlength="160" required class="form-control" />
-</label>
-</div>
-<div class="align-end">
-<button class="btn btn-primary">Record receipt</button>
-</div>
-</form>
-</section> }
-<section class="panel">
-<div class="panel-heading">
-<h2>Customer receipt history</h2>
-</div>
-<table class="table data-grid">
-<thead>
-<tr>
-<th data-type="date">Date</th>
-<th>Reference</th>
-<th data-type="amount">Amount (RM)</th>
-<th>Status</th>
-<th data-nosort>Action</th>
-</tr>
-</thead>
-<tbody>@foreach(var r in Model.Receipts) { <tr>
-<td>@r.ReceiptDate.ToString("yyyy-MM-dd")</td>
-<td>@r.Reference</td>
-<td>@r.Amount.ToString("N2")</td>
-<td>@(r.IsCancelled ? "Cancelled: "+r.CancellationReason : "Recorded")</td>
-<td>@if(User.IsInRole("Admin") && !r.IsCancelled) { <form asp-action="Cancel" method="post" class="inline-form">
-<input type="hidden" name="kind" value="receipt" />
-<input type="hidden" name="id" value="@r.Id" />
-<input name="reason" aria-label="Cancellation reason" placeholder="Cancellation reason" required class="form-control form-control-sm" />
-<button class="btn btn-outline-danger btn-sm">Cancel receipt</button>
-</form> }</td>
-</tr> }</tbody>
-</table>
-</section>
-@if (User.IsInRole("Admin") && Model.Status != BillingStatus.Cancelled) { <details class="panel cancellation">
-<summary>Cancel billing record</summary>
-<p>Cancel active receipts and worker assignments first. The full history is retained.</p>
-<form method="post" asp-action="Cancel" class="inline-form">
-<input type="hidden" name="kind" value="billing" />
-<input type="hidden" name="id" value="@Model.Id" />
-<input name="reason" aria-label="Cancellation reason" placeholder="Reason for cancellation" required maxlength="2000" class="form-control" />
-<button class="btn btn-outline-danger">Cancel billing</button>
-</form>
-</details> }
+@if (access.IsStaff && Model.Status < BillingStatus.Billed) { <section class="panel form-panel wide"><h2>Update billing status</h2><form method="post" asp-action="Status" class="form-grid">
+<input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="version" value="@Model.Version" />
+<div><label class="form-label" for="status">Status</label><select name="status" id="status" class="form-select">@foreach(var s in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.Billed)) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select></div>
+<div><label class="form-label" for="date">Billing date (required to post)</label><input id="date" name="date" type="date" class="form-control" /></div>
+<div><label class="form-label" for="invoice">Invoice reference (required to post)</label><input id="invoice" name="invoice" maxlength="100" class="form-control" /></div>
+<div class="align-end"><button class="btn btn-primary">Save status</button></div></form></section> }
+@if (access.IsStaff && Model.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid) { <section class="panel form-panel wide"><h2>Record customer receipt</h2><p>Outstanding: RM @((Model.Amount-paid).ToString("N2"))</p><form method="post" asp-action="Receive" class="form-grid">
+<input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="requestId" value="@Guid.NewGuid()" />
+<div><label class="form-label">Receipt date<input name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required class="form-control" /></label></div>
+<div><label class="form-label">Amount (RM)<input name="amount" type="number" step="0.01" min="0.01" required class="form-control" /></label></div>
+<div><label class="form-label">Reference<input name="reference" maxlength="160" required class="form-control" /></label></div>
+<div class="align-end"><button class="btn btn-primary">Record receipt</button></div></form></section> }
+@if(access.IsStaff || access.IsAccountingFirm) { <section class="panel"><div class="panel-heading"><h2>Customer receipt history</h2></div><table class="table data-grid"><thead><tr><th data-type="date">Date</th><th>Reference</th><th data-type="amount">Amount (RM)</th><th>Status</th>@if(access.IsAdmin){<th data-nosort>Action</th>}</tr></thead><tbody>
+@foreach(var r in Model.Receipts) { <tr><td>@r.ReceiptDate.ToString("yyyy-MM-dd")</td><td>@r.Reference</td><td>@r.Amount.ToString("N2")</td><td>@(r.IsCancelled ? "Cancelled: "+r.CancellationReason : "Recorded")</td>@if(access.IsAdmin){<td>@if(!r.IsCancelled) { <form asp-action="Cancel" method="post" class="inline-form"><input type="hidden" name="kind" value="receipt" /><input type="hidden" name="id" value="@r.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Cancellation reason" required class="form-control form-control-sm" /><button class="btn btn-outline-danger btn-sm">Cancel receipt</button></form> }</td>}</tr> }
+</tbody></table></section> }
+@if (access.IsAdmin && Model.Status != BillingStatus.Cancelled) { <details class="panel cancellation"><summary>Cancel billing record</summary><p>Cancel active receipts and worker assignments first. The full history is retained.</p><form method="post" asp-action="Cancel" class="inline-form"><input type="hidden" name="kind" value="billing" /><input type="hidden" name="id" value="@Model.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Reason for cancellation" required maxlength="2000" class="form-control" /><button class="btn btn-outline-danger">Cancel billing</button></form></details> }
 @if(Model.Status==BillingStatus.Cancelled) { <div class="alert alert-secondary">Cancelled: @Model.CancellationReason</div> }
-<p class="hint">Created @Model.CreatedAt.ToString("u") by @Model.CreatedBy · Updated @Model.UpdatedAt.ToString("u") by @Model.UpdatedBy</p>
+@if(access.IsStaff) { <p class="hint">Created @Model.CreatedAt.ToString("u") by @Model.CreatedBy · Updated @Model.UpdatedAt.ToString("u") by @Model.UpdatedBy</p> }

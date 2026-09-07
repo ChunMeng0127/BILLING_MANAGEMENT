@@ -1,12 +1,12 @@
 @model List<WorkerPayment>
-@{ ViewData["Title"]="Worker payments"; }
+@{ ViewData["Title"]="Worker payments"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">PAYMENT REGISTER</p>
 <h1>Worker payments</h1>
 <p>Actual payments and their assignment allocations.</p>
 </div>
-<a class="btn btn-primary" href="/Payments/Create">+ Record payment</a>
+@if(access.IsStaff) { <a class="btn btn-primary" href="/Payments/Create">+ Record payment</a> }
 </div>
 <div class="panel">
 <table class="table data-grid">
@@ -19,7 +19,7 @@
 <th data-type="amount">Amount (RM)</th>
 <th>Allocations</th>
 <th>Status</th>
-<th data-nosort>Action</th>
+@if(access.IsAdmin) { <th data-nosort>Action</th> }
 </tr>
 </thead>
 <tbody>
@@ -32,7 +32,7 @@
 <td>@foreach(var a in p.Allocations) { <div>
 <a href="/Work/Details/@a.WorkerAssignment.WorkItemId">A-@a.WorkerAssignmentId · @a.WorkerAssignment.WorkItem.BillingRecord.CustomerName</a> : RM @a.Amount.ToString("N2")</div> }</td>
 <td>@(p.IsCancelled ? "Cancelled: "+p.CancellationReason : "Recorded")</td>
-<td>@if(User.IsInRole("Admin") && !p.IsCancelled) { <details>
+@if(access.IsAdmin) { <td>@if(!p.IsCancelled) { <details>
 <summary>Cancel payment</summary>
 <form asp-controller="Billing" asp-action="Cancel" method="post">
 <input type="hidden" name="kind" value="payment" />
@@ -40,7 +40,7 @@
 <input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
 <button class="btn btn-outline-danger btn-sm">Cancel payment</button>
 </form>
-</details> }</td>
+</details> }</td> }
 </tr> }
 </tbody>
 </table>

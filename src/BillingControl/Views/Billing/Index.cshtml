@@ -1,12 +1,12 @@
 @model List<BillingRecord>
-@{ ViewData["Title"] = "Billing records"; ReportFilter f = ViewBag.Filter; }
+@{ ViewData["Title"] = "Billing records"; ReportFilter f = ViewBag.Filter; AccessProfile access = ViewBag.Access; var showReceipts = access.IsStaff || access.IsAccountingFirm; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">BILLING REGISTER</p>
 <h1>Billing records</h1>
 <p>Service periods, invoice dates and customer balances.</p>
 </div>
-<a href="/Billing/Schedule" class="btn btn-primary">+ Generate billing</a>
+@if (access.IsStaff) { <a href="/Billing/Schedule" class="btn btn-primary">+ Generate billing</a> }
 </div>
 <form class="report-filters" method="get">
 <div>
@@ -33,8 +33,7 @@
 <th>Invoice</th>
 <th>Status</th>
 <th data-type="amount">Amount (RM)</th>
-<th data-type="amount">Received (RM)</th>
-<th data-type="amount">Outstanding (RM)</th>
+@if(showReceipts) { <th data-type="amount">Received (RM)</th><th data-type="amount">Outstanding (RM)</th> }
 </tr>
 </thead>
 <tbody>
@@ -52,8 +51,7 @@
 <span class="badge status-@b.Status.ToString().ToLowerInvariant()">@Finance.Label(b.Status)</span>
 </td>
 <td class="money">@b.Amount.ToString("N2")</td>
-<td class="money">@paid.ToString("N2")</td>
-<td class="money">@((b.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid or BillingStatus.Paid ? b.Amount-paid : 0).ToString("N2"))</td>
+@if(showReceipts) { <td class="money">@paid.ToString("N2")</td><td class="money">@((b.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid or BillingStatus.Paid ? b.Amount-paid : 0).ToString("N2"))</td> }
 </tr> }
 </tbody>
 </table>

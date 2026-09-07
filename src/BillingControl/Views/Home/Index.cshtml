@@ -6,23 +6,23 @@
 <h1>Business overview</h1>
 <p>Keep your accounting work, billing and team payments in view.</p>
 </div>
-<a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a>
+@if (Model.Access.IsStaff) { <a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a> }
 </div>
 <partial name="_ReportFilters" model="Model.Filter" />
 <partial name="_Metrics" model="Model" />
 <div class="dashboard-grid">
-<section class="panel">
+@if (!Model.Access.IsWorker) { <section class="panel">
 <div class="panel-heading">
 <div>
 <h2>Upcoming billing</h2>
-<p>Next scheduled service periods · all engagements</p>
+<p>Next scheduled service periods in your access scope</p>
 </div>
 <a href="/Billing/Schedule">View schedule →</a>
 </div>
 @if (Model.Upcoming.Count == 0) { <div class="empty-state">
 <h3>Your schedule starts here</h3>
 <p>Add a customer, service and engagement to plan your first billing period.</p>
-<a href="/Engagements/Edit">Create engagement →</a>
+@if (Model.Access.IsStaff) { <a href="/Engagements/Edit">Create engagement →</a> }
 </div> }
 @foreach(var s in Model.Upcoming) { <a class="upcoming-row" href="/Billing/Schedule">
 <div class="date-chip">@s.NextPeriodStart?.ToString("dd")<small>@s.NextPeriodStart?.ToString("MMM")</small>
@@ -33,7 +33,10 @@
 </div>
 <strong class="money">RM @s.Engagement.BillingAmount.ToString("N2")</strong>
 </a> }
-</section>
+</section> } else { <section class="panel">
+<div class="panel-heading"><div><h2>Your assigned work</h2><p>Only active assignments linked to your worker account</p></div><a href="/Work">View work →</a></div>
+@foreach(var b in Model.Bills.Take(6)) { <a class="upcoming-row" href="/Work/Details/@b.WorkItem.Id"><div class="grow"><strong>@b.CustomerName</strong><small>@b.ServiceName · @b.PeriodStart.ToString("dd MMM yyyy") — @b.PeriodEnd.ToString("dd MMM yyyy")</small></div><strong>@Finance.Label(b.WorkItem.Status)</strong></a> }
+</section> }
 <section class="panel">
 <div class="panel-heading">
 <h2>Work & billing flow</h2>

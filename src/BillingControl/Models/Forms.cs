@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using BillingControl.Services;
 
 namespace BillingControl.Models;
 
@@ -44,5 +45,8 @@ public class UserForm
 {
     [Required, EmailAddress] public string Email { get; set; } = "";
     [Required, MinLength(12), DataType(DataType.Password)] public string Password { get; set; } = "";
-    public string Role { get; set; } = "User";
+    public string Role { get; set; } = AppRoles.InternalUser;
+    public int? BusinessPartyId { get; set; }
+    public int? ManagerId { get; set; }
+    public int? WorkerId { get; set; }
 }

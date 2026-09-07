@@ -1,9 +1,12 @@
 @model ReportModel
 <div class="metrics">
-@foreach (var m in new[] { ("Customer billing", Model.Total, "All active service periods"), ("Accounting firm share", Model.Share(ShareKind.Firm), "Historical allocation"), ("Manager share", Model.Share(ShareKind.Manager), "Historical allocation"), ("LCM MGT gross share", Model.Share(ShareKind.Lcm), "Before worker costs"), ("Worker entitlement", Model.WorkerCost, "Agreed assignment costs"), ("LCM MGT retained", Model.Share(ShareKind.Lcm)-Model.WorkerCost, "Gross share less entitlement"), ("Billing outstanding", Model.BillingOutstanding, "Posted bills less receipts"), ("Worker payments due", Model.WorkerCost-Model.WorkerPaid, "Entitlements less payments") }) { <div class="metric">
-<span>@m.Item1</span>
-<strong>
-<small>RM</small> @m.Item2.ToString("N2")</strong>
-<p>@m.Item3</p>
-</div> }
+@if (Model.Access.IsStaff) {
+@foreach (var m in new[] { ("Customer billing", Model.Total, "All active service periods"), ("Accounting firm share", Model.Share(ShareKind.Firm), "Historical allocation"), ("Manager share", Model.Share(ShareKind.Manager), "Historical allocation"), ("LCM MGT gross share", Model.Share(ShareKind.Lcm), "Before worker costs"), ("Worker entitlement", Model.WorkerCost, "Agreed assignment costs"), ("LCM MGT retained", Model.Share(ShareKind.Lcm)-Model.WorkerCost, "Gross share less entitlement"), ("Billing outstanding", Model.BillingOutstanding, "Posted bills less receipts"), ("Worker payments due", Model.WorkerCost-Model.WorkerPaid, "Entitlements less payments") }) { <div class="metric"><span>@m.Item1</span><strong><small>RM</small> @m.Item2.ToString("N2")</strong><p>@m.Item3</p></div> }
+} else if (Model.Access.IsAccountingFirm) {
+@foreach (var m in new[] { ("Customer billing", Model.Total, "Your customer service periods"), ("Your firm share", Model.OwnShare, "Historical allocation"), ("Billing outstanding", Model.BillingOutstanding, "Posted bills less receipts") }) { <div class="metric"><span>@m.Item1</span><strong><small>RM</small> @m.Item2.ToString("N2")</strong><p>@m.Item3</p></div> }
+} else if (Model.Access.IsManager) {
+@foreach (var m in new[] { ("Customer billing", Model.Total, "Your managed service periods"), ("Your manager share", Model.OwnShare, "Historical allocation") }) { <div class="metric"><span>@m.Item1</span><strong><small>RM</small> @m.Item2.ToString("N2")</strong><p>@m.Item3</p></div> }
+} else if (Model.Access.IsWorker) {
+@foreach (var m in new[] { ("Your entitlement", Model.WorkerCost, "Active assigned work"), ("Paid to you", Model.WorkerPaid, "Recorded payment allocations"), ("Due to you", Model.WorkerCost-Model.WorkerPaid, "Entitlement less payments") }) { <div class="metric"><span>@m.Item1</span><strong><small>RM</small> @m.Item2.ToString("N2")</strong><p>@m.Item3</p></div> }
+}
 </div>

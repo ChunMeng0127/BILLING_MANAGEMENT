@@ -1,6 +1,7 @@
 using BillingControl.Data;
 using BillingControl.Models;
 using BillingControl.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -8,26 +9,37 @@ using static BillingControl.Services.Finance;
 
 namespace BillingControl.Controllers;
 
-public class EngagementsController(AppDbContext db) : AppController
+public class EngagementsController(AppDbContext db, AccessScope access) : AppController
 {
-    public async Task<IActionResult> Index() => View(await db.Engagements.Include(x => x.Customer).Include(x => x.Service).Include(x => x.BusinessParty).Include(x => x.Manager).Include(x => x.Schedule).OrderBy(x => x.Customer.Name).ToListAsync());
-    private async Task Choices()
+    [Authorize(Roles = AppRoles.BillingReaders)]
+    public async Task<IActionResult> Index()
     {
-        ViewBag.Customers = new SelectList(await db.Customers.OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
-        ViewBag.Services = new SelectList(await db.Services.OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
-        ViewBag.Firms = new SelectList(await db.BusinessParties.OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
-        ViewBag.Managers = new SelectList(await db.Managers.OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
+        var a = await access.CurrentAsync();
+        ViewBag.Access = a;
+        var q = access.Engagements(a).Include(x => x.Customer).Include(x => x.Service).Include(x => x.Schedule).AsQueryable();
+        if (a.IsStaff) q = q.Include(x => x.BusinessParty).Include(x => x.Manager);
+        return View(await q.OrderBy(x => x.Customer.Name).ToListAsync());
     }
+    private async Task Choices(AccessProfile a)
+    {
+        ViewBag.Customers = new SelectList(await access.Customers(a).OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
+        ViewBag.Services = new SelectList(await access.Services(a).OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
+        ViewBag.Firms = new SelectList(await access.BusinessParties(a).OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
+        ViewBag.Managers = new SelectList(await access.Managers(a).OrderBy(x => x.Name).ToListAsync(), "Id", "Name");
+    }
+    [Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Edit(int? id)
     {
-        await Choices();
+        var a = await access.CurrentAsync();
+        await Choices(a);
         if (id == null) return View(new EngagementForm());
-        var e = await db.Engagements.Include(x => x.Schedule).SingleOrDefaultAsync(x => x.Id == id); if (e == null) return NotFound();
+        var e = await access.Engagements(a).Include(x => x.Schedule).SingleOrDefaultAsync(x => x.Id == id); if (e == null) return NotFound();
         return View(new EngagementForm { Id = e.Id, Version = e.Version, CustomerId = e.CustomerId, ServiceId = e.ServiceId, BusinessPartyId = e.BusinessPartyId, ManagerId = e.ManagerId, StartDate = e.StartDate, EndDate = e.EndDate, BillingAmount = e.BillingAmount, FirmPercent = e.FirmPercent, ManagerPercent = e.ManagerPercent, LcmPercent = e.LcmPercent, Frequency = e.Schedule.Frequency, NextPeriodStart = e.Schedule.NextPeriodStart, AnchorDay = e.Schedule.AnchorDay, Status = e.Status, Notes = e.Notes });
     }
-    [HttpPost]
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Edit(EngagementForm form)
     {
+        var a = await access.CurrentAsync();
         try
         {
             ValidForm(); Split(form.BillingAmount, form.FirmPercent, form.ManagerPercent, form.LcmPercent);
@@ -35,7 +47,8 @@ public class EngagementsController(AppDbContext db) : AppController
             Require(form.StartDate != default && (form.EndDate == null || form.EndDate >= form.StartDate), "End date cannot precede start date.");
             Require(form.NextPeriodStart == null || (form.NextPeriodStart >= form.StartDate && (form.EndDate == null || form.NextPeriodStart <= form.EndDate)), "Next service period must be inside the engagement dates.");
             Require(await db.Customers.AnyAsync(x => x.Id == form.CustomerId) && await db.Services.AnyAsync(x => x.Id == form.ServiceId) && await db.BusinessParties.AnyAsync(x => x.Id == form.BusinessPartyId) && await db.Managers.AnyAsync(x => x.Id == form.ManagerId), "Select existing customer, service, firm and manager records.");
-            var e = form.Id == 0 ? new Engagement { Schedule = new() } : await db.Engagements.Include(x => x.Schedule).SingleAsync(x => x.Id == form.Id);
+            var e = form.Id == 0 ? new Engagement { Schedule = new() } : await access.Engagements(a).Include(x => x.Schedule).SingleOrDefaultAsync(x => x.Id == form.Id);
+            if (e == null) return NotFound();
             Require(form.Id == 0 || form.Version == e.Version, "This engagement changed. Refresh before saving.");
             if (form.Id != 0 && await db.BillingRecords.AnyAsync(x => x.EngagementId == form.Id)) Require(e.CustomerId == form.CustomerId && e.ServiceId == form.ServiceId, "Customer and service cannot change after billing has been generated. Create another engagement.");
             e.CustomerId = form.CustomerId; e.ServiceId = form.ServiceId; e.BusinessPartyId = form.BusinessPartyId; e.ManagerId = form.ManagerId;
@@ -45,6 +58,6 @@ public class EngagementsController(AppDbContext db) : AppController
             if (form.Id == 0) db.Engagements.Add(e);
             await db.SaveChangesAsync(); TempData["Success"] = "Engagement saved. Existing billing snapshots are unchanged."; return RedirectToAction(nameof(Index));
         }
-        catch (BusinessException ex) { ModelState.AddModelError("", ex.Message); await Choices(); return View(form); }
+        catch (BusinessException ex) { ModelState.AddModelError("", ex.Message); await Choices(a); return View(form); }
     }
 }

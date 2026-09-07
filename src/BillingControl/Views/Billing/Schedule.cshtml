@@ -1,5 +1,5 @@
 @model List<BillingSchedule>
-@{ ViewData["Title"] = "Upcoming billing"; }
+@{ ViewData["Title"] = "Upcoming billing"; AccessProfile access = ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">PLAN & GENERATE</p>
@@ -17,7 +17,7 @@
 <th>Frequency</th>
 <th data-type="date">Next start</th>
 <th data-type="amount">Fee (RM)</th>
-<th data-nosort>Generate billing period</th>
+<th data-nosort>@(access.IsStaff ? "Generate billing period" : "Schedule")</th>
 </tr>
 </thead>
 <tbody>
@@ -29,6 +29,7 @@
 <td>@s.NextPeriodStart?.ToString("yyyy-MM-dd")</td>
 <td class="money">@e.BillingAmount.ToString("N2")</td>
 <td>
+@if(access.IsStaff) {
 @if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="advanceSchedule" value="@(s.Frequency!=Frequency.AdHoc ? "true" : "false")" />
@@ -50,6 +51,7 @@
 </form>
 <small>Does not advance the schedule. Active overlapping periods are rejected.</small>
 </details>
+} else { <span class="text-muted">Read-only</span> }
 </td>
 </tr> }
 </tbody>
