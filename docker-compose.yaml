@@ -86,6 +86,7 @@ services:
   app:
     image: mcr.microsoft.com/dotnet/aspnet:10.0
     restart: unless-stopped
+    command: ["dotnet", "/app/BillingControl.dll"]
     environment:
       TZ: Asia/Kuala_Lumpur
       ASPNETCORE_ENVIRONMENT: Production
