@@ -1,0 +1,126 @@
+name: billing-control
+
+services:
+  source:
+    image: alpine:3.20
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - >-
+        apk add --no-cache git &&
+        rm -rf /source/repo &&
+        git clone --depth 1 --branch master
+        https://github.com/ChunMeng0127/BILLING_MANAGEMENT.git /source/repo
+    volumes:
+      - app_source:/source
+
+  builder:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    restart: "no"
+    command:
+      - sh
+      - -c
+      - >-
+        rm -rf /work /publish/* &&
+        cp -R /src/repo/src/BillingControl /work &&
+        dotnet restore /work/BillingControl.csproj &&
+        dotnet publish /work/BillingControl.csproj -c Release --no-restore
+        -o /publish /p:UseAppHost=false
+    volumes:
+      - app_source:/src:ro
+      - app_publish:/publish
+    depends_on:
+      source:
+        condition: service_completed_successfully
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: billing
+      POSTGRES_USER: billing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U billing -d billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - database
+
+  keys-init:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    restart: "no"
+    user: "0"
+    command: ["sh", "-c", "mkdir -p /keys && chown -R 1654:1654 /keys"]
+    volumes:
+      - data_keys:/keys
+
+  migrate:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    restart: "no"
+    command: ["dotnet", "/app/BillingControl.dll", "--migrate"]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      BootstrapAdmin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
+      BootstrapAdmin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
+      Seed__Demo: "false"
+      DataProtection__Path: /keys
+    volumes:
+      - app_publish:/app:ro
+      - data_keys:/keys
+    depends_on:
+      builder:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      keys-init:
+        condition: service_completed_successfully
+    networks:
+      - database
+
+  app:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Kuala_Lumpur
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_HTTPS_PORT: "443"
+      ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      DataProtection__Path: /keys
+      ReverseProxy__Address: 172.17.0.1
+      AllowedHosts: ${APP_HOST:?Set APP_HOST}
+    volumes:
+      - app_publish:/app:ro
+      - data_keys:/keys
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - database
+      - frontend
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=billing-control_frontend
+      - traefik.http.routers.billing-control.rule=Host(`${APP_HOST:?Set APP_HOST}`)
+      - traefik.http.routers.billing-control.entrypoints=websecure
+      - traefik.http.routers.billing-control.tls=true
+      - traefik.http.routers.billing-control.tls.certresolver=letsencrypt
+      - traefik.http.services.billing-control.loadbalancer.server.port=8080
+
+volumes:
+  app_source:
+  app_publish:
+  postgres_data:
+  data_keys:
+
+networks:
+  database:
+    internal: true
+  frontend:
+    name: billing-control_frontend

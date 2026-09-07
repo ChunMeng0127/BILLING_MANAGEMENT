@@ -38,8 +38,8 @@ jobs:
         run: |
           mkdir -p deploy/tls
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout deploy/tls/privkey.pem -out deploy/tls/fullchain.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost
-          docker compose config --quiet
-          docker compose up -d --build
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.yaml up -d --build
           curl --cacert deploy/tls/fullchain.pem --fail --retry 20 --retry-delay 3 --retry-all-errors --retry-max-time 90 https://localhost/Account/Login -o /dev/null
           python3 scripts/smoke_https.py
       - name: Stop production smoke stack
@@ -50,8 +50,8 @@ jobs:
           ADMIN_PASSWORD: CI-Compose-Password!123
           APP_HOST: localhost
         run: |
-          docker compose logs --no-color --tail 100 app nginx
-          docker compose down
+          docker compose -f compose.yaml logs --no-color --tail 100 app nginx
+          docker compose -f compose.yaml down
       - uses: actions/upload-artifact@v4
         if: always()
         with:

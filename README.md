@@ -85,6 +85,10 @@ The repository supplies deployment configuration; it does not automatically depl
 
 If the VPS already uses ports 80/443 for another proxy, integrate this app with that existing proxy instead of starting a second listener. Keep the application private to the proxy network and trust only its actual address. Do not expose Kestrel or PostgreSQL publicly.
 
+### Hostinger MCP deployment
+
+Hostinger's project importer reads `docker-compose.yaml` from the repository's `master` branch. That file is designed for the existing Traefik proxy: it clones the selected `master` source into a temporary volume, builds the published app with the .NET SDK image, runs the migration once, and exposes only the app through the Traefik HTTPS router. Supply `POSTGRES_PASSWORD`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and `APP_HOST` as project environment variables. Keep `APP_HOST` on a DNS A record pointing at the VPS before starting the project so Traefik can obtain the certificate.
+
 ## Backup and restore
 
 ```bash
