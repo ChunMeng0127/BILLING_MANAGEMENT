@@ -13,7 +13,12 @@ public class BillingController(BillingService billing, AccessScope access) : App
     {
         var a = await access.CurrentAsync();
         var showReceipts = a.IsStaff || a.IsAccountingFirm;
-        var q = access.BillingRecords(a).Include(x => x.Receipts.Where(_ => showReceipts)).AsQueryable();
+        var q = access.BillingRecords(a)
+            .Include(x => x.InvoiceLines)
+            .ThenInclude(x => x.Invoice)
+            .ThenInclude(x => x.ReceiptAllocations)
+            .ThenInclude(x => x.CustomerReceipt)
+            .AsQueryable();
         if (filter.CustomerId != null) q = q.Where(x => x.Engagement.CustomerId == filter.CustomerId);
         if (filter.ServiceId != null) q = q.Where(x => x.Engagement.ServiceId == filter.ServiceId);
         if (filter.Status != null) q = q.Where(x => x.Status == filter.Status);
@@ -52,7 +57,10 @@ public class BillingController(BillingService billing, AccessScope access) : App
         var manager = a.IsManager;
         var b = await access.BillingRecords(a)
             .Include(x => x.Shares.Where(s => staff || (firm && s.Kind == ShareKind.Firm) || (manager && s.Kind == ShareKind.Manager)))
-            .Include(x => x.Receipts.Where(_ => staff || firm))
+            .Include(x => x.InvoiceLines)
+            .ThenInclude(x => x.Invoice)
+            .ThenInclude(x => x.ReceiptAllocations)
+            .ThenInclude(x => x.CustomerReceipt)
             .Include(x => x.WorkItem)
             .ThenInclude(x => x.Assignments.Where(_ => staff))
             .ThenInclude(x => x.Allocations)

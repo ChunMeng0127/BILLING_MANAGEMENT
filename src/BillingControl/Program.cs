@@ -31,6 +31,7 @@ builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInter
 builder.Services.AddAuthorization(o => o.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().AddRequirements(new ValidAccessProfileRequirement()).Build());
 builder.Services.AddControllersWithViews(o => o.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 builder.Services.AddScoped<BillingService>();
+builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddScoped<IAuthorizationHandler, ValidAccessProfileHandler>();
 builder.Services.AddRateLimiter(o =>

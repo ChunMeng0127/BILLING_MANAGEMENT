@@ -3,14 +3,15 @@
 ## Completed locally
 
 - .NET 10 Release build: **0 errors, 0 warnings**.
-- Automated tests: **24 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/results.trx` (local, ignored by Git).
-- Applied the committed EF migration to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
-- Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules, wrong-worker rejection and concurrent overpayment protection.
+- Automated tests: **26 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/invoice-results.trx` (local, ignored by Git).
+- Applied the EF migrations through `InvoiceDocuments` to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
+- Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules, wrong-worker rejection and concurrent overpayment protection.
+- Verified legacy invoice/date and receipt data migrates into Invoice, InvoiceLine and CustomerReceiptAllocation rows without changing the historical amount or removing audit/cancellation data.
 - Verified login redirects across application pages, CSRF rejection, safe login return URLs, Admin access, failed-login lockout and disabled-session revocation.
 - Verified AccountingFirm A cannot read AccountingFirm B data, Manager A cannot read Manager B data, and Worker A cannot read or mutate Worker B assignments or payments, including manually substituted URL/form IDs.
 - Verified dashboard totals, lists, reports and CSV exports use the same entity scope. External detail pages and exports omit other-party shares, LCM gross/retained amounts, worker costs and unrelated receipt/payment data according to role.
 - Verified Admin retains full access, InternalUser retains LCM operational access without user administration/cancellation, invalid role/link combinations are rejected, and changing a role or entity link revokes the existing session.
-- Browser walkthrough: generated sample September billing; posted with an invoice date/reference; recorded a RM250 customer receipt; assigned a worker at 70% of LCM's share; recorded a RM100 worker payment. Dashboard showed RM1,000 billing, RM350 firm, RM250 manager, RM400 LCM gross, RM280 worker entitlement, RM120 retained, RM750 customer outstanding and RM180 worker outstanding.
+- Browser walkthrough: generated sample September billing; created the customer invoice document; allocated a RM250 customer receipt; assigned a worker at 70% of LCM's share; recorded a RM100 worker payment. Dashboard showed RM1,000 billing, RM350 firm, RM250 manager, RM400 LCM gross, RM280 worker entitlement, RM120 retained, RM750 customer outstanding and RM180 worker outstanding.
 - Browser checks: text search with Enter and empty results, year/month/day date filter display and month search, inclusive amount ranges with reversed bounds, Cancel preserving filters, Clear filters, column visibility and multiple-column sort indicators. No browser console errors were captured.
 - Responsive register checked at 390×844: page width remained 390px; wide table content scrolled within its 360px container. Desktop layout was also inspected.
 - PostgreSQL custom-format backup restored successfully into a separate `billing_restore_test` database. Restored user count (1), billing (RM1,000), worker entitlement (RM280) and payments (RM100) matched the source demo.

@@ -6,8 +6,13 @@ using static BillingControl.Services.Finance;
 
 namespace BillingControl.Services;
 
-public class BillingService(AppDbContext db)
+public class BillingService
 {
+    private readonly AppDbContext db;
+    private readonly InvoiceService invoices;
+    public BillingService(AppDbContext db) : this(db, new InvoiceService(db)) { }
+    public BillingService(AppDbContext db, InvoiceService invoices) { this.db = db; this.invoices = invoices; }
+
     public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule = false)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
@@ -64,37 +69,32 @@ public class BillingService(AppDbContext db)
     }
     public async Task UpdateBillingStatus(int id, BillingStatus status, DateOnly? date, string? invoice, long version)
     {
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         Require(Enum.IsDefined(status) && status != BillingStatus.Cancelled && status != BillingStatus.Paid && status != BillingStatus.PartiallyPaid, "Use receipts or the cancellation action to change payment/cancellation status.");
         var bill = await db.BillingRecords.SingleAsync(x => x.Id == id);
         Require(bill.Version == version, "This record changed. Refresh before saving.");
         Require(bill.Status < BillingStatus.Billed, "Posted billing is locked. Use receipts or cancel it.");
-        if (status == BillingStatus.Billed) { Require(date != null && !string.IsNullOrWhiteSpace(invoice) && invoice.Length <= 100, "Billing date and invoice reference are required when posting."); bill.BillingDate = date; bill.InvoiceNumber = invoice!.Trim(); }
-        bill.Status = status; await db.SaveChangesAsync();
+        if (status == BillingStatus.Billed)
+        {
+            Require(date != null && !string.IsNullOrWhiteSpace(invoice) && invoice.Trim().Length <= 100, "Billing date and invoice reference are required when posting.");
+            await invoices.CreateInvoiceCore(InvoiceFlow.AccountingFirmToCustomer, invoice!, date!.Value, new Dictionary<int, decimal> { [id] = bill.Amount });
+        }
+        bill.Status = status; await db.SaveChangesAsync(); await tx.CommitAsync();
     }
     public async Task Receive(int id, DateOnly date, decimal amount, string reference, Guid requestId)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         PositiveMoney(amount);
-        Require(requestId != Guid.Empty && !await db.CustomerReceipts.AnyAsync(x => x.RequestId == requestId), "This receipt was already submitted or its request identifier is missing.");
-        Require(date != default && date <= DateOnly.FromDateTime(DateTime.Today) && !string.IsNullOrWhiteSpace(reference) && reference.Length <= 160, "Enter a receipt date (today or earlier) and reference up to 160 characters.");
-        var bill = await db.BillingRecords.Include(x => x.Receipts).SingleAsync(x => x.Id == id);
+        var bill = await db.BillingRecords.SingleAsync(x => x.Id == id);
         Require(bill.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid, "Only billed records with an outstanding balance can receive payment.");
-        var paid = bill.Receipts.Where(x => !x.IsCancelled).Sum(x => x.Amount);
-        Require(paid + amount <= bill.Amount, "Receipt exceeds outstanding customer billing.");
-        db.CustomerReceipts.Add(new() { BillingRecordId = id, ReceiptDate = date, Amount = amount, Reference = reference.Trim(), RequestId = requestId });
-        bill.Status = paid + amount == bill.Amount ? BillingStatus.Paid : BillingStatus.PartiallyPaid;
-        await db.SaveChangesAsync(); await tx.CommitAsync();
+        await invoices.CreateReceiptForBillingRecord(date, amount, reference, requestId, id);
     }
     public async Task Cancel(string kind, int id, string reason)
     {
         Require(!string.IsNullOrWhiteSpace(reason) && reason.Length <= 2000, "A cancellation reason is required (up to 2,000 characters).");
+        if (kind == "invoice") { await invoices.CancelInvoice(id, reason); return; }
+        if (kind == "receipt") { await invoices.CancelReceipt(id, reason); return; }
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (kind == "payment") { var p = await db.WorkerPayments.SingleAsync(x => x.Id == id); Require(!p.IsCancelled, "Already cancelled."); p.IsCancelled = true; p.CancellationReason = reason; }
-        else if (kind == "receipt")
-        {
-            var r = await db.CustomerReceipts.Include(x => x.BillingRecord).ThenInclude(x => x.Receipts).SingleAsync(x => x.Id == id); Require(!r.IsCancelled, "Already cancelled."); r.IsCancelled = true; r.CancellationReason = reason;
-            var total = r.BillingRecord.Receipts.Where(x => !x.IsCancelled).Sum(x => x.Amount); r.BillingRecord.Status = total == 0 ? BillingStatus.Billed : total == r.BillingRecord.Amount ? BillingStatus.Paid : BillingStatus.PartiallyPaid;
-        }
         else if (kind == "assignment")
         {
             var a = await db.WorkerAssignments.Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment).SingleAsync(x => x.Id == id);
@@ -102,8 +102,8 @@ public class BillingService(AppDbContext db)
         }
         else if (kind == "billing")
         {
-            var b = await db.BillingRecords.Include(x => x.Receipts).Include(x => x.WorkItem).ThenInclude(x => x.Assignments).SingleAsync(x => x.Id == id);
-            Require(b.Status != BillingStatus.Cancelled && !b.Receipts.Any(x => !x.IsCancelled) && !b.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active receipts and assignments first, or billing is already cancelled."); b.Status = BillingStatus.Cancelled; b.CancellationReason = reason;
+            var b = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt).Include(x => x.WorkItem).ThenInclude(x => x.Assignments).SingleAsync(x => x.Id == id);
+            Require(b.Status != BillingStatus.Cancelled && !b.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled) && !b.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active invoices, receipts and assignments first, or billing is already cancelled."); b.Status = BillingStatus.Cancelled; b.CancellationReason = reason;
         }
         else throw new BusinessException("Unknown cancellation type.");
         await db.SaveChangesAsync(); await tx.CommitAsync();

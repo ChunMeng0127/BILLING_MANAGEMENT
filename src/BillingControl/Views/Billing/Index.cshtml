@@ -4,7 +4,7 @@
 <div>
 <p class="eyebrow">BILLING REGISTER</p>
 <h1>Billing records</h1>
-<p>Service periods, invoice dates and customer balances.</p>
+<p>Service periods, invoice documents and customer balances.</p>
 </div>
 @if (access.IsStaff) { <a href="/Billing/Schedule" class="btn btn-primary">+ Generate billing</a> }
 </div>
@@ -29,15 +29,15 @@
 <th>Service</th>
 <th data-type="date">Period start</th>
 <th data-type="date">Period end</th>
-<th data-type="date">Billing date</th>
-<th>Invoice</th>
+<th>Customer invoice state</th>
+<th>Customer invoices</th>
 <th>Status</th>
 <th data-type="amount">Amount (RM)</th>
 @if(showReceipts) { <th data-type="amount">Received (RM)</th><th data-type="amount">Outstanding (RM)</th> }
 </tr>
 </thead>
 <tbody>
-@foreach(var b in Model) { var paid=b.Receipts.Where(x=>!x.IsCancelled).Sum(x=>x.Amount); <tr>
+@foreach(var b in Model) { var invoices=b.InvoiceLines.Where(x=>x.Invoice.Flow==InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status!=InvoiceStatus.Cancelled).Select(x=>x.Invoice).DistinctBy(x=>x.Id).ToList(); <tr>
 <td>
 <a href="/Billing/Details/@b.Id">B-@b.Id.ToString("D5")</a>
 </td>
@@ -45,13 +45,13 @@
 <td>@b.ServiceName</td>
 <td>@b.PeriodStart.ToString("yyyy-MM-dd")</td>
 <td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td>
-<td>@b.BillingDate?.ToString("yyyy-MM-dd")</td>
-<td>@b.InvoiceNumber</td>
+<td>@b.CustomerInvoiceState</td>
+<td>@(invoices.Count == 0 ? "—" : string.Join(", ", invoices.Select(x => x.InvoiceNumber)))</td>
 <td>
 <span class="badge status-@b.Status.ToString().ToLowerInvariant()">@Finance.Label(b.Status)</span>
 </td>
 <td class="money">@b.Amount.ToString("N2")</td>
-@if(showReceipts) { <td class="money">@paid.ToString("N2")</td><td class="money">@((b.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid or BillingStatus.Paid ? b.Amount-paid : 0).ToString("N2"))</td> }
+@if(showReceipts) { <td class="money">@b.CustomerReceivedAmount.ToString("N2")</td><td class="money">@b.CustomerOutstandingAmount.ToString("N2")</td> }
 </tr> }
 </tbody>
 </table>

@@ -20,6 +20,7 @@
 <nav>
 <a class="@(Context.Request.Path.Value == "/" ? "active" : "")" href="/">Overview</a>
 @if (staff || firm || manager) { <a class="@(Context.Request.Path.Value == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule">Upcoming billing</a><a class="@(Context.Request.Path.Value == "/Billing" ? "active" : "")" href="/Billing">Billing records</a> }
+@if (staff || firm || manager) { <a class="@(Context.Request.Path.Value?.StartsWith("/Invoices") == true ? "active" : "")" href="/Invoices">Invoices</a> }
 @if (staff || manager || worker) { <a class="@(Context.Request.Path.Value == "/Work" ? "active" : "")" href="/Work">Work items</a> }
 @if (staff || worker) { <a class="@(Context.Request.Path.Value == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments">Worker assignments</a><a class="@(Context.Request.Path.Value == "/Payments" ? "active" : "")" href="/Payments">Worker payments</a> }
 <a class="@(Context.Request.Path.Value == "/Home/Reports" ? "active" : "")" href="/Home/Reports">Reports</a>

@@ -86,6 +86,87 @@ public class IntegrationTests
         await svc.Cancel("assignment", a.Id, "Reassign"); await svc.Cancel("billing", bill.Id, "Replace"); var replacement = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31)); Assert.NotEqual(bill.Id, replacement.Id);
     }
     [PostgresFact]
+    public async Task InvoiceDocumentsSupportSplitsConsolidationLimitsReceiptsCancellationAndConcurrency()
+    {
+        await using var db = await Fresh();
+        var id = await Engagement(db);
+        var firstEngagement = await db.Engagements.Include(x => x.BusinessParty).Include(x => x.Manager).SingleAsync(x => x.Id == id);
+        var secondEngagement = new Engagement
+        {
+            Customer = new Customer { Name = "Second customer" },
+            Service = new Service { Name = "Bookkeeping" },
+            BusinessPartyId = firstEngagement.BusinessPartyId,
+            ManagerId = firstEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000,
+            Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        db.Add(secondEngagement); await db.SaveChangesAsync();
+        var billing = new BillingService(db);
+        var bill1 = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
+        var bill2 = await billing.Generate(secondEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+        var invoices = new InvoiceService(db);
+
+        var customerPart1 = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-A", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 600 });
+        var customerPart2 = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-B", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 400 });
+        db.ChangeTracker.Clear();
+        var bill1State = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).SingleAsync(x => x.Id == bill1.Id);
+        Assert.Equal(BillingInvoiceState.FullyInvoiced, bill1State.CustomerInvoiceState); Assert.Equal(BillingStatus.Billed, bill1State.Status);
+        Assert.Equal(1000m, bill1State.CustomerInvoicedAmount);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-OVER", new(2026, 2, 2), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+
+        var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 250, [bill2.Id] = 250 });
+        Assert.Equal(2, consolidated.Lines.Count);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+        var lcm = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 400 });
+        Assert.Equal(400m, lcm.Total);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+
+        var firstReceipt = await invoices.CreateReceipt(new(2026, 2, 2), "RCPT-1", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 300 });
+        Assert.Equal(InvoiceStatus.PartiallyPaid, (await db.Invoices.SingleAsync(x => x.Id == customerPart1.Id)).Status);
+        var secondReceipt = await invoices.CreateReceipt(new(2026, 2, 3), "RCPT-2", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 300, [customerPart2.Id] = 400 });
+        Assert.Equal(InvoiceStatus.Paid, (await db.Invoices.SingleAsync(x => x.Id == customerPart1.Id)).Status);
+        Assert.Equal(InvoiceStatus.Paid, (await db.Invoices.SingleAsync(x => x.Id == customerPart2.Id)).Status);
+        Assert.Equal(1000m, (await db.CustomerReceipts.Include(x => x.Allocations).SumAsync(x => x.Amount)));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateReceipt(new(2026, 2, 4), "RCPT-OVER", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 1 }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CancelInvoice(customerPart1.Id, "Has receipt"));
+        await invoices.CancelInvoice(lcm.Id, "LCM correction");
+        Assert.Equal(InvoiceStatus.Cancelled, (await db.Invoices.SingleAsync(x => x.Id == lcm.Id)).Status);
+        await invoices.CancelReceipt(firstReceipt.Id, "Correction");
+        Assert.True((await db.CustomerReceipts.SingleAsync(x => x.Id == firstReceipt.Id)).IsCancelled);
+        var snapshots = await db.BillingRecords.Include(x => x.Shares).Where(x => x.Id == bill1.Id).SingleAsync();
+        var originalLcm = snapshots.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
+        firstEngagement.BillingAmount = 2000; firstEngagement.FirmPercent = 10; firstEngagement.ManagerPercent = 20; firstEngagement.LcmPercent = 70; await db.SaveChangesAsync();
+        Assert.Equal(originalLcm, (await db.BillingRecords.Include(x => x.Shares).SingleAsync(x => x.Id == bill1.Id)).Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
+
+        var bill3 = await billing.Generate(id, new(2026, 2, 1), new(2026, 2, 28));
+        var c1 = Db(); var c2 = Db();
+        async Task Attempt(AppDbContext context, string number)
+        {
+            try { await new InvoiceService(context).CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, number, new(2026, 2, 28), new Dictionary<int, decimal> { [bill3.Id] = 600 }); }
+            catch (BusinessException) { }
+            catch (Npgsql.PostgresException ex) when (ex.SqlState is "40001" or "40P01") { }
+            catch (DbUpdateException) { }
+        }
+        await Task.WhenAll(Attempt(c1, "CONCURRENT-A"), Attempt(c2, "CONCURRENT-B")); await c1.DisposeAsync(); await c2.DisposeAsync();
+        Assert.InRange(await db.InvoiceLines.Where(x => x.BillingRecordId == bill3.Id && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status != InvoiceStatus.Cancelled).SumAsync(x => x.AllocatedAmount), 0m, bill3.Amount);
+    }
+    [PostgresFact]
+    public async Task InvoiceMigrationPreservesLegacyBillingAndReceipts()
+    {
+        await using var db = Db(); await db.Database.EnsureDeletedAsync();
+        await db.Database.MigrateAsync("20260907031528_EntityScopedAccess");
+        var id = await Engagement(db); var billing = new BillingService(db); var bill = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BillingRecords\" SET \"BillingDate\"={new DateOnly(2026, 1, 31)}, \"InvoiceNumber\"={"OLD-001"}, \"Status\"={(int)BillingStatus.Billed} WHERE \"Id\"={bill.Id}");
+        var request = Guid.NewGuid();
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"CustomerReceipts\" (\"BillingRecordId\", \"ReceiptDate\", \"Amount\", \"Reference\", \"RequestId\", \"IsCancelled\", \"CancellationReason\", \"CreatedAt\", \"CreatedBy\", \"UpdatedAt\", \"UpdatedBy\", \"Version\") VALUES ({bill.Id}, {new DateOnly(2026, 2, 1)}, {125m}, {"OLD-RECEIPT"}, {request}, {false}, {null}, {DateTime.UtcNow}, {"legacy"}, {DateTime.UtcNow}, {"legacy"}, {1})");
+        await db.Database.MigrateAsync(); db.ChangeTracker.Clear();
+        var invoice = await db.Invoices.Include(x => x.Lines).SingleAsync(x => x.InvoiceNumber == "OLD-001");
+        Assert.Equal(1000m, invoice.Total); Assert.Equal(InvoiceStatus.PartiallyPaid, invoice.Status); Assert.Equal(bill.Id, invoice.Lines.Single().BillingRecordId);
+        var allocation = await db.CustomerReceiptAllocations.Include(x => x.CustomerReceipt).SingleAsync(x => x.InvoiceId == invoice.Id);
+        Assert.Equal(125m, allocation.Amount); Assert.Equal("OLD-RECEIPT", allocation.CustomerReceipt.Reference);
+        Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='BillingRecords' AND column_name='InvoiceNumber') AS \"Value\"").SingleAsync());
+    }
+    [PostgresFact]
     public async Task ConcurrentPaymentsCannotOverpay()
     {
         await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31)); var w = new Worker { Name = "Concurrency" }; db.Add(w); await db.SaveChangesAsync(); await svc.Assign(bill.WorkItem.Id, w.Id, 70); var a = await db.WorkerAssignments.SingleAsync();
@@ -99,12 +180,12 @@ public class IntegrationTests
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "test-keys")));
         using (var scope = app.Services.CreateScope()) await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "BootstrapAdmin:Email", "test@example.com" }, { "BootstrapAdmin:Password", "Testing-Password!123" }, { "Seed:Demo", "true" } }).Build());
         using var client = app.CreateClient(new() { AllowAutoRedirect = false });
-        foreach (var path in new[] { "/", "/Masters", "/Engagements", "/Billing", "/Billing/Schedule", "/Work", "/Work/Assignments", "/Payments", "/Home/Reports", "/Home/Export", "/Users", "/Account/Password" }) { var response = await client.GetAsync(path); Assert.Equal(HttpStatusCode.Redirect, response.StatusCode); Assert.Contains("/Account/Login", response.Headers.Location!.ToString()); }
+        foreach (var path in new[] { "/", "/Masters", "/Engagements", "/Billing", "/Billing/Schedule", "/Invoices", "/Invoices/Details/1", "/Invoices/Create", "/Invoices/Receipt", "/Work", "/Work/Assignments", "/Payments", "/Home/Reports", "/Home/Export", "/Users", "/Account/Password" }) { var response = await client.GetAsync(path); Assert.Equal(HttpStatusCode.Redirect, response.StatusCode); Assert.Contains("/Account/Login", response.Headers.Location!.ToString()); }
         var login = await client.GetAsync("/Account/Login"); Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var html = await login.Content.ReadAsStringAsync(); var token = WebUtility.HtmlDecode(Regex.Match(html, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value); Assert.NotEmpty(token);
         var noToken = await client.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string> { { "Email", "test@example.com" }, { "Password", "Testing-Password!123" } })); Assert.Equal(HttpStatusCode.BadRequest, noToken.StatusCode);
         var signed = await client.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string> { { "Email", "test@example.com" }, { "Password", "Testing-Password!123" }, { "__RequestVerificationToken", token }, { "ReturnUrl", "https://evil.example/" } })); Assert.Equal("/", signed.Headers.Location!.ToString());
-        foreach (var path in new[] { "/", "/Masters?kind=Customers", "/Masters?kind=Workers", "/Masters/Edit?kind=Customers", "/Engagements", "/Engagements/Edit", "/Billing", "/Billing/Schedule", "/Work", "/Work/Assignments", "/Payments", "/Payments/Create", "/Home/Reports", "/Home/Export", "/Users", "/Users/Create", "/Account/Password" }) { var response = await client.GetAsync(path); Assert.True(response.StatusCode == HttpStatusCode.OK, path + ": " + response.StatusCode); }
+        foreach (var path in new[] { "/", "/Masters?kind=Customers", "/Masters?kind=Workers", "/Masters/Edit?kind=Customers", "/Engagements", "/Engagements/Edit", "/Billing", "/Billing/Schedule", "/Invoices", "/Invoices/Create", "/Invoices/Receipt", "/Work", "/Work/Assignments", "/Payments", "/Payments/Create", "/Home/Reports", "/Home/Export", "/Users", "/Users/Create", "/Account/Password" }) { var response = await client.GetAsync(path); Assert.True(response.StatusCode == HttpStatusCode.OK, path + ": " + response.StatusCode); }
         using (var scope = app.Services.CreateScope()) { var manager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>(); var user = new AppUser { Email = "user@example.com", UserName = "user@example.com" }; Seed.Check(await manager.CreateAsync(user, "User-Password!123")); Seed.Check(await manager.AddToRoleAsync(user, AppRoles.InternalUser)); }
         using var normal = app.CreateClient(new() { AllowAutoRedirect = false }); var page = await normal.GetStringAsync("/Account/Login"); token = WebUtility.HtmlDecode(Regex.Match(page, "name=\"__RequestVerificationToken\" type=\"hidden\" value=\"([^\"]+)\"").Groups[1].Value);
         await normal.PostAsync("/Account/Login", new FormUrlEncodedContent(new Dictionary<string, string> { { "Email", "user@example.com" }, { "Password", "User-Password!123" }, { "__RequestVerificationToken", token } })); var denied = await normal.GetAsync("/Users"); Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode); Assert.Contains("Denied", denied.Headers.Location!.ToString());
@@ -152,7 +233,7 @@ public class IntegrationTests
         await using var reset = await Fresh();
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "scope-test-keys")));
         const string password = "Scope-Password!123";
-        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, billAId, billBId, workAId, workBId;
+        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, billAId, billBId, workAId, workBId, invoiceAId, invoiceBId, managerInvoiceAId;
         long workBVersion;
         string internalId, firmBUserId;
         using (var scope = app.Services.CreateScope())
@@ -173,6 +254,9 @@ public class IntegrationTests
             await finance.Assign(billA.WorkItem.Id, workerA.Id, 70m); await finance.Assign(billB.WorkItem.Id, workerB.Id, 60m);
             await finance.UpdateBillingStatus(billA.Id, BillingStatus.Billed, new(2026, 1, 31), "ALPHA-INV", billA.Version);
             await finance.UpdateBillingStatus(billB.Id, BillingStatus.Billed, new(2026, 1, 31), "BETA-INV", billB.Version);
+            invoiceAId = await db.Invoices.Where(x => x.InvoiceNumber == "ALPHA-INV").Select(x => x.Id).SingleAsync();
+            invoiceBId = await db.Invoices.Where(x => x.InvoiceNumber == "BETA-INV").Select(x => x.Id).SingleAsync();
+            managerInvoiceAId = (await new InvoiceService(db).CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "ALPHA-MGR-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = 250 })).Id;
             await finance.Receive(billA.Id, new(2026, 1, 31), 100m, "ALPHA-RECEIPT", Guid.NewGuid());
             await finance.Receive(billB.Id, new(2026, 1, 31), 200m, "BETA-RECEIPT", Guid.NewGuid());
             var assignmentA = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == billA.WorkItem.Id);
@@ -201,6 +285,8 @@ public class IntegrationTests
         var firmBilling = await firmClient.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", firmBilling); Assert.DoesNotContain("Beta Scope Customer", firmBilling);
         Assert.Equal(HttpStatusCode.NotFound, (await firmClient.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         var firmDetails = await firmClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Your firm share", firmDetails); Assert.Contains("ALPHA-RECEIPT", firmDetails); Assert.DoesNotContain("Your manager share", firmDetails); Assert.DoesNotContain("LCM retained", firmDetails); Assert.DoesNotContain("Worker entitlement", firmDetails);
+        var firmInvoices = await firmClient.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", firmInvoices); Assert.Contains("ALPHA-MGR-INV", firmInvoices); Assert.DoesNotContain("BETA-INV", firmInvoices); Assert.Equal(HttpStatusCode.NotFound, (await firmClient.GetAsync($"/Invoices/Details/{invoiceBId}")).StatusCode);
+        var firmInvoiceCsv = await firmClient.GetStringAsync("/Invoices/Export"); Assert.Contains("ALPHA-INV", firmInvoiceCsv); Assert.DoesNotContain("BETA-INV", firmInvoiceCsv);
         var firmReport = await firmClient.GetStringAsync("/Home/Reports"); Assert.Contains("Your firm share", firmReport); Assert.DoesNotContain("Manager share", firmReport); Assert.DoesNotContain("LCM MGT gross", firmReport); Assert.DoesNotContain("Worker cost", firmReport); Assert.DoesNotContain("Beta Scope Customer", firmReport);
         var firmCsv = await firmClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", firmCsv); Assert.DoesNotContain("Beta Scope Customer", firmCsv); Assert.DoesNotContain("LCM gross", firmCsv); Assert.DoesNotContain("Worker entitlement", firmCsv);
 
@@ -209,6 +295,7 @@ public class IntegrationTests
         var managerEngagements = await managerClient.GetStringAsync("/Engagements"); Assert.Contains("Alpha Scope Customer", managerEngagements); Assert.DoesNotContain("Beta Scope Customer", managerEngagements);
         Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         var managerDetails = await managerClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Your manager share", managerDetails); Assert.Contains("Work status", managerDetails); Assert.DoesNotContain("Customer receipt history", managerDetails); Assert.DoesNotContain("LCM retained", managerDetails); Assert.DoesNotContain("Worker entitlement", managerDetails);
+        var managerInvoices = await managerClient.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-MGR-INV", managerInvoices); Assert.DoesNotContain("ALPHA-INV", managerInvoices); Assert.DoesNotContain("BETA-INV", managerInvoices); Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Invoices/Details/{invoiceAId}")).StatusCode);
         var managerReport = await managerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Your manager share", managerReport); Assert.DoesNotContain("LCM MGT gross", managerReport); Assert.DoesNotContain("Worker cost", managerReport); Assert.DoesNotContain("Beta Scope Customer", managerReport);
         var managerCsv = await managerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", managerCsv); Assert.DoesNotContain("Beta Scope Customer", managerCsv); Assert.Contains("Manager share MYR", managerCsv); Assert.DoesNotContain("LCM gross", managerCsv); Assert.DoesNotContain("Worker entitlement", managerCsv);
 
@@ -221,15 +308,19 @@ public class IntegrationTests
         var workerReport = await workerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Your entitlement", workerReport); Assert.DoesNotContain("Accounting firm share", workerReport); Assert.DoesNotContain("Manager share", workerReport); Assert.DoesNotContain("LCM MGT gross", workerReport); Assert.DoesNotContain("Beta Scope Customer", workerReport);
         var workerCsv = await workerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", workerCsv); Assert.DoesNotContain("Beta Scope Customer", workerCsv); Assert.DoesNotContain("Firm share", workerCsv); Assert.DoesNotContain("LCM", workerCsv);
         var billingDenied = await workerClient.GetAsync($"/Billing/Details/{billAId}"); Assert.Equal(HttpStatusCode.Redirect, billingDenied.StatusCode); Assert.Contains("Denied", billingDenied.Headers.Location!.ToString());
+        var invoiceDenied = await workerClient.GetAsync("/Invoices"); Assert.Equal(HttpStatusCode.Redirect, invoiceDenied.StatusCode); Assert.Contains("Denied", invoiceDenied.Headers.Location!.ToString());
+        var invoiceExportDenied = await workerClient.GetAsync("/Invoices/Export"); Assert.Equal(HttpStatusCode.Redirect, invoiceExportDenied.StatusCode); Assert.Contains("Denied", invoiceExportDenied.Headers.Location!.ToString());
         var forgedWork = await PostWithToken(workerClient, $"/Work/Details/{workAId}", "/Work/Update", new() { ["id"] = workBId.ToString(), ["version"] = workBVersion.ToString(), ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "forged" });
         Assert.Equal(HttpStatusCode.NotFound, forgedWork.StatusCode);
         var workerDirectory = await workerClient.GetStringAsync("/Masters?kind=Workers"); Assert.Contains("Alpha Worker", workerDirectory); Assert.DoesNotContain("Beta Worker", workerDirectory);
 
         using var admin = await SignedIn(app, "scope-admin@example.com", password);
         var adminDashboard = await admin.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", adminDashboard); Assert.Contains("Beta Scope Customer", adminDashboard);
+        var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
         var adminBilling = await admin.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", adminBilling); Assert.Contains("Beta Scope Customer", adminBilling); Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         using var internalUser = await SignedIn(app, "internal@example.com", password);
         var internalBilling = await internalUser.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", internalBilling); Assert.Contains("Beta Scope Customer", internalBilling);
+        var internalInvoices = await internalUser.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", internalInvoices); Assert.Contains("ALPHA-MGR-INV", internalInvoices); Assert.Contains("BETA-INV", internalInvoices);
         var usersDenied = await internalUser.GetAsync("/Users"); Assert.Equal(HttpStatusCode.Redirect, usersDenied.StatusCode); Assert.Contains("Denied", usersDenied.Headers.Location!.ToString());
 
         var invalidUpdate = await PostWithToken(admin, "/Users", "/Users/Update", new() { ["id"] = firmBUserId, ["role"] = AppRoles.AccountingFirm, ["active"] = "true", ["managerId"] = managerBId.ToString() });

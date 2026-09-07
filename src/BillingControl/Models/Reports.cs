@@ -23,7 +23,7 @@ public class ReportModel
     public IEnumerable<WorkerAssignment> Assignments => Active.SelectMany(x => x.WorkItem.Assignments).Where(x => !x.IsCancelled);
     public decimal WorkerCost => Assignments.Sum(x => x.Entitlement);
     public decimal WorkerPaid => Assignments.Sum(x => x.Allocations.Where(a => !a.WorkerPayment.IsCancelled).Sum(a => a.Amount));
-    public decimal BillingOutstanding => Active.Where(x => x.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid or BillingStatus.Paid).Sum(x => x.Amount - x.Receipts.Where(r => !r.IsCancelled).Sum(r => r.Amount));
+    public decimal BillingOutstanding => Active.Sum(x => x.CustomerOutstandingAmount);
     public decimal OwnShare => Access.Role switch
     {
         AppRoles.AccountingFirm => Share(ShareKind.Firm),

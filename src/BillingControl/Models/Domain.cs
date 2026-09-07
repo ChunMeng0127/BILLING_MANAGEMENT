@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.AspNetCore.Identity;
 
 namespace BillingControl.Models;
@@ -72,8 +73,6 @@ public class BillingRecord : Record
     public Engagement Engagement { get; set; } = null!;
     public DateOnly PeriodStart { get; set; }
     public DateOnly PeriodEnd { get; set; }
-    public DateOnly? BillingDate { get; set; }
-    public string? InvoiceNumber { get; set; }
     public BillingStatus Status { get; set; }
     public decimal Amount { get; set; }
     public string CustomerName { get; set; } = "";
@@ -81,8 +80,13 @@ public class BillingRecord : Record
     public string? CancellationReason { get; set; }
     public List<RevenueShareAllocation> Shares { get; set; } = [];
     public WorkItem WorkItem { get; set; } = null!;
-    public List<CustomerReceipt> Receipts { get; set; } = [];
+    public List<InvoiceLine> InvoiceLines { get; set; } = [];
+    [NotMapped] public decimal CustomerInvoicedAmount => InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer).Sum(x => x.AllocatedAmount);
+    [NotMapped] public BillingInvoiceState CustomerInvoiceState => CustomerInvoicedAmount <= 0 ? BillingInvoiceState.Unbilled : CustomerInvoicedAmount < Amount ? BillingInvoiceState.PartiallyInvoiced : BillingInvoiceState.FullyInvoiced;
+    [NotMapped] public decimal CustomerReceivedAmount => InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Total > 0).Sum(x => x.Invoice.ReceiptAllocations.Where(y => !y.CustomerReceipt.IsCancelled).Sum(y => y.Amount) * x.AllocatedAmount / x.Invoice.Total);
+    [NotMapped] public decimal CustomerOutstandingAmount => Math.Max(0m, CustomerInvoicedAmount - CustomerReceivedAmount);
 }
+public enum BillingInvoiceState { Unbilled, PartiallyInvoiced, FullyInvoiced }
 public enum ShareKind { Firm, Manager, Lcm }
 public class RevenueShareAllocation : Record
 {
@@ -135,14 +139,48 @@ public class WorkerPaymentAllocation : Record
     public WorkerAssignment WorkerAssignment { get; set; } = null!;
     public decimal Amount { get; set; }
 }
-public class CustomerReceipt : Record
+public enum InvoiceFlow { AccountingFirmToCustomer, ManagerToAccountingFirm, LcmToManager }
+public enum InvoiceStatus { Issued, PartiallyPaid, Paid, Cancelled }
+public class Invoice : Record
 {
+    [Required, StringLength(100)] public string InvoiceNumber { get; set; } = "";
+    public DateOnly InvoiceDate { get; set; }
+    public InvoiceFlow Flow { get; set; }
+    public InvoiceStatus Status { get; set; } = InvoiceStatus.Issued;
+    public decimal Total { get; set; }
+    public string IssuerName { get; set; } = "";
+    public string RecipientName { get; set; } = "";
+    public int? BusinessPartyId { get; set; }
+    public BusinessParty? BusinessParty { get; set; }
+    public int? ManagerId { get; set; }
+    public Manager? Manager { get; set; }
+    public string? CancellationReason { get; set; }
+    public List<InvoiceLine> Lines { get; set; } = [];
+    public List<CustomerReceiptAllocation> ReceiptAllocations { get; set; } = [];
+}
+public class InvoiceLine : Record
+{
+    public int InvoiceId { get; set; }
+    public Invoice Invoice { get; set; } = null!;
     public int BillingRecordId { get; set; }
     public BillingRecord BillingRecord { get; set; } = null!;
+    public decimal AllocatedAmount { get; set; }
+}
+public class CustomerReceipt : Record
+{
     public DateOnly ReceiptDate { get; set; }
     public decimal Amount { get; set; }
     public string Reference { get; set; } = "";
     public Guid RequestId { get; set; }
     public bool IsCancelled { get; set; }
     public string? CancellationReason { get; set; }
+    public List<CustomerReceiptAllocation> Allocations { get; set; } = [];
+}
+public class CustomerReceiptAllocation : Record
+{
+    public int CustomerReceiptId { get; set; }
+    public CustomerReceipt CustomerReceipt { get; set; } = null!;
+    public int InvoiceId { get; set; }
+    public Invoice Invoice { get; set; } = null!;
+    public decimal Amount { get; set; }
 }

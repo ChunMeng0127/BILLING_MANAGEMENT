@@ -16,11 +16,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<BillingSchedule> BillingSchedules => Set<BillingSchedule>();
     public DbSet<BillingRecord> BillingRecords => Set<BillingRecord>();
     public DbSet<RevenueShareAllocation> RevenueShareAllocations => Set<RevenueShareAllocation>();
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<WorkerAssignment> WorkerAssignments => Set<WorkerAssignment>();
     public DbSet<WorkerPayment> WorkerPayments => Set<WorkerPayment>();
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
+    public DbSet<CustomerReceiptAllocation> CustomerReceiptAllocations => Set<CustomerReceiptAllocation>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -58,16 +61,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_Billing_Dates", "\"PeriodEnd\" >= \"PeriodStart\"");
             t.HasCheckConstraint("CK_Billing_Amount", "\"Amount\" > 0");
-            t.HasCheckConstraint("CK_Billing_Invoice", "\"Status\" NOT IN (4,5,6) OR (\"BillingDate\" IS NOT NULL AND length(trim(\"InvoiceNumber\")) > 0)");
         });
         b.Entity<RevenueShareAllocation>().HasIndex(x => new { x.BillingRecordId, x.Kind }).IsUnique();
         b.Entity<RevenueShareAllocation>().ToTable(t => t.HasCheckConstraint("CK_Share", "\"Amount\" >= 0 AND \"Percent\" BETWEEN 0 AND 100"));
+        b.Entity<Invoice>().HasIndex(x => x.InvoiceNumber).IsUnique();
+        b.Entity<Invoice>().Property(x => x.InvoiceNumber).HasMaxLength(100);
+        b.Entity<Invoice>().HasOne(x => x.BusinessParty).WithMany().HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Invoice>().HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Invoice>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_Invoice_Total", "\"Total\" > 0");
+            t.HasCheckConstraint("CK_Invoice_Party", "(\"Flow\" = 0 AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NULL) OR (\"Flow\" = 1 AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NOT NULL) OR (\"Flow\" = 2 AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NOT NULL)");
+        });
+        b.Entity<InvoiceLine>().HasIndex(x => new { x.InvoiceId, x.BillingRecordId }).IsUnique();
+        b.Entity<InvoiceLine>().ToTable(t => t.HasCheckConstraint("CK_InvoiceLine_Amount", "\"AllocatedAmount\" > 0"));
         b.Entity<BillingRecord>().HasOne(x => x.WorkItem).WithOne(x => x.BillingRecord).HasForeignKey<WorkItem>(x => x.BillingRecordId);
         b.Entity<WorkerAssignment>().ToTable(t => t.HasCheckConstraint("CK_Assignment", "\"Percent\" > 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0"));
         b.Entity<WorkerPayment>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<CustomerReceipt>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<WorkerPayment>().ToTable(t => t.HasCheckConstraint("CK_Payment", "\"Amount\" > 0"));
         b.Entity<CustomerReceipt>().ToTable(t => t.HasCheckConstraint("CK_Receipt", "\"Amount\" > 0"));
+        b.Entity<CustomerReceiptAllocation>().HasIndex(x => new { x.CustomerReceiptId, x.InvoiceId }).IsUnique();
+        b.Entity<CustomerReceiptAllocation>().ToTable(t => t.HasCheckConstraint("CK_ReceiptAllocation_Amount", "\"Amount\" > 0"));
         b.Entity<WorkerPaymentAllocation>().HasIndex(x => new { x.WorkerPaymentId, x.WorkerAssignmentId }).IsUnique();
         b.Entity<WorkerPaymentAllocation>().ToTable(t => t.HasCheckConstraint("CK_PaymentAllocation", "\"Amount\" > 0"));
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
@@ -81,8 +96,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             {
                 string[] allowed = e.Entity switch
                 {
-                    BillingRecord => ["Status", "BillingDate", "InvoiceNumber", "CancellationReason"],
-                    RevenueShareAllocation or WorkerPaymentAllocation => [],
+                    BillingRecord => ["Status", "CancellationReason"],
+                    Invoice => ["Status", "CancellationReason"],
+                    RevenueShareAllocation or WorkerPaymentAllocation or InvoiceLine or CustomerReceiptAllocation => [],
                     WorkerAssignment or WorkerPayment or CustomerReceipt => ["IsCancelled", "CancellationReason"],
                     _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
                 };

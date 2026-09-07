@@ -91,6 +91,14 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
         _ => db.BillingRecords.Where(_ => false)
     };
 
+    public IQueryable<Invoice> Invoices(AccessProfile a) => a.Role switch
+    {
+        AppRoles.Admin or AppRoles.InternalUser => db.Invoices,
+        AppRoles.AccountingFirm => db.Invoices.Where(x => x.BusinessPartyId == a.BusinessPartyId && x.Lines.Any(line => line.BillingRecord.Engagement.BusinessPartyId == a.BusinessPartyId)),
+        AppRoles.Manager => db.Invoices.Where(x => x.ManagerId == a.ManagerId && x.Lines.Any(line => line.BillingRecord.Engagement.ManagerId == a.ManagerId)),
+        _ => db.Invoices.Where(_ => false)
+    };
+
     public IQueryable<BillingSchedule> BillingSchedules(AccessProfile a) => a.Role switch
     {
         AppRoles.Admin or AppRoles.InternalUser => db.BillingSchedules,
