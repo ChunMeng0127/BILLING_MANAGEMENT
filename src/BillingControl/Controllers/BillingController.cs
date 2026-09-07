@@ -73,24 +73,13 @@ public class BillingController(BillingService billing, AccessScope access) : App
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
-    public async Task<IActionResult> Status(int id, BillingStatus status, DateOnly? date, string? invoice, long version)
+    public async Task<IActionResult> Status(int id, BillingStatus status, long version)
     {
         ValidForm();
         var a = await access.CurrentAsync();
         if (!await access.BillingRecords(a).AnyAsync(x => x.Id == id)) return NotFound();
-        await billing.UpdateBillingStatus(id, status, date, invoice, version);
+        await billing.UpdateBillingStatus(id, status, version);
         TempData["Success"] = "Billing status updated.";
-        return RedirectToAction(nameof(Details), new { id });
-    }
-
-    [HttpPost, Authorize(Roles = AppRoles.Staff)]
-    public async Task<IActionResult> Receive(int id, DateOnly date, decimal amount, string reference, Guid requestId)
-    {
-        ValidForm();
-        var a = await access.CurrentAsync();
-        if (!await access.BillingRecords(a).AnyAsync(x => x.Id == id)) return NotFound();
-        await billing.Receive(id, date, amount, reference, requestId);
-        TempData["Success"] = "Customer receipt recorded.";
         return RedirectToAction(nameof(Details), new { id });
     }
 

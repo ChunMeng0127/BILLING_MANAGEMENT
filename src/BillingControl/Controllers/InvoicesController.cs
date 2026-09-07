@@ -58,7 +58,11 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
     public async Task<IActionResult> Create()
     {
         ViewBag.Access = await access.CurrentAsync();
-        ViewBag.Bills = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).Where(x => x.Status != BillingStatus.Cancelled).OrderByDescending(x => x.PeriodStart).ToListAsync();
+        ViewBag.Bills = await db.BillingRecords
+            .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
+            .Include(x => x.Engagement).ThenInclude(x => x.Manager)
+            .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice)
+            .Where(x => x.Status != BillingStatus.Cancelled).OrderByDescending(x => x.PeriodStart).ToListAsync();
         return View(new InvoiceForm());
     }
 

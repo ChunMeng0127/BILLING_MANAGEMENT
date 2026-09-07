@@ -13,20 +13,13 @@
 <div class="panel summary-strip">
 @if(access.IsStaff) { <span>Worker entitlement <strong>RM @cost.ToString("N2")</strong></span><span>LCM retained <strong>RM @((gross-cost).ToString("N2"))</strong></span> }
 @if(access.IsStaff || access.IsAccountingFirm) { <span>Customer invoiced <strong>RM @Model.CustomerInvoicedAmount.ToString("N2")</strong></span><span>Customer received <strong>RM @Model.CustomerReceivedAmount.ToString("N2")</strong></span><span>Customer outstanding <strong>RM @Model.CustomerOutstandingAmount.ToString("N2")</strong></span> }
-<span>Customer invoice state <strong>@Model.CustomerInvoiceState</strong></span>
+<span>Customer invoice state <strong>@Finance.Label(Model.CustomerInvoiceState)</strong></span>
 </div>
-@if (access.IsStaff && Model.Status < BillingStatus.Billed) { <section class="panel form-panel wide"><h2>Update billing workflow</h2><form method="post" asp-action="Status" class="form-grid">
+@if (access.IsStaff && Model.Status <= BillingStatus.ReadyToBill) { <section class="panel form-panel wide"><h2>Update operational billing workflow</h2><p class="hint">Invoice and payment states are calculated from active invoice and receipt allocations.</p><form method="post" asp-action="Status" class="form-grid">
 <input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="version" value="@Model.Version" />
-<div><label class="form-label" for="status">Status</label><select name="status" id="status" class="form-select">@foreach(var s in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.Billed)) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select></div>
-<div><label class="form-label" for="date">Customer invoice date (required to post)</label><input id="date" name="date" type="date" class="form-control" /></div>
-<div><label class="form-label" for="invoice">Customer invoice number (creates an invoice document)</label><input id="invoice" name="invoice" maxlength="100" class="form-control" /></div>
+<div><label class="form-label" for="status">Operational status</label><select name="status" id="status" class="form-select">@foreach(var s in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.ReadyToBill)) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select></div>
 <div class="align-end"><button class="btn btn-primary">Save status</button></div></form></section> }
-@if (access.IsStaff && Model.CustomerInvoicedAmount > Model.CustomerReceivedAmount) { <section class="panel form-panel wide"><h2>Record customer receipt</h2><p>Outstanding across customer invoices: RM @Model.CustomerOutstandingAmount.ToString("N2")</p><form method="post" asp-action="Receive" class="form-grid">
-<input type="hidden" name="id" value="@Model.Id" /><input type="hidden" name="requestId" value="@Guid.NewGuid()" />
-<div><label class="form-label">Receipt date<input name="date" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" required class="form-control" /></label></div>
-<div><label class="form-label">Amount (RM)<input name="amount" type="number" step="0.01" min="0.01" required class="form-control" /></label></div>
-<div><label class="form-label">Reference<input name="reference" maxlength="160" required class="form-control" /></label></div>
-<div class="align-end"><button class="btn btn-primary">Record receipt</button></div></form></section> }
+@if (access.IsStaff) { <section class="panel form-panel wide"><h2>Invoice and receipt documents</h2><p class="hint">Create invoices and allocate customer receipts through the invoice module.</p><div class="form-actions"><a class="btn btn-primary" href="/Invoices/Create">Create invoice</a><a class="btn btn-outline-secondary" href="/Invoices/Receipt">Allocate customer receipt</a></div></section> }
 @if(access.IsStaff || access.IsAccountingFirm) { <section class="panel"><div class="panel-heading"><h2>Customer receipt history</h2></div><table class="table data-grid"><thead><tr><th data-type="date">Date</th><th>Reference</th><th data-type="amount">Amount (RM)</th><th>Status</th>@if(access.IsAdmin){<th data-nosort>Action</th>}</tr></thead><tbody>
 @foreach(var r in Model.InvoiceLines.SelectMany(x=>x.Invoice.ReceiptAllocations).Select(x=>x.CustomerReceipt).Where(x=>x!=null).GroupBy(x=>x.Id).Select(x=>x.First())) { <tr><td>@r.ReceiptDate.ToString("yyyy-MM-dd")</td><td>@r.Reference</td><td>@r.Amount.ToString("N2")</td><td>@(r.IsCancelled ? "Cancelled: "+r.CancellationReason : "Recorded")</td>@if(access.IsAdmin){<td>@if(!r.IsCancelled) { <form asp-action="Cancel" method="post" class="inline-form"><input type="hidden" name="kind" value="receipt" /><input type="hidden" name="id" value="@r.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Cancellation reason" required class="form-control form-control-sm" /><button class="btn btn-outline-danger btn-sm">Cancel receipt</button></form> }</td>}</tr> }
 </tbody></table></section> }

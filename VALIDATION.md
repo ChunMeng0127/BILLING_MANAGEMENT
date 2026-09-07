@@ -3,9 +3,12 @@
 ## Completed locally
 
 - .NET 10 Release build: **0 errors, 0 warnings**.
-- Automated tests: **26 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/invoice-results.trx` (local, ignored by Git).
+- Automated tests: **26 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/invoice-integrity-results.trx` (local, ignored by Git).
 - Applied the EF migrations through `InvoiceDocuments` to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
-- Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules, wrong-worker rejection and concurrent overpayment protection.
+- Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules and wrong-worker rejection.
+- Verified same-customer customer-invoice consolidation is allowed while mixed customers are rejected; Manager and LCM flows retain their permitted consolidation. Verified invoice numbers can be reused by different issuers and are rejected for the same issuer.
+- Verified one receipt can cover several invoices for the same firm/customer, while mixed-customer and mixed-firm receipts and overpayments are rejected. Invoice and receipt cancellation recalculate the derived states.
+- Verified concurrent worker payments, invoice allocations and receipt allocations preserve their caps. PostgreSQL serialization/deadlock exceptions, including wrapped `40001`, roll back and return the normal refresh/retry business error without automatic retry.
 - Verified legacy invoice/date and receipt data migrates into Invoice, InvoiceLine and CustomerReceiptAllocation rows without changing the historical amount or removing audit/cancellation data.
 - Verified login redirects across application pages, CSRF rejection, safe login return URLs, Admin access, failed-login lockout and disabled-session revocation.
 - Verified AccountingFirm A cannot read AccountingFirm B data, Manager A cannot read Manager B data, and Worker A cannot read or mutate Worker B assignments or payments, including manually substituted URL/form IDs.
@@ -15,7 +18,7 @@
 - Browser checks: text search with Enter and empty results, year/month/day date filter display and month search, inclusive amount ranges with reversed bounds, Cancel preserving filters, Clear filters, column visibility and multiple-column sort indicators. No browser console errors were captured.
 - Responsive register checked at 390×844: page width remained 390px; wide table content scrolled within its 360px container. Desktop layout was also inspected.
 - PostgreSQL custom-format backup restored successfully into a separate `billing_restore_test` database. Restored user count (1), billing (RM1,000), worker entitlement (RM280) and payments (RM100) matched the source demo.
-- JavaScript syntax check and Compose/CI YAML parsing passed.
+- JavaScript syntax check and CI YAML parsing passed. Docker is unavailable on this Windows PC; the production image and Compose smoke test are run by GitHub Actions.
 
 ## Deployment verification
 

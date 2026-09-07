@@ -64,14 +64,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         });
         b.Entity<RevenueShareAllocation>().HasIndex(x => new { x.BillingRecordId, x.Kind }).IsUnique();
         b.Entity<RevenueShareAllocation>().ToTable(t => t.HasCheckConstraint("CK_Share", "\"Amount\" >= 0 AND \"Percent\" BETWEEN 0 AND 100"));
-        b.Entity<Invoice>().HasIndex(x => x.InvoiceNumber).IsUnique();
+        b.Entity<Invoice>().HasIndex(x => new { x.BusinessPartyId, x.InvoiceNumber }).IsUnique().HasFilter("\"Flow\" = 0");
+        b.Entity<Invoice>().HasIndex(x => new { x.ManagerId, x.InvoiceNumber }).IsUnique().HasFilter("\"Flow\" = 1");
+        b.Entity<Invoice>().HasIndex(x => x.InvoiceNumber).IsUnique().HasFilter("\"Flow\" = 2");
         b.Entity<Invoice>().Property(x => x.InvoiceNumber).HasMaxLength(100);
         b.Entity<Invoice>().HasOne(x => x.BusinessParty).WithMany().HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Invoice>().HasOne(x => x.Customer).WithMany().HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Invoice>().HasOne(x => x.Manager).WithMany().HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<Invoice>().ToTable(t =>
         {
             t.HasCheckConstraint("CK_Invoice_Total", "\"Total\" > 0");
-            t.HasCheckConstraint("CK_Invoice_Party", "(\"Flow\" = 0 AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NULL) OR (\"Flow\" = 1 AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NOT NULL) OR (\"Flow\" = 2 AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_Invoice_Party", "(\"Flow\" = 0 AND \"BusinessPartyId\" IS NOT NULL AND \"CustomerId\" IS NOT NULL AND \"ManagerId\" IS NULL) OR (\"Flow\" = 1 AND \"BusinessPartyId\" IS NOT NULL AND \"CustomerId\" IS NULL AND \"ManagerId\" IS NOT NULL) OR (\"Flow\" = 2 AND \"BusinessPartyId\" IS NULL AND \"CustomerId\" IS NULL AND \"ManagerId\" IS NOT NULL)");
         });
         b.Entity<InvoiceLine>().HasIndex(x => new { x.InvoiceId, x.BillingRecordId }).IsUnique();
         b.Entity<InvoiceLine>().ToTable(t => t.HasCheckConstraint("CK_InvoiceLine_Amount", "\"AllocatedAmount\" > 0"));

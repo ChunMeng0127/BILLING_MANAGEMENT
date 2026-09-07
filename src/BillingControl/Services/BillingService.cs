@@ -1,4 +1,3 @@
-using System.Data;
 using BillingControl.Data;
 using BillingControl.Models;
 using Microsoft.EntityFrameworkCore;
@@ -9,13 +8,12 @@ namespace BillingControl.Services;
 public class BillingService
 {
     private readonly AppDbContext db;
-    private readonly InvoiceService invoices;
-    public BillingService(AppDbContext db) : this(db, new InvoiceService(db)) { }
-    public BillingService(AppDbContext db, InvoiceService invoices) { this.db = db; this.invoices = invoices; }
+    public BillingService(AppDbContext db) { this.db = db; }
 
     public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule = false)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        return await FinancialTransaction.Serializable(db, async () =>
+        {
         var e = await db.Engagements.Include(x => x.Customer).Include(x => x.Service).Include(x => x.BusinessParty).Include(x => x.Manager).Include(x => x.Schedule).SingleAsync(x => x.Id == engagementId);
         Require(e.Status == EngagementStatus.Active, "Engagement must be active.");
         Require(e.Customer.IsActive && e.Service.IsActive && e.BusinessParty.IsActive && e.Manager.IsActive, "Reactivate this engagement's master records before generating billing.");
@@ -34,11 +32,13 @@ public class BillingService
         bill.Shares = [new() { Kind = ShareKind.Firm, PartyName = e.BusinessParty.Name, Percent = e.FirmPercent, Amount = amounts[0] }, new() { Kind = ShareKind.Manager, PartyName = e.Manager.Name, Percent = e.ManagerPercent, Amount = amounts[1] }, new() { Kind = ShareKind.Lcm, PartyName = "LCM MGT Sdn Bhd", Percent = e.LcmPercent, Amount = amounts[2] }];
         db.BillingRecords.Add(bill);
         if (advanceSchedule) { var next = Next(start, e.Schedule.Frequency, e.Schedule.AnchorDay); e.Schedule.NextPeriodStart = Months(e.Schedule.Frequency) == 0 || (e.EndDate != null && next > e.EndDate) ? null : next; }
-        await db.SaveChangesAsync(); await tx.CommitAsync(); return bill;
+        await db.SaveChangesAsync(); return bill;
+        });
     }
     public async Task Assign(int workItemId, int workerId, decimal percent)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await FinancialTransaction.Serializable(db, async () =>
+        {
         Percentage(percent); Require(percent > 0, "Worker percentage must be greater than zero.");
         var work = await db.WorkItems.Include(x => x.BillingRecord).ThenInclude(x => x.Shares).Include(x => x.Assignments).SingleAsync(x => x.Id == workItemId);
         Require(work.BillingRecord.Status != BillingStatus.Cancelled, "Cannot assign cancelled billing.");
@@ -50,11 +50,13 @@ public class BillingService
         var amount = WorkerEntitlement(gross, percent);
         Require(active.Sum(x => x.Entitlement) + amount <= gross, "Rounded worker entitlements would exceed the LCM gross share. Adjust the percentage.");
         db.WorkerAssignments.Add(new() { WorkItemId = workItemId, WorkerId = workerId, WorkerName = worker.Name, Percent = percent, LcmGrossSnapshot = gross, Entitlement = amount });
-        await db.SaveChangesAsync(); await tx.CommitAsync();
+        await db.SaveChangesAsync();
+        });
     }
     public async Task Pay(int workerId, DateOnly date, string reference, Guid requestId, Dictionary<int, decimal> allocations)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await FinancialTransaction.Serializable(db, async () =>
+        {
         Require(requestId != Guid.Empty, "Payment request identifier is required.");
         Require(!await db.WorkerPayments.AnyAsync(x => x.RequestId == requestId), "This payment was already submitted. Refresh the register.");
         Require(!string.IsNullOrWhiteSpace(reference) && reference.Length <= 160, "Payment reference is required (maximum 160 characters).");
@@ -65,35 +67,27 @@ public class BillingService
         foreach (var a in assignments) ValidateAllocation(allocations[a.Id], a.Entitlement, a.Allocations.Where(x => !x.WorkerPayment.IsCancelled).Sum(x => x.Amount));
         var total = allocations.Values.Sum(); PositiveMoney(total);
         db.WorkerPayments.Add(new() { WorkerId = workerId, PaymentDate = date, Reference = reference.Trim(), RequestId = requestId, Amount = total, Allocations = allocations.Select(x => new WorkerPaymentAllocation { WorkerAssignmentId = x.Key, Amount = x.Value }).ToList() });
-        await db.SaveChangesAsync(); await tx.CommitAsync();
+        await db.SaveChangesAsync();
+        });
     }
-    public async Task UpdateBillingStatus(int id, BillingStatus status, DateOnly? date, string? invoice, long version)
+    public async Task UpdateBillingStatus(int id, BillingStatus status, long version)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        Require(Enum.IsDefined(status) && status != BillingStatus.Cancelled && status != BillingStatus.Paid && status != BillingStatus.PartiallyPaid, "Use receipts or the cancellation action to change payment/cancellation status.");
+        await FinancialTransaction.Serializable(db, async () =>
+        {
+        Require(Enum.IsDefined(status) && status <= BillingStatus.ReadyToBill, "Financial billing states are derived from invoice and receipt allocations.");
         var bill = await db.BillingRecords.SingleAsync(x => x.Id == id);
         Require(bill.Version == version, "This record changed. Refresh before saving.");
-        Require(bill.Status < BillingStatus.Billed, "Posted billing is locked. Use receipts or cancel it.");
-        if (status == BillingStatus.Billed)
-        {
-            Require(date != null && !string.IsNullOrWhiteSpace(invoice) && invoice.Trim().Length <= 100, "Billing date and invoice reference are required when posting.");
-            await invoices.CreateInvoiceCore(InvoiceFlow.AccountingFirmToCustomer, invoice!, date!.Value, new Dictionary<int, decimal> { [id] = bill.Amount });
-        }
-        bill.Status = status; await db.SaveChangesAsync(); await tx.CommitAsync();
-    }
-    public async Task Receive(int id, DateOnly date, decimal amount, string reference, Guid requestId)
-    {
-        PositiveMoney(amount);
-        var bill = await db.BillingRecords.SingleAsync(x => x.Id == id);
-        Require(bill.Status is BillingStatus.Billed or BillingStatus.PartiallyPaid, "Only billed records with an outstanding balance can receive payment.");
-        await invoices.CreateReceiptForBillingRecord(date, amount, reference, requestId, id);
+        Require(bill.Status <= BillingStatus.ReadyToBill, "Financial billing states are controlled by invoices and receipts.");
+        bill.Status = status; await db.SaveChangesAsync();
+        });
     }
     public async Task Cancel(string kind, int id, string reason)
     {
         Require(!string.IsNullOrWhiteSpace(reason) && reason.Length <= 2000, "A cancellation reason is required (up to 2,000 characters).");
-        if (kind == "invoice") { await invoices.CancelInvoice(id, reason); return; }
-        if (kind == "receipt") { await invoices.CancelReceipt(id, reason); return; }
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        if (kind == "invoice") { await new InvoiceService(db).CancelInvoice(id, reason); return; }
+        if (kind == "receipt") { await new InvoiceService(db).CancelReceipt(id, reason); return; }
+        await FinancialTransaction.Serializable(db, async () =>
+        {
         if (kind == "payment") { var p = await db.WorkerPayments.SingleAsync(x => x.Id == id); Require(!p.IsCancelled, "Already cancelled."); p.IsCancelled = true; p.CancellationReason = reason; }
         else if (kind == "assignment")
         {
@@ -106,6 +100,7 @@ public class BillingService
             Require(b.Status != BillingStatus.Cancelled && !b.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled) && !b.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active invoices, receipts and assignments first, or billing is already cancelled."); b.Status = BillingStatus.Cancelled; b.CancellationReason = reason;
         }
         else throw new BusinessException("Unknown cancellation type.");
-        await db.SaveChangesAsync(); await tx.CommitAsync();
+        await db.SaveChangesAsync();
+        });
     }
 }

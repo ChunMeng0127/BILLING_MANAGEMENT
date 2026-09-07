@@ -67,9 +67,12 @@ public class IntegrationTests
         await Assert.ThrowsAsync<BusinessException>(() => service.Cancel("assignment", a.Id, "Paid"));
         var payment = await db.WorkerPayments.SingleAsync(x => x.RequestId == request); await service.Cancel("payment", payment.Id, "Reversed");
         Assert.Equal(100m, await db.WorkerPaymentAllocations.Where(x => !x.WorkerPayment.IsCancelled).SumAsync(x => x.Amount));
-        old = await db.BillingRecords.SingleAsync(x => x.Id == bill.Id); await service.UpdateBillingStatus(old.Id, BillingStatus.Billed, new(2026, 1, 31), "INV-001", old.Version);
-        await service.Receive(old.Id, new(2026, 1, 31), 250m, "BANK", Guid.NewGuid()); Assert.Equal(BillingStatus.PartiallyPaid, old.Status);
-        await Assert.ThrowsAsync<BusinessException>(() => service.Receive(old.Id, new(2026, 1, 31), 751, "OVER", Guid.NewGuid()));
+        old = await db.BillingRecords.SingleAsync(x => x.Id == bill.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => service.UpdateBillingStatus(old.Id, BillingStatus.Billed, old.Version));
+        var invoiceService = new InvoiceService(db);
+        var customerInvoice = await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "INV-001", new(2026, 1, 31), new Dictionary<int, decimal> { [old.Id] = old.Amount });
+        await invoiceService.CreateReceipt(new(2026, 1, 31), "BANK", Guid.NewGuid(), new Dictionary<int, decimal> { [customerInvoice.Id] = 250m }); Assert.Equal(BillingStatus.PartiallyPaid, old.Status);
+        await Assert.ThrowsAsync<BusinessException>(() => invoiceService.CreateReceipt(new(2026, 1, 31), "OVER", Guid.NewGuid(), new Dictionary<int, decimal> { [customerInvoice.Id] = 751m }));
         var receipt = await db.CustomerReceipts.SingleAsync(); await service.Cancel("receipt", receipt.Id, "Correction"); Assert.Equal(BillingStatus.Billed, old.Status);
         old.Amount = 2000; await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
     }
@@ -100,13 +103,32 @@ public class IntegrationTests
             StartDate = new(2026, 1, 1), BillingAmount = 1000,
             Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
         };
-        db.Add(secondEngagement); await db.SaveChangesAsync();
+        var sameCustomerEngagement = new Engagement
+        {
+            CustomerId = firstEngagement.CustomerId, Service = new Service { Name = "Payroll" },
+            BusinessPartyId = firstEngagement.BusinessPartyId, ManagerId = firstEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000,
+            Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        var otherFirmEngagement = new Engagement
+        {
+            CustomerId = firstEngagement.CustomerId, Service = new Service { Name = "Tax" },
+            BusinessParty = new BusinessParty { Name = "Other Firm" }, ManagerId = firstEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000,
+            Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        db.AddRange(secondEngagement, sameCustomerEngagement, otherFirmEngagement); await db.SaveChangesAsync();
         var billing = new BillingService(db);
         var bill1 = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
         var bill2 = await billing.Generate(secondEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+        var sameCustomerBill = await billing.Generate(sameCustomerEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+        var otherFirmBill = await billing.Generate(otherFirmEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
         var invoices = new InvoiceService(db);
 
-        var customerPart1 = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-A", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 600 });
+        var sameCustomerConsolidated = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-CONSOLIDATED", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 100, [sameCustomerBill.Id] = 100 });
+        Assert.Equal(2, sameCustomerConsolidated.Lines.Count);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "MIXED-CUSTOMERS", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 1, [bill2.Id] = 1 }));
+        var customerPart1 = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-A", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 500 });
         var customerPart2 = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-B", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 400 });
         db.ChangeTracker.Clear();
         var bill1State = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).SingleAsync(x => x.Id == bill1.Id);
@@ -117,16 +139,26 @@ public class IntegrationTests
         var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 250, [bill2.Id] = 250 });
         Assert.Equal(2, consolidated.Lines.Count);
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
-        var lcm = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 400 });
+        var lcm = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 200, [bill2.Id] = 200 });
         Assert.Equal(400m, lcm.Total);
-        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+        Assert.Equal(2, lcm.Lines.Count);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 201 }));
 
-        var firstReceipt = await invoices.CreateReceipt(new(2026, 2, 2), "RCPT-1", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 300 });
+        await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "SHARED-NUMBER", new(2026, 2, 1), new Dictionary<int, decimal> { [sameCustomerBill.Id] = 1 });
+        await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "SHARED-NUMBER", new(2026, 2, 1), new Dictionary<int, decimal> { [sameCustomerBill.Id] = 1 });
+        await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "SHARED-NUMBER", new(2026, 2, 1), new Dictionary<int, decimal> { [sameCustomerBill.Id] = 1 });
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "SHARED-NUMBER", new(2026, 2, 1), new Dictionary<int, decimal> { [sameCustomerBill.Id] = 1 }));
+
+        var otherCustomerInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "OTHER-CUSTOMER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill2.Id] = 100 });
+        var otherFirmInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "SHARED-NUMBER", new(2026, 2, 1), new Dictionary<int, decimal> { [otherFirmBill.Id] = 100 });
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateReceipt(new(2026, 2, 2), "MIXED-CUSTOMERS", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 1, [otherCustomerInvoice.Id] = 1 }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateReceipt(new(2026, 2, 2), "MIXED-FIRMS", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 1, [otherFirmInvoice.Id] = 1 }));
+        var firstReceipt = await invoices.CreateReceipt(new(2026, 2, 2), "RCPT-1", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 200 });
         Assert.Equal(InvoiceStatus.PartiallyPaid, (await db.Invoices.SingleAsync(x => x.Id == customerPart1.Id)).Status);
         var secondReceipt = await invoices.CreateReceipt(new(2026, 2, 3), "RCPT-2", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 300, [customerPart2.Id] = 400 });
         Assert.Equal(InvoiceStatus.Paid, (await db.Invoices.SingleAsync(x => x.Id == customerPart1.Id)).Status);
         Assert.Equal(InvoiceStatus.Paid, (await db.Invoices.SingleAsync(x => x.Id == customerPart2.Id)).Status);
-        Assert.Equal(1000m, (await db.CustomerReceipts.Include(x => x.Allocations).SumAsync(x => x.Amount)));
+        Assert.Equal(900m, (await db.CustomerReceipts.Include(x => x.Allocations).SumAsync(x => x.Amount)));
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateReceipt(new(2026, 2, 4), "RCPT-OVER", Guid.NewGuid(), new Dictionary<int, decimal> { [customerPart1.Id] = 1 }));
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CancelInvoice(customerPart1.Id, "Has receipt"));
         await invoices.CancelInvoice(lcm.Id, "LCM correction");
@@ -144,11 +176,20 @@ public class IntegrationTests
         {
             try { await new InvoiceService(context).CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, number, new(2026, 2, 28), new Dictionary<int, decimal> { [bill3.Id] = 600 }); }
             catch (BusinessException) { }
-            catch (Npgsql.PostgresException ex) when (ex.SqlState is "40001" or "40P01") { }
-            catch (DbUpdateException) { }
         }
         await Task.WhenAll(Attempt(c1, "CONCURRENT-A"), Attempt(c2, "CONCURRENT-B")); await c1.DisposeAsync(); await c2.DisposeAsync();
-        Assert.InRange(await db.InvoiceLines.Where(x => x.BillingRecordId == bill3.Id && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status != InvoiceStatus.Cancelled).SumAsync(x => x.AllocatedAmount), 0m, bill3.Amount);
+        Assert.Equal(600m, await db.InvoiceLines.Where(x => x.BillingRecordId == bill3.Id && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status != InvoiceStatus.Cancelled).SumAsync(x => x.AllocatedAmount));
+
+        var bill4 = await billing.Generate(id, new(2026, 3, 1), new(2026, 3, 31));
+        var receiptInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "RECEIPT-CONCURRENCY", new(2026, 3, 31), new Dictionary<int, decimal> { [bill4.Id] = 1000 });
+        async Task ReceiptAttempt()
+        {
+            await using var context = Db();
+            try { await new InvoiceService(context).CreateReceipt(new(2026, 3, 31), "Concurrent receipt", Guid.NewGuid(), new Dictionary<int, decimal> { [receiptInvoice.Id] = 600 }); }
+            catch (BusinessException) { }
+        }
+        await Task.WhenAll(ReceiptAttempt(), ReceiptAttempt());
+        Assert.Equal(600m, await db.CustomerReceiptAllocations.Where(x => x.InvoiceId == receiptInvoice.Id && !x.CustomerReceipt.IsCancelled).SumAsync(x => x.Amount));
     }
     [PostgresFact]
     public async Task InvoiceMigrationPreservesLegacyBillingAndReceipts()
@@ -162,6 +203,7 @@ public class IntegrationTests
         await db.Database.MigrateAsync(); db.ChangeTracker.Clear();
         var invoice = await db.Invoices.Include(x => x.Lines).SingleAsync(x => x.InvoiceNumber == "OLD-001");
         Assert.Equal(1000m, invoice.Total); Assert.Equal(InvoiceStatus.PartiallyPaid, invoice.Status); Assert.Equal(bill.Id, invoice.Lines.Single().BillingRecordId);
+        Assert.Equal(await db.Engagements.Where(x => x.Id == id).Select(x => x.CustomerId).SingleAsync(), invoice.CustomerId);
         var allocation = await db.CustomerReceiptAllocations.Include(x => x.CustomerReceipt).SingleAsync(x => x.InvoiceId == invoice.Id);
         Assert.Equal(125m, allocation.Amount); Assert.Equal("OLD-RECEIPT", allocation.CustomerReceipt.Reference);
         Assert.False(await db.Database.SqlQuery<bool>($"SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='BillingRecords' AND column_name='InvoiceNumber') AS \"Value\"").SingleAsync());
@@ -170,7 +212,7 @@ public class IntegrationTests
     public async Task ConcurrentPaymentsCannotOverpay()
     {
         await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31)); var w = new Worker { Name = "Concurrency" }; db.Add(w); await db.SaveChangesAsync(); await svc.Assign(bill.WorkItem.Id, w.Id, 70); var a = await db.WorkerAssignments.SingleAsync();
-        async Task Attempt() { await using var ctx = Db(); try { await new BillingService(ctx).Pay(w.Id, new(2026, 1, 31), "Concurrent", Guid.NewGuid(), new() { [a.Id] = 200 }); } catch (BusinessException) { } catch (Npgsql.PostgresException ex) when (ex.SqlState == "40001") { } catch (DbUpdateException) { } }
+        async Task Attempt() { await using var ctx = Db(); try { await new BillingService(ctx).Pay(w.Id, new(2026, 1, 31), "Concurrent", Guid.NewGuid(), new() { [a.Id] = 200 }); } catch (BusinessException) { } }
         await Task.WhenAll(Attempt(), Attempt()); Assert.Equal(200m, await db.WorkerPaymentAllocations.SumAsync(x => x.Amount));
     }
     [PostgresFact]
@@ -252,13 +294,12 @@ public class IntegrationTests
             var billA = await finance.Generate(engagementA.Id, new(2026, 1, 1), new(2026, 1, 31));
             var billB = await finance.Generate(engagementB.Id, new(2026, 1, 1), new(2026, 1, 31));
             await finance.Assign(billA.WorkItem.Id, workerA.Id, 70m); await finance.Assign(billB.WorkItem.Id, workerB.Id, 60m);
-            await finance.UpdateBillingStatus(billA.Id, BillingStatus.Billed, new(2026, 1, 31), "ALPHA-INV", billA.Version);
-            await finance.UpdateBillingStatus(billB.Id, BillingStatus.Billed, new(2026, 1, 31), "BETA-INV", billB.Version);
-            invoiceAId = await db.Invoices.Where(x => x.InvoiceNumber == "ALPHA-INV").Select(x => x.Id).SingleAsync();
-            invoiceBId = await db.Invoices.Where(x => x.InvoiceNumber == "BETA-INV").Select(x => x.Id).SingleAsync();
-            managerInvoiceAId = (await new InvoiceService(db).CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "ALPHA-MGR-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = 250 })).Id;
-            await finance.Receive(billA.Id, new(2026, 1, 31), 100m, "ALPHA-RECEIPT", Guid.NewGuid());
-            await finance.Receive(billB.Id, new(2026, 1, 31), 200m, "BETA-RECEIPT", Guid.NewGuid());
+            var invoiceService = new InvoiceService(db);
+            invoiceAId = (await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "ALPHA-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = billA.Amount })).Id;
+            invoiceBId = (await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BETA-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billB.Id] = billB.Amount })).Id;
+            managerInvoiceAId = (await invoiceService.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "ALPHA-MGR-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = 250 })).Id;
+            await invoiceService.CreateReceipt(new(2026, 1, 31), "ALPHA-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceAId] = 100m });
+            await invoiceService.CreateReceipt(new(2026, 1, 31), "BETA-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceBId] = 200m });
             var assignmentA = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == billA.WorkItem.Id);
             var assignmentB = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == billB.WorkItem.Id);
             await finance.Pay(workerA.Id, new(2026, 1, 31), "ALPHA-PAYMENT", Guid.NewGuid(), new() { [assignmentA.Id] = 100m });

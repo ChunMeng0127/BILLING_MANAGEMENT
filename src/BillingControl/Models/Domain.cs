@@ -152,6 +152,8 @@ public class Invoice : Record
     public string RecipientName { get; set; } = "";
     public int? BusinessPartyId { get; set; }
     public BusinessParty? BusinessParty { get; set; }
+    public int? CustomerId { get; set; }
+    public Customer? Customer { get; set; }
     public int? ManagerId { get; set; }
     public Manager? Manager { get; set; }
     public string? CancellationReason { get; set; }
