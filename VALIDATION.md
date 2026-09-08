@@ -3,7 +3,7 @@
 ## Completed locally
 
 - .NET 10 Release build: **0 errors, 0 warnings**.
-- Automated tests: **27 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/engagement-invoice-flow-results.trx` (local, ignored by Git).
+- Automated tests: **28 passed, 0 failed, 0 skipped**, using the isolated local PostgreSQL 17 instance. This includes the allocation-form regression covering blank unused invoice, receipt and worker-payment rows, all-blank rejection, negative values and non-numeric input.
 - Applied the EF migrations through `InvoiceDocuments` to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
 - Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules and wrong-worker rejection.
 - Verified same-customer customer-invoice consolidation is allowed while mixed customers are rejected; Manager and LCM flows retain their permitted consolidation. Verified invoice numbers can be reused by different issuers and are rejected for the same issuer.

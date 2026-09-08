@@ -39,10 +39,92 @@ public class IntegrationTests
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         return client;
     }
-    private static async Task<HttpResponseMessage> PostWithToken(HttpClient client, string tokenPage, string target, Dictionary<string, string> fields)
+    private static async Task<HttpResponseMessage> PostWithToken(HttpClient client, string tokenPage, string target, Dictionary<string, string> fields, string? referer = null)
     {
         fields["__RequestVerificationToken"] = Token(await client.GetStringAsync(tokenPage));
-        return await client.PostAsync(target, new FormUrlEncodedContent(fields));
+        using var request = new HttpRequestMessage(HttpMethod.Post, target) { Content = new FormUrlEncodedContent(fields) };
+        if (!string.IsNullOrWhiteSpace(referer)) request.Headers.Referrer = new Uri(client.BaseAddress!, referer);
+        return await client.SendAsync(request);
+    }
+    [PostgresFact]
+    public async Task AllocationFormsAcceptBlankRowsAndReportUsefulValidation()
+    {
+        await using var db = await Fresh();
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "allocation-test-keys")));
+        const string password = "Allocation-Password!123";
+        int workerId, bill1Id, bill2Id, bill3Id, assignment1Id, assignment2Id, assignment3Id;
+        using (var scope = app.Services.CreateScope())
+        {
+            await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "BootstrapAdmin:Email", "allocation-admin@example.com" }, { "BootstrapAdmin:Password", password } }).Build());
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var worker = new Worker { Name = "Allocation Worker" };
+            var engagement = new Engagement
+            {
+                Customer = new Customer { Name = "Allocation Customer" },
+                Service = new Service { Name = "Allocation Service" },
+                BusinessParty = new BusinessParty { Name = "Allocation Firm" },
+                Manager = new Manager { Name = "Allocation Manager" },
+                StartDate = new(2026, 1, 1), BillingAmount = 1000m,
+                Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+            };
+            context.AddRange(worker, engagement); await context.SaveChangesAsync(); workerId = worker.Id;
+            var finance = new BillingService(context);
+            var first = await finance.Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+            var second = await finance.Generate(engagement.Id, new(2026, 2, 1), new(2026, 2, 28));
+            var third = await finance.Generate(engagement.Id, new(2026, 3, 1), new(2026, 3, 31));
+            await finance.Assign(first.WorkItem.Id, worker.Id, 50m); await finance.Assign(second.WorkItem.Id, worker.Id, 50m); await finance.Assign(third.WorkItem.Id, worker.Id, 50m);
+            bill1Id = first.Id; bill2Id = second.Id; bill3Id = third.Id;
+            assignment1Id = await context.WorkerAssignments.Where(x => x.WorkItemId == first.WorkItem.Id).Select(x => x.Id).SingleAsync();
+            assignment2Id = await context.WorkerAssignments.Where(x => x.WorkItemId == second.WorkItem.Id).Select(x => x.Id).SingleAsync();
+            assignment3Id = await context.WorkerAssignments.Where(x => x.WorkItemId == third.WorkItem.Id).Select(x => x.Id).SingleAsync();
+        }
+
+        using var admin = await SignedIn(app, "allocation-admin@example.com", password);
+        static string Value(decimal amount) => amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+        Dictionary<string, string> InvoiceFields(string number, string first, string second, string third) => new()
+        {
+            ["InvoiceNumber"] = number, ["InvoiceDate"] = "2026-03-31", ["Flow"] = InvoiceFlow.AccountingFirmToCustomer.ToString(),
+            [$"Allocations[{bill1Id}]"] = first, [$"Allocations[{bill2Id}]"] = second, [$"Allocations[{bill3Id}]"] = third
+        };
+        var one = await PostWithToken(admin, "/Invoices/Create", "/Invoices/Create", InvoiceFields("WEB-INV-ONE", Value(400), "", ""));
+        Assert.Equal(HttpStatusCode.Redirect, one.StatusCode);
+        var multi = await PostWithToken(admin, "/Invoices/Create", "/Invoices/Create", InvoiceFields("WEB-INV-MULTI", Value(100), Value(200), ""));
+        Assert.Equal(HttpStatusCode.Redirect, multi.StatusCode);
+
+        var blank = await PostWithToken(admin, "/Invoices/Create", "/Invoices/Create", InvoiceFields("WEB-INV-BLANK", "", "", ""), "/Invoices/Create");
+        Assert.Equal(HttpStatusCode.Redirect, blank.StatusCode); Assert.EndsWith("/Invoices/Create", blank.Headers.Location!.ToString());
+        var blankPage = await admin.GetStringAsync("/Invoices/Create"); Assert.Contains("Enter an amount for at least one billing record.", blankPage);
+        var negative = await PostWithToken(admin, "/Invoices/Create", "/Invoices/Create", InvoiceFields("WEB-INV-NEGATIVE", "-1", "", ""), "/Invoices/Create");
+        Assert.Equal(HttpStatusCode.Redirect, negative.StatusCode); Assert.Contains("Invoice allocations must be positive amounts", await admin.GetStringAsync("/Invoices/Create"));
+        var invalid = await PostWithToken(admin, "/Invoices/Create", "/Invoices/Create", InvoiceFields("WEB-INV-INVALID", "abc", "", ""), "/Invoices/Create");
+        Assert.Equal(HttpStatusCode.Redirect, invalid.StatusCode); Assert.Contains("Enter a valid allocation amount", await admin.GetStringAsync("/Invoices/Create"));
+
+        int invoiceOneId, invoiceMultiId;
+        using (var scope = app.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            invoiceOneId = await context.Invoices.Where(x => x.InvoiceNumber == "WEB-INV-ONE").Select(x => x.Id).SingleAsync();
+            invoiceMultiId = await context.Invoices.Where(x => x.InvoiceNumber == "WEB-INV-MULTI").Select(x => x.Id).SingleAsync();
+        }
+        var receipt = await PostWithToken(admin, "/Invoices/Receipt", "/Invoices/Receive", new()
+        {
+            ["ReceiptDate"] = "2026-03-31", ["Reference"] = "WEB-RECEIPT", ["RequestId"] = Guid.NewGuid().ToString(),
+            [$"Allocations[{invoiceOneId}]"] = "100.00", [$"Allocations[{invoiceMultiId}]"] = ""
+        });
+        Assert.Equal(HttpStatusCode.Redirect, receipt.StatusCode);
+
+        var payment = await PostWithToken(admin, $"/Payments/Create?workerId={workerId}", "/Payments/Create", new()
+        {
+            ["workerId"] = workerId.ToString(), ["date"] = "2026-03-31", ["reference"] = "WEB-PAYMENT", ["requestId"] = Guid.NewGuid().ToString(),
+            [$"amounts[{assignment1Id}]"] = "50.00", [$"amounts[{assignment2Id}]"] = "", [$"amounts[{assignment3Id}]"] = ""
+        });
+        Assert.Equal(HttpStatusCode.Redirect, payment.StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await context.CustomerReceiptAllocations.CountAsync(x => x.Amount == 100m));
+            Assert.Equal(1, await context.WorkerPaymentAllocations.CountAsync(x => x.Amount == 50m));
+        }
     }
     [PostgresFact]
     public async Task FinancialWorkflowSnapshotsDuplicatesAndPayments()
@@ -443,6 +525,9 @@ public class IntegrationTests
         Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
         Assert.Contains("data-manager-cap=\"250.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
+        var newInvoiceText = WebUtility.HtmlDecode(newInvoice);
+        Assert.Contains("Accounting Firm → Customer", newInvoiceText); Assert.Contains("Manager → Accounting Firm", newInvoiceText); Assert.Contains("LCM MGT → Manager", newInvoiceText);
+        Assert.Contains("invoice-create-form", newInvoice); Assert.Contains("invoice-allocation-table", newInvoice); Assert.DoesNotContain("Allocated for selected flow (RM)", newInvoice);
         var adminBilling = await admin.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", adminBilling); Assert.Contains("Beta Scope Customer", adminBilling); Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         using var internalUser = await SignedIn(app, "internal@example.com", password);
         var internalBilling = await internalUser.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", internalBilling); Assert.Contains("Beta Scope Customer", internalBilling);

@@ -71,7 +71,8 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
     public async Task<IActionResult> Create(InvoiceForm form)
     {
         ValidForm();
-        await invoices.CreateInvoice(form.Flow, form.InvoiceNumber, form.InvoiceDate, form.Allocations.Where(x => x.Value != 0).ToDictionary(x => x.Key, x => x.Value));
+        var allocations = NormalizeAllocations(form.Allocations, "Enter an amount for at least one billing record.");
+        await invoices.CreateInvoice(form.Flow, form.InvoiceNumber, form.InvoiceDate, allocations);
         TempData["Success"] = "Invoice created with immutable billing allocations.";
         return RedirectToAction(nameof(Index));
     }
@@ -87,7 +88,8 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
     public async Task<IActionResult> Receive(ReceiptForm form)
     {
         ValidForm();
-        await invoices.CreateReceipt(form.ReceiptDate, form.Reference, form.RequestId, form.Allocations.Where(x => x.Value != 0).ToDictionary(x => x.Key, x => x.Value));
+        var allocations = NormalizeAllocations(form.Allocations, "Enter an amount for at least one invoice.");
+        await invoices.CreateReceipt(form.ReceiptDate, form.Reference, form.RequestId, allocations);
         TempData["Success"] = "Customer receipt allocated to invoice documents.";
         return RedirectToAction(nameof(Index));
     }

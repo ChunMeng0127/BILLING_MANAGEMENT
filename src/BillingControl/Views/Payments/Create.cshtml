@@ -12,6 +12,7 @@
 </div>
 </form>
 @if(workerId!=null) { <form asp-action="Create" method="post" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger"></div>
 <input type="hidden" name="workerId" value="@workerId" />
 <input type="hidden" name="requestId" value="@Guid.NewGuid()" />
 <div class="form-grid">
@@ -25,7 +26,7 @@
 </div>
 </div>
 <h2 class="section-title">Allocate payment</h2>
-<p class="hint">Enter only the amount paid now. Leave other assignments at zero. The payment total is calculated on the server.</p>
+<p class="hint">Enter only the amount paid now. Leave other assignments blank. The payment total is calculated on the server.</p>
 <div class="table-scroll">
 <table class="table">
 <thead>
@@ -44,7 +45,7 @@
 <td>@a.Entitlement.ToString("N2")</td>
 <td>@due.ToString("N2")</td>
 <td>
-<input name="amounts[@a.Id]" aria-label="Payment for assignment @a.Id" type="number" value="0" min="0" max="@due" step="0.01" class="form-control" />
+<input name="amounts[@a.Id]" aria-label="Payment for assignment @a.Id" type="number" value="" min="0" max="@due" step="0.01" class="form-control" />
 </td>
 </tr> } }
 </tbody>

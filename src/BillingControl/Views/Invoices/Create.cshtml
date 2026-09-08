@@ -3,24 +3,42 @@
     ViewData["Title"] = "New invoice";
     List<BillingRecord> bills = ViewBag.Bills;
     static string DataMoney(decimal value) => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    static string FlowLabel(InvoiceFlow flow) => flow switch
+    {
+        InvoiceFlow.AccountingFirmToCustomer => "Accounting Firm → Customer",
+        InvoiceFlow.ManagerToAccountingFirm => "Manager → Accounting Firm",
+        InvoiceFlow.LcmToManager => "LCM MGT → Manager",
+        _ => flow.ToString()
+    };
 }
 <a class="back-link" href="/Invoices">← Invoice register</a>
 <h1>New invoice</h1>
-<form asp-action="Create" method="post" class="panel form-panel wide">
+<form asp-action="Create" method="post" class="panel form-panel wide invoice-create-form">
     <div asp-validation-summary="All" class="text-danger"></div>
-    <div class="form-grid">
+    <div class="form-grid invoice-header-grid">
         <label class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required /></label>
         <label class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label>
         <label class="form-label">Invoice flow
             <select asp-for="Flow" class="form-select" id="invoice-flow">
-                @foreach(var flow in Enum.GetValues<InvoiceFlow>()) { <option value="@flow">@flow</option> }
+                @foreach(var flow in Enum.GetValues<InvoiceFlow>()) { <option value="@flow">@FlowLabel(flow)</option> }
             </select>
         </label>
     </div>
     <h2>Billing allocations</h2>
-    <p class="hint">The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
-    <table class="table data-grid" id="invoice-allocation-grid">
-        <thead><tr><th>Billing record</th><th>Customer</th><th>Firm</th><th>Manager</th><th>Period</th><th data-type="amount">Flow cap (RM)</th><th data-type="amount">Allocated for selected flow (RM)</th><th data-type="amount">Remaining (RM)</th><th data-nosort>Allocate (RM)</th></tr></thead>
+    <p class="hint">Amounts are in RM. The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
+    <table class="table data-grid invoice-allocation-table" id="invoice-allocation-grid">
+        <colgroup>
+            <col class="invoice-col-billing" />
+            <col class="invoice-col-customer" />
+            <col class="invoice-col-firm" />
+            <col class="invoice-col-manager" />
+            <col class="invoice-col-period" />
+            <col class="invoice-col-money" />
+            <col class="invoice-col-money-wide" />
+            <col class="invoice-col-money-wide" />
+            <col class="invoice-col-allocate" />
+        </colgroup>
+        <thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-type="amount" title="Maximum amount for the selected invoice flow">Flow cap</th><th data-type="amount" title="Allocated for the selected invoice flow">Allocated</th><th data-type="amount">Remaining</th><th data-nosort title="Amount to allocate in this invoice">Allocate</th></tr></thead>
         <tbody>
         @foreach(var b in bills)
         {
@@ -37,7 +55,7 @@
                 <td>@b.CustomerName</td>
                 <td>@b.Engagement.BusinessParty.Name</td>
                 <td>@b.Engagement.Manager.Name</td>
-                <td>@b.PeriodStart — @b.PeriodEnd</td>
+                <td><span class="invoice-period">@b.PeriodStart.ToString("yyyy-MM-dd") — @b.PeriodEnd.ToString("yyyy-MM-dd")</span></td>
                 <td data-flow-cap class="money">@b.Amount.ToString("N2")</td>
                 <td data-flow-allocated class="money">@customerAllocated.ToString("N2")</td>
                 <td data-flow-remaining class="money">@Math.Max(0m, b.Amount - customerAllocated).ToString("N2")</td>

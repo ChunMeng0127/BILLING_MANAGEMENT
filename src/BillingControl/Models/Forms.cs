@@ -55,12 +55,12 @@ public class InvoiceForm
     [Required, StringLength(100)] public string InvoiceNumber { get; set; } = "";
     [DataType(DataType.Date)] public DateOnly InvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     public InvoiceFlow Flow { get; set; }
-    public Dictionary<int, decimal> Allocations { get; set; } = [];
+    public Dictionary<int, decimal?> Allocations { get; set; } = [];
 }
 public class ReceiptForm
 {
     [DataType(DataType.Date)] public DateOnly ReceiptDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     [Required, StringLength(160)] public string Reference { get; set; } = "";
     public Guid RequestId { get; set; } = Guid.NewGuid();
-    public Dictionary<int, decimal> Allocations { get; set; } = [];
+    public Dictionary<int, decimal?> Allocations { get; set; } = [];
 }

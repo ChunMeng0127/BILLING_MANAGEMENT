@@ -543,6 +543,81 @@ footer {
 .form-panel.wide {
   max-width: 1000px;
 }
+.invoice-create-form {
+  width: 100%;
+  max-width: none;
+  padding: 25px 28px 28px;
+}
+.form-grid.invoice-header-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 22px;
+}
+.invoice-create-form > h2 {
+  margin-top: 28px;
+}
+.invoice-create-form .table-scroll {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.invoice-allocation-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.invoice-allocation-table > :not(caption) > * > * {
+  padding: 11px 10px;
+}
+.invoice-allocation-table col.invoice-col-billing {
+  width: 8%;
+}
+.invoice-allocation-table col.invoice-col-customer {
+  width: 15%;
+}
+.invoice-allocation-table col.invoice-col-firm,
+.invoice-allocation-table col.invoice-col-manager {
+  width: 13%;
+}
+.invoice-allocation-table col.invoice-col-period {
+  width: 16%;
+}
+.invoice-allocation-table col.invoice-col-money {
+  width: 8%;
+}
+.invoice-allocation-table col.invoice-col-money-wide {
+  width: 10%;
+}
+.invoice-allocation-table col.invoice-col-allocate {
+  width: 7%;
+}
+.invoice-allocation-table td {
+  min-width: 0;
+  max-width: none;
+  overflow-wrap: break-word;
+}
+.invoice-allocation-table th:nth-child(n + 6),
+.invoice-allocation-table td:nth-child(n + 6) {
+  text-align: right;
+}
+.invoice-allocation-table td:nth-child(1),
+.invoice-allocation-table td:nth-child(5),
+.invoice-allocation-table td:nth-child(n + 6) {
+  white-space: nowrap;
+}
+.invoice-allocation-table td:nth-child(2),
+.invoice-allocation-table td:nth-child(3),
+.invoice-allocation-table td:nth-child(4) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.invoice-period {
+  white-space: nowrap;
+}
+.invoice-allocation-table input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 7px;
+  text-align: right;
+}
 .form-label {
   display: block;
   font-size: 12px;
@@ -790,6 +865,19 @@ summary:focus-visible {
   }
   .form-panel {
     padding: 18px;
+  }
+  .invoice-create-form {
+    padding: 18px;
+  }
+  .form-grid.invoice-header-grid {
+    grid-template-columns: 1fr;
+  }
+  .invoice-create-form .table-scroll {
+    margin: 0 -18px;
+    padding: 0 18px;
+  }
+  .invoice-allocation-table {
+    min-width: 1080px;
   }
   .grid-toolbar {
     align-items: start;
