@@ -18,7 +18,7 @@
     return { cap, allocated, remaining, eligible: remaining > 0 };
   };
 
-  const updateRow = (row, flow, format) => {
+  const updateRow = (row, flow, format, clearInput = false) => {
     const state = stateFor(row.dataset, flow);
     row.querySelector("[data-flow-cap]").textContent = format(state.cap);
     row.querySelector("[data-flow-allocated]").textContent = format(
@@ -31,13 +31,13 @@
     const input = row.querySelector("input[type=number]");
     input.max = state.remaining.toFixed(2);
     input.disabled = !state.eligible;
-    if (!state.eligible) input.value = "";
+    if (clearInput) input.value = "";
     return state;
   };
 
-  const updateTable = (table, flow, format) => {
+  const updateTable = (table, flow, format, clearInputs = false) => {
     const states = [...table.querySelectorAll(".invoice-allocation-row")].map(
-      (row) => updateRow(row, flow, format),
+      (row) => updateRow(row, flow, format, clearInputs),
     );
     return {
       states,
@@ -53,13 +53,23 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
-    const update = () => {
-      updateTable(table, flow.value, (value) => numberFormat.format(value));
+    let selectedFlow = flow.value;
+    const update = (clearInputs) => {
+      updateTable(
+        table,
+        flow.value,
+        (value) => numberFormat.format(value),
+        clearInputs,
+      );
       table.dispatchEvent(new windowRef.Event("grid:refresh"));
     };
-    flow.addEventListener("change", update);
-    windowRef.addEventListener("pageshow", update);
-    update();
+    flow.addEventListener("change", () => {
+      const flowChanged = flow.value !== selectedFlow;
+      selectedFlow = flow.value;
+      update(flowChanged);
+    });
+    windowRef.addEventListener("pageshow", () => update(false));
+    update(false);
   };
 
   if (typeof document !== "undefined" && typeof window !== "undefined")

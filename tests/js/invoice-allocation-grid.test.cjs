@@ -81,10 +81,37 @@ test("changing to a flow with no remaining amount clears and disables a stale al
   );
   invoiceGrid.updateRow(row, "AccountingFirmToCustomer", format);
   assert.equal(row.input.value, "125.00");
-  invoiceGrid.updateRow(row, "ManagerToAccountingFirm", format);
+  invoiceGrid.updateRow(row, "ManagerToAccountingFirm", format, true);
   assert.equal(row.dataset.gridEligible, "false");
   assert.equal(row.input.value, "");
   assert.equal(row.input.disabled, true);
+});
+
+test("changing flow clears an entered amount even when the row remains eligible", () => {
+  const row = makeRow(
+    { customerAllocated: "0.00", managerAllocated: "0.00" },
+    "100.00",
+  );
+  invoiceGrid.updateRow(row, "ManagerToAccountingFirm", format, true);
+  assert.equal(row.dataset.gridEligible, "true");
+  assert.equal(row.input.value, "");
+  row.input.value = "100.00";
+  invoiceGrid.updateRow(row, "LcmToManager", format, true);
+  assert.equal(row.dataset.gridEligible, "true");
+  assert.equal(row.input.value, "");
+});
+
+test("initial updates, grid refreshes, and non-flow updates preserve entered values", () => {
+  const row = makeRow(
+    { customerAllocated: "0.00", managerAllocated: "0.00" },
+    "100.00",
+  );
+  invoiceGrid.updateRow(row, "AccountingFirmToCustomer", format);
+  assert.equal(row.input.value, "100.00");
+  row.input.value = "125.00";
+  const table = { querySelectorAll: () => [row] };
+  invoiceGrid.updateTable(table, "AccountingFirmToCustomer", format, false);
+  assert.equal(row.input.value, "125.00");
 });
 
 test("the data-grid count excludes flow-ineligible rows", () => {
@@ -117,8 +144,11 @@ test("an all-fully-allocated flow uses the invoice-specific empty-state message"
   );
 });
 
-test("external page initialization updates eligibility and refreshes the data grid on flow changes", () => {
-  const row = makeRow();
+test("external page initialization preserves values until a user flow change", () => {
+  const row = makeRow(
+    { customerAllocated: "0.00", managerAllocated: "0.00" },
+    "75.00",
+  );
   const flowListeners = {};
   const windowListeners = {};
   const events = [];
@@ -148,11 +178,17 @@ test("external page initialization updates eligibility and refreshes the data gr
   };
 
   invoiceGrid.initialize(documentRef, windowRef);
-  assert.equal(row.dataset.gridEligible, "false");
+  assert.equal(row.dataset.gridEligible, "true");
+  assert.equal(row.input.value, "75.00");
   assert.deepEqual(events, ["grid:refresh"]);
   flow.value = "ManagerToAccountingFirm";
   flowListeners.change();
   assert.equal(row.dataset.gridEligible, "true");
+  assert.equal(row.input.value, "");
   assert.deepEqual(events, ["grid:refresh", "grid:refresh"]);
   assert.equal(typeof windowListeners.pageshow, "function");
+  row.input.value = "125.00";
+  windowListeners.pageshow();
+  assert.equal(row.input.value, "125.00");
+  assert.deepEqual(events, ["grid:refresh", "grid:refresh", "grid:refresh"]);
 });
