@@ -1,4 +1,81 @@
 @model InvoiceForm
-@{ ViewData["Title"] = "New invoice"; List<BillingRecord> bills = ViewBag.Bills; }
-<a class="back-link" href="/Invoices">← Invoice register</a><h1>New invoice</h1>
-<form asp-action="Create" method="post" class="panel form-panel wide"><div asp-validation-summary="All" class="text-danger"></div><div class="form-grid"><label class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required /></label><label class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label><label class="form-label">Invoice flow<select asp-for="Flow" class="form-select">@foreach(var flow in Enum.GetValues<InvoiceFlow>()){<option value="@flow">@flow</option>}</select></label></div><h2>Billing allocations</h2><p class="hint">Customer invoices require one accounting firm and one end customer. Manager invoices require one manager and firm. LCM invoices require one manager. Invoice numbers are unique for the selected issuer.</p><table class="table data-grid"><thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th>Amount (RM)</th><th>Allocated so far (RM)</th><th>Allocate (RM)</th></tr></thead><tbody>@foreach(var b in bills){var allocated=b.InvoiceLines.Where(x=>x.Invoice.Status!=InvoiceStatus.Cancelled).Sum(x=>x.AllocatedAmount);<tr><td>B-@b.Id.ToString("D5")</td><td>@b.CustomerName</td><td>@b.Engagement.BusinessParty.Name</td><td>@b.Engagement.Manager.Name</td><td>@b.PeriodStart — @b.PeriodEnd</td><td>@b.Amount.ToString("N2")</td><td>@allocated.ToString("N2")</td><td><input name="Allocations[@b.Id]" type="number" min="0" step="0.01" class="form-control" /></td></tr>}</tbody></table><div class="form-actions"><button class="btn btn-primary">Create invoice</button></div></form>
+@{
+    ViewData["Title"] = "New invoice";
+    List<BillingRecord> bills = ViewBag.Bills;
+    static string DataMoney(decimal value) => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+}
+<a class="back-link" href="/Invoices">← Invoice register</a>
+<h1>New invoice</h1>
+<form asp-action="Create" method="post" class="panel form-panel wide">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="form-grid">
+        <label class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required /></label>
+        <label class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label>
+        <label class="form-label">Invoice flow
+            <select asp-for="Flow" class="form-select" id="invoice-flow">
+                @foreach(var flow in Enum.GetValues<InvoiceFlow>()) { <option value="@flow">@flow</option> }
+            </select>
+        </label>
+    </div>
+    <h2>Billing allocations</h2>
+    <p class="hint">The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
+    <table class="table data-grid" id="invoice-allocation-grid">
+        <thead><tr><th>Billing record</th><th>Customer</th><th>Firm</th><th>Manager</th><th>Period</th><th data-type="amount">Flow cap (RM)</th><th data-type="amount">Allocated for selected flow (RM)</th><th data-type="amount">Remaining (RM)</th><th data-nosort>Allocate (RM)</th></tr></thead>
+        <tbody>
+        @foreach(var b in bills)
+        {
+            var managerCap = b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount;
+            var lcmCap = b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
+            var customerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer).Sum(x => x.AllocatedAmount);
+            var managerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);
+            var lcmAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.LcmToManager).Sum(x => x.AllocatedAmount);
+            <tr class="invoice-allocation-row"
+                data-customer-cap="@DataMoney(b.Amount)" data-customer-allocated="@DataMoney(customerAllocated)"
+                data-manager-cap="@DataMoney(managerCap)" data-manager-allocated="@DataMoney(managerAllocated)"
+                data-lcm-cap="@DataMoney(lcmCap)" data-lcm-allocated="@DataMoney(lcmAllocated)">
+                <td>B-@b.Id.ToString("D5")</td>
+                <td>@b.CustomerName</td>
+                <td>@b.Engagement.BusinessParty.Name</td>
+                <td>@b.Engagement.Manager.Name</td>
+                <td>@b.PeriodStart — @b.PeriodEnd</td>
+                <td data-flow-cap class="money">@b.Amount.ToString("N2")</td>
+                <td data-flow-allocated class="money">@customerAllocated.ToString("N2")</td>
+                <td data-flow-remaining class="money">@Math.Max(0m, b.Amount - customerAllocated).ToString("N2")</td>
+                <td><input name="Allocations[@b.Id]" type="number" min="0" max="@DataMoney(Math.Max(0m, b.Amount - customerAllocated))" step="0.01" class="form-control" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <div class="form-actions"><button class="btn btn-primary">Create invoice</button></div>
+</form>
+
+@section Scripts {
+<script>
+(() => {
+  const flow = document.getElementById("invoice-flow");
+  const table = document.getElementById("invoice-allocation-grid");
+  if (!flow || !table) return;
+  const keys = {
+    AccountingFirmToCustomer: "customer",
+    ManagerToAccountingFirm: "manager",
+    LcmToManager: "lcm"
+  };
+  const format = new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const update = () => {
+    const key = keys[flow.value];
+    table.querySelectorAll(".invoice-allocation-row").forEach(row => {
+      const cap = Number(row.dataset[key + "Cap"]);
+      const allocated = Number(row.dataset[key + "Allocated"]);
+      const remaining = Math.max(0, cap - allocated);
+      row.querySelector("[data-flow-cap]").textContent = format.format(cap);
+      row.querySelector("[data-flow-allocated]").textContent = format.format(allocated);
+      row.querySelector("[data-flow-remaining]").textContent = format.format(remaining);
+      row.querySelector("input[type=number]").max = remaining.toFixed(2);
+    });
+    table.dispatchEvent(new Event("grid:refresh"));
+  };
+  flow.addEventListener("change", update);
+  update();
+})();
+</script>
+}

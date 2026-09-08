@@ -3,10 +3,12 @@
 ## Completed locally
 
 - .NET 10 Release build: **0 errors, 0 warnings**.
-- Automated tests: **26 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/invoice-integrity-results.trx` (local, ignored by Git).
+- Automated tests: **27 passed, 0 failed, 0 skipped**, using real PostgreSQL 17.6. Test report: `artifacts/test-results/engagement-invoice-flow-results.trx` (local, ignored by Git).
 - Applied the EF migrations through `InvoiceDocuments` to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
 - Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules and wrong-worker rejection.
 - Verified same-customer customer-invoice consolidation is allowed while mixed customers are rejected; Manager and LCM flows retain their permitted consolidation. Verified invoice numbers can be reused by different issuers and are rejected for the same issuer.
+- Verified customer, service, accounting firm and manager changes are rejected after billing exists, including forged POST values. Billing amount, percentages, valid schedule settings, end date, status and notes remain editable, and historical access stays with the original firm and manager.
+- Verified New Invoice displays separate customer, Manager and LCM caps, active allocated amounts and remaining balances and updates them when the selected flow changes.
 - Verified one receipt can cover several invoices for the same firm/customer, while mixed-customer and mixed-firm receipts and overpayments are rejected. Invoice and receipt cancellation recalculate the derived states.
 - Verified concurrent worker payments, invoice allocations and receipt allocations preserve their caps. PostgreSQL serialization/deadlock exceptions, including wrapped `40001`, roll back and return the normal refresh/retry business error without automatic retry.
 - Verified legacy invoice/date and receipt data migrates into Invoice, InvoiceLine and CustomerReceiptAllocation rows without changing the historical amount or removing audit/cancellation data.

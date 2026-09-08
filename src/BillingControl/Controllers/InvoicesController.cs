@@ -61,6 +61,7 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
         ViewBag.Bills = await db.BillingRecords
             .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
             .Include(x => x.Engagement).ThenInclude(x => x.Manager)
+            .Include(x => x.Shares)
             .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice)
             .Where(x => x.Status != BillingStatus.Cancelled).OrderByDescending(x => x.PeriodStart).ToListAsync();
         return View(new InvoiceForm());

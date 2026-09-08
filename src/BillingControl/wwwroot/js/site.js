@@ -389,6 +389,10 @@
       f.setAttribute("aria-label", `Filter ${h.dataset.title}`);
       h.append(s, f);
     });
+    table.addEventListener("grid:refresh", () => {
+      data.forEach((item) => (item.values = values(item.row)));
+      render();
+    });
     render();
   });
 })();

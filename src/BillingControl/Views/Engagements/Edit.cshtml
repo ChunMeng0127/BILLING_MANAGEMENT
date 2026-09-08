@@ -1,8 +1,9 @@
 @model EngagementForm
-@{ ViewData["Title"] = Model.Id == 0 ? "New engagement" : "Edit engagement"; }
+@{ ViewData["Title"] = Model.Id == 0 ? "New engagement" : "Edit engagement"; bool hasBilling = ViewBag.HasBilling == true; }
 <a class="back-link" href="/Engagements">← Engagements</a>
 <h1>@ViewData["Title"]</h1>
 <p class="text-muted">Changes apply to future billing. Existing snapshots are preserved.</p>
+@if(hasBilling) { <div class="alert alert-secondary">Customer, service, accounting firm and manager are locked because billing has been generated. End this engagement and create a new engagement for a new party arrangement.</div> }
 <form method="post" asp-action="Edit" class="panel form-panel wide">
 <div asp-validation-summary="All" class="text-danger">
 </div>
@@ -11,25 +12,29 @@
 <div class="form-grid">
 <div>
 <label asp-for="CustomerId" class="form-label">Customer</label>
-<select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-select" required>
+@if(hasBilling) { <input type="hidden" name="CustomerId" value="@Model.CustomerId" /> }
+<select asp-for="CustomerId" asp-items="ViewBag.Customers" class="form-select" required disabled="@hasBilling">
 <option value="">Select customer</option>
 </select>
 </div>
 <div>
 <label asp-for="ServiceId" class="form-label">Service</label>
-<select asp-for="ServiceId" asp-items="ViewBag.Services" class="form-select" required>
+@if(hasBilling) { <input type="hidden" name="ServiceId" value="@Model.ServiceId" /> }
+<select asp-for="ServiceId" asp-items="ViewBag.Services" class="form-select" required disabled="@hasBilling">
 <option value="">Select service</option>
 </select>
 </div>
 <div>
 <label asp-for="BusinessPartyId" class="form-label">Accounting firm</label>
-<select asp-for="BusinessPartyId" asp-items="ViewBag.Firms" class="form-select" required>
+@if(hasBilling) { <input type="hidden" name="BusinessPartyId" value="@Model.BusinessPartyId" /> }
+<select asp-for="BusinessPartyId" asp-items="ViewBag.Firms" class="form-select" required disabled="@hasBilling">
 <option value="">Select firm</option>
 </select>
 </div>
 <div>
 <label asp-for="ManagerId" class="form-label">Manager</label>
-<select asp-for="ManagerId" asp-items="ViewBag.Managers" class="form-select" required>
+@if(hasBilling) { <input type="hidden" name="ManagerId" value="@Model.ManagerId" /> }
+<select asp-for="ManagerId" asp-items="ViewBag.Managers" class="form-select" required disabled="@hasBilling">
 <option value="">Select manager</option>
 </select>
 </div>

@@ -216,6 +216,87 @@ public class IntegrationTests
         await Task.WhenAll(Attempt(), Attempt()); Assert.Equal(200m, await db.WorkerPaymentAllocations.SumAsync(x => x.Amount));
     }
     [PostgresFact]
+    public async Task EngagementPartiesFreezeAfterBillingWhileOtherEditsAndOriginalScopeRemain()
+    {
+        await using var reset = await Fresh();
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "engagement-freeze-keys")));
+        const string password = "Freeze-Password!123";
+        int engagementId, customerId, serviceId, firmId, managerId, otherCustomerId, otherServiceId, otherFirmId, otherManagerId;
+        long version;
+        using (var scope = app.Services.CreateScope())
+        {
+            await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "BootstrapAdmin:Email", "freeze-admin@example.com" }, { "BootstrapAdmin:Password", password } }).Build());
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = new Customer { Name = "Frozen Customer" }; var service = new Service { Name = "Frozen Service" };
+            var firm = new BusinessParty { Name = "Original Firm" }; var manager = new Manager { Name = "Original Manager" };
+            var otherCustomer = new Customer { Name = "Replacement Customer" }; var otherService = new Service { Name = "Replacement Service" };
+            var otherFirm = new BusinessParty { Name = "Replacement Firm" }; var otherManager = new Manager { Name = "Replacement Manager" };
+            var engagement = new Engagement { Customer = customer, Service = service, BusinessParty = firm, Manager = manager, StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 2, 1), AnchorDay = 1 } };
+            db.AddRange(engagement, otherCustomer, otherService, otherFirm, otherManager); await db.SaveChangesAsync();
+            await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+            engagementId = engagement.Id; customerId = customer.Id; serviceId = service.Id; firmId = firm.Id; managerId = manager.Id;
+            otherCustomerId = otherCustomer.Id; otherServiceId = otherService.Id; otherFirmId = otherFirm.Id; otherManagerId = otherManager.Id;
+            version = (await db.Engagements.AsNoTracking().SingleAsync(x => x.Id == engagementId)).Version;
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            async Task AddUser(string email, string role, int? businessPartyId = null, int? linkedManagerId = null)
+            {
+                var user = new AppUser { Email = email, UserName = email, EmailConfirmed = true, BusinessPartyId = businessPartyId, ManagerId = linkedManagerId };
+                Seed.Check(await users.CreateAsync(user, password)); Seed.Check(await users.AddToRoleAsync(user, role));
+            }
+            await AddUser("original-firm@example.com", AppRoles.AccountingFirm, businessPartyId: firmId);
+            await AddUser("replacement-firm@example.com", AppRoles.AccountingFirm, businessPartyId: otherFirmId);
+            await AddUser("original-manager@example.com", AppRoles.Manager, linkedManagerId: managerId);
+            await AddUser("replacement-manager@example.com", AppRoles.Manager, linkedManagerId: otherManagerId);
+        }
+
+        using var admin = await SignedIn(app, "freeze-admin@example.com", password);
+        var editUrl = $"/Engagements/Edit/{engagementId}";
+        Dictionary<string, string> Form() => new()
+        {
+            ["Id"] = engagementId.ToString(), ["Version"] = version.ToString(),
+            ["CustomerId"] = customerId.ToString(), ["ServiceId"] = serviceId.ToString(),
+            ["BusinessPartyId"] = firmId.ToString(), ["ManagerId"] = managerId.ToString(),
+            ["StartDate"] = "2026-01-01", ["BillingAmount"] = "1000.00",
+            ["FirmPercent"] = "35", ["ManagerPercent"] = "25", ["LcmPercent"] = "40",
+            ["Frequency"] = Frequency.Monthly.ToString(), ["NextPeriodStart"] = "2026-02-01",
+            ["AnchorDay"] = "1", ["Status"] = EngagementStatus.Active.ToString(), ["Notes"] = "Original"
+        };
+        const string frozenMessage = "Customer, service, accounting firm and manager cannot be changed after billing has been generated. End this engagement and create a new engagement for the new arrangement.";
+        async Task Reject(string field, int replacementId)
+        {
+            var form = Form(); form[field] = replacementId.ToString();
+            var response = await PostWithToken(admin, editUrl, "/Engagements/Edit", form);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains(frozenMessage, await response.Content.ReadAsStringAsync());
+        }
+        await Reject("CustomerId", otherCustomerId);
+        await Reject("ServiceId", otherServiceId);
+        await Reject("BusinessPartyId", otherFirmId);
+        await Reject("ManagerId", otherManagerId);
+
+        var allowed = Form();
+        allowed["BillingAmount"] = "1200.00"; allowed["FirmPercent"] = "30"; allowed["ManagerPercent"] = "30"; allowed["LcmPercent"] = "40";
+        allowed["Frequency"] = Frequency.Quarterly.ToString(); allowed["NextPeriodStart"] = "2026-04-01"; allowed["AnchorDay"] = "15";
+        allowed["EndDate"] = "2026-12-31"; allowed["Status"] = EngagementStatus.Paused.ToString(); allowed["Notes"] = "Updated non-party terms";
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, editUrl, "/Engagements/Edit", allowed)).StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var saved = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Engagements.Include(x => x.Schedule).AsNoTracking().SingleAsync(x => x.Id == engagementId);
+            Assert.Equal(customerId, saved.CustomerId); Assert.Equal(serviceId, saved.ServiceId); Assert.Equal(firmId, saved.BusinessPartyId); Assert.Equal(managerId, saved.ManagerId);
+            Assert.Equal(1200m, saved.BillingAmount); Assert.Equal(30m, saved.FirmPercent); Assert.Equal(30m, saved.ManagerPercent); Assert.Equal(40m, saved.LcmPercent);
+            Assert.Equal(Frequency.Quarterly, saved.Schedule.Frequency); Assert.Equal(new DateOnly(2026, 4, 1), saved.Schedule.NextPeriodStart); Assert.Equal(15, saved.Schedule.AnchorDay);
+            Assert.Equal(new DateOnly(2026, 12, 31), saved.EndDate); Assert.Equal(EngagementStatus.Paused, saved.Status); Assert.Equal("Updated non-party terms", saved.Notes);
+        }
+        using var originalFirm = await SignedIn(app, "original-firm@example.com", password);
+        using var replacementFirm = await SignedIn(app, "replacement-firm@example.com", password);
+        using var originalManager = await SignedIn(app, "original-manager@example.com", password);
+        using var replacementManager = await SignedIn(app, "replacement-manager@example.com", password);
+        Assert.Contains("Frozen Customer", await originalFirm.GetStringAsync("/Billing"));
+        Assert.DoesNotContain("Frozen Customer", await replacementFirm.GetStringAsync("/Billing"));
+        Assert.Contains("Frozen Customer", await originalManager.GetStringAsync("/Billing"));
+        Assert.DoesNotContain("Frozen Customer", await replacementManager.GetStringAsync("/Billing"));
+    }
+    [PostgresFact]
     public async Task AuthenticationAndFullPageRender()
     {
         await using var db = await Fresh();
@@ -358,6 +439,10 @@ public class IntegrationTests
         using var admin = await SignedIn(app, "scope-admin@example.com", password);
         var adminDashboard = await admin.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", adminDashboard); Assert.Contains("Beta Scope Customer", adminDashboard);
         var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
+        var newInvoice = await admin.GetStringAsync("/Invoices/Create");
+        Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
+        Assert.Contains("data-manager-cap=\"250.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
+        Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
         var adminBilling = await admin.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", adminBilling); Assert.Contains("Beta Scope Customer", adminBilling); Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         using var internalUser = await SignedIn(app, "internal@example.com", password);
         var internalBilling = await internalUser.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", internalBilling); Assert.Contains("Beta Scope Customer", internalBilling);
