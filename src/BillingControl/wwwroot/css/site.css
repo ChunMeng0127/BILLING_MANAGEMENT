@@ -568,26 +568,28 @@ footer {
   padding: 11px 10px;
 }
 .invoice-allocation-table col.invoice-col-billing {
-  width: 8%;
+  width: 7%;
 }
 .invoice-allocation-table col.invoice-col-customer {
   width: 15%;
 }
-.invoice-allocation-table col.invoice-col-firm,
+.invoice-allocation-table col.invoice-col-firm {
+  width: 12%;
+}
 .invoice-allocation-table col.invoice-col-manager {
-  width: 13%;
+  width: 11%;
 }
 .invoice-allocation-table col.invoice-col-period {
-  width: 16%;
+  width: 15%;
 }
 .invoice-allocation-table col.invoice-col-money {
-  width: 8%;
+  width: 7%;
 }
 .invoice-allocation-table col.invoice-col-money-wide {
-  width: 10%;
+  width: 8%;
 }
 .invoice-allocation-table col.invoice-col-allocate {
-  width: 7%;
+  width: 140px;
 }
 .invoice-allocation-table td {
   min-width: 0;
@@ -614,7 +616,7 @@ footer {
 }
 .invoice-allocation-table input[type="number"] {
   width: 100%;
-  min-width: 0;
+  min-width: 110px;
   padding: 8px 7px;
   text-align: right;
 }

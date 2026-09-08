@@ -26,7 +26,8 @@
     </div>
     <h2>Billing allocations</h2>
     <p class="hint">Amounts are in RM. The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
-    <table class="table data-grid invoice-allocation-table" id="invoice-allocation-grid">
+    <table class="table data-grid invoice-allocation-table" id="invoice-allocation-grid"
+           data-empty-eligible-message="No billing records have a remaining amount for this invoice flow.">
         <colgroup>
             <col class="invoice-col-billing" />
             <col class="invoice-col-customer" />
@@ -47,7 +48,9 @@
             var customerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer).Sum(x => x.AllocatedAmount);
             var managerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);
             var lcmAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.LcmToManager).Sum(x => x.AllocatedAmount);
+            var customerRemaining = Math.Max(0m, b.Amount - customerAllocated);
             <tr class="invoice-allocation-row"
+                data-billing-id="@b.Id" data-grid-eligible="@(customerRemaining > 0 ? "true" : "false")"
                 data-customer-cap="@DataMoney(b.Amount)" data-customer-allocated="@DataMoney(customerAllocated)"
                 data-manager-cap="@DataMoney(managerCap)" data-manager-allocated="@DataMoney(managerAllocated)"
                 data-lcm-cap="@DataMoney(lcmCap)" data-lcm-allocated="@DataMoney(lcmAllocated)">
@@ -58,8 +61,8 @@
                 <td><span class="invoice-period">@b.PeriodStart.ToString("yyyy-MM-dd") — @b.PeriodEnd.ToString("yyyy-MM-dd")</span></td>
                 <td data-flow-cap class="money">@b.Amount.ToString("N2")</td>
                 <td data-flow-allocated class="money">@customerAllocated.ToString("N2")</td>
-                <td data-flow-remaining class="money">@Math.Max(0m, b.Amount - customerAllocated).ToString("N2")</td>
-                <td><input name="Allocations[@b.Id]" type="number" min="0" max="@DataMoney(Math.Max(0m, b.Amount - customerAllocated))" step="0.01" class="form-control" /></td>
+                <td data-flow-remaining class="money">@customerRemaining.ToString("N2")</td>
+                <td><input name="Allocations[@b.Id]" type="number" min="0" max="@DataMoney(customerRemaining)" step="0.01" class="form-control" disabled="@(customerRemaining <= 0 ? "disabled" : null)" /></td>
             </tr>
         }
         </tbody>
@@ -68,32 +71,5 @@
 </form>
 
 @section Scripts {
-<script>
-(() => {
-  const flow = document.getElementById("invoice-flow");
-  const table = document.getElementById("invoice-allocation-grid");
-  if (!flow || !table) return;
-  const keys = {
-    AccountingFirmToCustomer: "customer",
-    ManagerToAccountingFirm: "manager",
-    LcmToManager: "lcm"
-  };
-  const format = new Intl.NumberFormat("en-MY", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const update = () => {
-    const key = keys[flow.value];
-    table.querySelectorAll(".invoice-allocation-row").forEach(row => {
-      const cap = Number(row.dataset[key + "Cap"]);
-      const allocated = Number(row.dataset[key + "Allocated"]);
-      const remaining = Math.max(0, cap - allocated);
-      row.querySelector("[data-flow-cap]").textContent = format.format(cap);
-      row.querySelector("[data-flow-allocated]").textContent = format.format(allocated);
-      row.querySelector("[data-flow-remaining]").textContent = format.format(remaining);
-      row.querySelector("input[type=number]").max = remaining.toFixed(2);
-    });
-    table.dispatchEvent(new Event("grid:refresh"));
-  };
-  flow.addEventListener("change", update);
-  update();
-})();
-</script>
+<script src="~/js/invoice-allocations.js" asp-append-version="true"></script>
 }

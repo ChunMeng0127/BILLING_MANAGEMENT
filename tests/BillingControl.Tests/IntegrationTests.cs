@@ -525,6 +525,10 @@ public class IntegrationTests
         Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
         Assert.Contains("data-manager-cap=\"250.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
+        var fullyCustomerAllocatedRow = Regex.Match(newInvoice, $"<tr class=\"invoice-allocation-row\"[^>]*data-billing-id=\"{billBId}\"[^>]*>[\\s\\S]*?</tr>").Value;
+        Assert.NotEmpty(fullyCustomerAllocatedRow); Assert.Contains("data-grid-eligible=\"false\"", fullyCustomerAllocatedRow); Assert.Contains("max=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("disabled=\"disabled\"", fullyCustomerAllocatedRow);
+        Assert.Contains("data-manager-allocated=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("data-lcm-allocated=\"0.00\"", fullyCustomerAllocatedRow);
+        Assert.Contains("No billing records have a remaining amount for this invoice flow.", newInvoice); Assert.Contains("invoice-allocations", newInvoice);
         var newInvoiceText = WebUtility.HtmlDecode(newInvoice);
         Assert.Contains("Accounting Firm → Customer", newInvoiceText); Assert.Contains("Manager → Accounting Firm", newInvoiceText); Assert.Contains("LCM MGT → Manager", newInvoiceText);
         Assert.Contains("invoice-create-form", newInvoice); Assert.Contains("invoice-allocation-table", newInvoice); Assert.DoesNotContain("Allocated for selected flow (RM)", newInvoice);

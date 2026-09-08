@@ -1,4 +1,25 @@
 (() => {
+  const isGridEligible = (row) => row.dataset.gridEligible !== "false";
+  const eligibleGridRows = (items) => items.filter((item) =>
+    isGridEligible(item.row ?? item),
+  );
+  const gridRowCountText = (shown, total) =>
+    `${shown} of ${total} Rows shown`;
+  const defaultGridEmptyMessage =
+    "No rows to show. Add a record or clear your filters.";
+  const gridEmptyMessage = (eligibleCount, dataset) =>
+    eligibleCount === 0 && dataset.emptyEligibleMessage
+      ? dataset.emptyEligibleMessage
+      : dataset.emptyMessage ?? defaultGridEmptyMessage;
+  if (typeof module === "object" && module.exports)
+    module.exports = {
+      isGridEligible,
+      eligibleGridRows,
+      gridRowCountText,
+      gridEmptyMessage,
+    };
+  if (typeof document === "undefined") return;
+
   const element = (tag, cls, text) => {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -66,11 +87,8 @@
     const scroll = element("div", "table-scroll");
     table.before(scroll);
     scroll.append(table);
-    const empty = element(
-      "div",
-      "empty-state",
-      "No rows to show. Add a record or clear your filters.",
-    );
+    const defaultEmptyMessage = gridEmptyMessage(1, table.dataset);
+    const empty = element("div", "empty-state", defaultEmptyMessage);
     scroll.append(empty);
     const numeric = (s) => Number(s.replace(/,/g, ""));
     const matches = (value, f) => {
@@ -87,9 +105,14 @@
         "><": n >= Math.min(f.a, f.b) && n <= Math.max(f.a, f.b),
       }[f.op];
     };
-    const loaded = () => (limit ? data.slice(0, limit) : data);
+    const eligible = () => eligibleGridRows(data);
+    const loaded = () => {
+      const items = eligible();
+      return limit ? items.slice(0, limit) : items;
+    };
     const render = () => {
-      const shown = loaded().filter((r) =>
+      const loadedRows = loaded();
+      const shown = loadedRows.filter((r) =>
         [...filters].every(([i, f]) => matches(r.values[i], f)),
       );
       shown.sort((a, b) => {
@@ -129,8 +152,9 @@
               : "");
         }
       });
-      count.textContent = `${shown.length} of ${loaded().length} Rows shown`;
+      count.textContent = gridRowCountText(shown.length, loadedRows.length);
       clear.hidden = filters.size === 0;
+      empty.textContent = gridEmptyMessage(eligible().length, table.dataset);
       empty.hidden = shown.length !== 0;
     };
     function dialog(title) {
