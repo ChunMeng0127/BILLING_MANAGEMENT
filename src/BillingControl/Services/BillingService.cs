@@ -10,7 +10,7 @@ public class BillingService
     private readonly AppDbContext db;
     public BillingService(AppDbContext db) { this.db = db; }
 
-    public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, BillingGenerationMode? mode)
+    public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, BillingGenerationMode? mode, decimal? customerBillingAmount = null, decimal? revenueShareBaseAmount = null)
     {
         return await FinancialTransaction.Serializable(db, async () =>
         {
@@ -36,8 +36,12 @@ public class BillingService
             if (e.EndDate is { } stop && expectedEnd > stop) expectedEnd = stop;
             Require(end == expectedEnd, "Scheduled period no longer matches. Refresh before generating.");
         }
-        var amounts = Split(e.BillingAmount, e.FirmPercent, e.ManagerPercent, e.LcmPercent);
-        var bill = new BillingRecord { EngagementId = e.Id, PeriodStart = start, PeriodEnd = end, Amount = e.BillingAmount, CustomerName = e.Customer.Name, ServiceName = e.Service.Name, WorkItem = new WorkItem() };
+        var customerAmount = customerBillingAmount ?? e.BillingAmount;
+        var shareBaseAmount = revenueShareBaseAmount ?? customerAmount;
+        PositiveMoney(customerAmount);
+        PositiveMoney(shareBaseAmount);
+        var amounts = Split(shareBaseAmount, e.FirmPercent, e.ManagerPercent, e.LcmPercent);
+        var bill = new BillingRecord { EngagementId = e.Id, PeriodStart = start, PeriodEnd = end, Amount = customerAmount, RevenueShareBaseAmount = shareBaseAmount, CustomerName = e.Customer.Name, ServiceName = e.Service.Name, WorkItem = new WorkItem() };
         bill.Shares = [new() { Kind = ShareKind.Firm, PartyName = e.BusinessParty.Name, Percent = e.FirmPercent, Amount = amounts[0] }, new() { Kind = ShareKind.Manager, PartyName = e.Manager.Name, Percent = e.ManagerPercent, Amount = amounts[1] }, new() { Kind = ShareKind.Lcm, PartyName = "LCM MGT Sdn Bhd", Percent = e.LcmPercent, Amount = amounts[2] }];
         db.BillingRecords.Add(bill);
         if (generationMode == BillingGenerationMode.Scheduled) { var next = Next(start, e.Schedule.Frequency, e.Schedule.AnchorDay); e.Schedule.NextPeriodStart = Months(e.Schedule.Frequency) == 0 || (e.EndDate != null && next > e.EndDate) ? null : next; }
@@ -55,12 +59,13 @@ public class BillingService
         await db.SaveChangesAsync(); return bill;
         });
     }
-    public async Task Correct(int id, DateOnly periodStart, DateOnly periodEnd, BillingStatus status, string? notes, long version, long workItemVersion)
+    public async Task Correct(int id, DateOnly periodStart, DateOnly periodEnd, BillingStatus status, string? notes, long version, long workItemVersion, decimal? customerBillingAmount = null, decimal? revenueShareBaseAmount = null)
     {
         await FinancialTransaction.Serializable(db, async () =>
         {
             var bill = await db.BillingRecords
                 .Include(x => x.Engagement)
+                .Include(x => x.Shares)
                 .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
                 .Include(x => x.WorkItem).ThenInclude(x => x.Assignments).ThenInclude(x => x.Allocations).ThenInclude(x => x.WorkerPayment)
                 .SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Billing record was not found.");
@@ -73,6 +78,24 @@ public class BillingService
                     : status == bill.Status),
                 "Invoice and payment states are calculated from active financial records and cannot be changed here.");
             Require(periodStart >= bill.Engagement.StartDate && periodEnd >= periodStart && (bill.Engagement.EndDate == null || periodEnd <= bill.Engagement.EndDate), "The service period must stay within the engagement dates.");
+            var correctedCustomerAmount = customerBillingAmount ?? bill.Amount;
+            var correctedShareBaseAmount = revenueShareBaseAmount ?? bill.RevenueShareBaseAmount;
+            PositiveMoney(correctedCustomerAmount);
+            PositiveMoney(correctedShareBaseAmount);
+            var amountsChanged = bill.Amount != correctedCustomerAmount || bill.RevenueShareBaseAmount != correctedShareBaseAmount;
+            if (amountsChanged)
+            {
+                Require(!bill.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled), "Cancel active invoices before correcting billing amounts.");
+                Require(!bill.InvoiceLines.SelectMany(x => x.Invoice.ReceiptAllocations).Any(x => !x.CustomerReceipt.IsCancelled), "Cancel active receipts before correcting billing amounts.");
+                Require(!bill.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active worker assignments before correcting the revenue-share base.");
+                Require(!bill.WorkItem.Assignments.SelectMany(x => x.Allocations).Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before correcting the revenue-share base.");
+                var shares = bill.Shares.OrderBy(x => x.Kind).ToList();
+                Require(shares.Count == 3 && shares.Select(x => x.Kind).Distinct().Count() == 3, "Revenue-share snapshots are incomplete and cannot be corrected safely.");
+                var correctedShares = Split(correctedShareBaseAmount, shares[0].Percent, shares[1].Percent, shares[2].Percent);
+                for (var i = 0; i < shares.Count; i++) shares[i].Amount = correctedShares[i];
+                bill.Amount = correctedCustomerAmount;
+                bill.RevenueShareBaseAmount = correctedShareBaseAmount;
+            }
             var periodChanged = bill.PeriodStart != periodStart || bill.PeriodEnd != periodEnd;
             if (periodChanged)
             {
@@ -85,7 +108,15 @@ public class BillingService
             bill.PeriodEnd = periodEnd;
             bill.Status = status;
             bill.WorkItem.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
-            await db.SaveChangesAsync();
+            if (amountsChanged)
+            {
+                using var correctionScope = db.PermitBillingSnapshotCorrection();
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                await db.SaveChangesAsync();
+            }
         });
     }
     public async Task Assign(int workItemId, int workerId, decimal percent)

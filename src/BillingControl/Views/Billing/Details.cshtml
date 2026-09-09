@@ -6,6 +6,7 @@
 </div>
 <div class="metrics compact">
 <div class="metric"><span>Customer billing</span><strong>RM @Model.Amount.ToString("N2")</strong></div>
+@if(access.IsStaff) { <div class="metric"><span>Revenue-share base</span><strong>RM @Model.RevenueShareBaseAmount.ToString("N2")</strong></div> }
 @if(access.IsStaff) { @foreach(var s in Model.Shares.OrderBy(x=>x.Kind)) { <div class="metric"><span>@s.PartyName · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div> } }
 @if(access.IsAccountingFirm) { var s=Model.Shares.Single(x=>x.Kind==ShareKind.Firm); <div class="metric"><span>Your firm share · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div> }
 @if(access.IsManager) { var s=Model.Shares.Single(x=>x.Kind==ShareKind.Manager); <div class="metric"><span>Your manager share · @s.Percent.ToString("0.####")%</span><strong>RM @s.Amount.ToString("N2")</strong></div><div class="metric"><span>Work status</span><strong>@Finance.Label(Model.WorkItem.Status)</strong></div> }

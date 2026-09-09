@@ -101,12 +101,12 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
-    public async Task<IActionResult> Generate(int engagementId, DateOnly start, DateOnly end, BillingGenerationMode? mode)
+    public async Task<IActionResult> Generate(int engagementId, DateOnly start, DateOnly end, BillingGenerationMode? mode, decimal? customerBillingAmount, decimal? revenueShareBaseAmount)
     {
         ValidForm();
         var a = await access.CurrentAsync();
         if (!await access.Engagements(a).AnyAsync(x => x.Id == engagementId)) return NotFound();
-        var bill = await billing.Generate(engagementId, start, end, mode);
+        var bill = await billing.Generate(engagementId, start, end, mode, customerBillingAmount, revenueShareBaseAmount);
         TempData["Success"] = "Billing period and work item created.";
         return RedirectToAction(nameof(Details), new { id = bill.Id });
     }
@@ -144,7 +144,9 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
         ViewBag.Bill = bill;
         ViewBag.HasActiveInvoices = await db.InvoiceLines.AnyAsync(x => x.BillingRecordId == id && x.Invoice.Status != InvoiceStatus.Cancelled);
         ViewBag.HasActiveAssignments = await db.WorkerAssignments.AnyAsync(x => x.WorkItem.BillingRecordId == id && !x.IsCancelled);
-        return View(new BillingRecordEditForm { Id = bill.Id, Version = bill.Version, WorkItemVersion = bill.WorkItem.Version, PeriodStart = bill.PeriodStart, PeriodEnd = bill.PeriodEnd, Status = bill.Status, Notes = bill.WorkItem.Notes });
+        ViewBag.HasActiveReceipts = await db.CustomerReceiptAllocations.AnyAsync(x => x.Invoice.Lines.Any(l => l.BillingRecordId == id) && !x.CustomerReceipt.IsCancelled);
+        ViewBag.HasActivePayments = await db.WorkerPaymentAllocations.AnyAsync(x => x.WorkerAssignment.WorkItem.BillingRecordId == id && !x.WorkerPayment.IsCancelled);
+        return View(new BillingRecordEditForm { Id = bill.Id, Version = bill.Version, WorkItemVersion = bill.WorkItem.Version, PeriodStart = bill.PeriodStart, PeriodEnd = bill.PeriodEnd, CustomerBillingAmount = bill.Amount, RevenueShareBaseAmount = bill.RevenueShareBaseAmount, Status = bill.Status, Notes = bill.WorkItem.Notes });
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
@@ -153,8 +155,8 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
         ValidForm();
         var a = await access.CurrentAsync();
         if (!await access.BillingRecords(a).AnyAsync(x => x.Id == form.Id)) return NotFound();
-        await billing.Correct(form.Id, form.PeriodStart, form.PeriodEnd, form.Status, form.Notes, form.Version, form.WorkItemVersion);
-        TempData["Success"] = "Billing record correction saved. Historical amount and share snapshots are unchanged.";
+        await billing.Correct(form.Id, form.PeriodStart, form.PeriodEnd, form.Status, form.Notes, form.Version, form.WorkItemVersion, form.CustomerBillingAmount, form.RevenueShareBaseAmount);
+        TempData["Success"] = "Billing record correction saved. Revenue shares use the stored percentages; audit origins were preserved.";
         return RedirectToAction(nameof(Details), new { id = form.Id });
     }
 

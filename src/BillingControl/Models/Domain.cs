@@ -75,6 +75,8 @@ public class BillingRecord : Record
     public DateOnly PeriodStart { get; set; }
     public DateOnly PeriodEnd { get; set; }
     public BillingStatus Status { get; set; }
+    /// <summary>Immutable historical base used to calculate the revenue-share snapshots.</summary>
+    public decimal RevenueShareBaseAmount { get; set; }
     public decimal Amount { get; set; }
     public string CustomerName { get; set; } = "";
     public string ServiceName { get; set; } = "";

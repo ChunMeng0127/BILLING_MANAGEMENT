@@ -8,6 +8,7 @@ namespace BillingControl.Data;
 public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<AppUser>(options)
 {
     private bool allowInvoiceLineDeletion;
+    private bool allowBillingSnapshotCorrection;
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<BusinessParty> BusinessParties => Set<BusinessParty>();
@@ -62,6 +63,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_Billing_Dates", "\"PeriodEnd\" >= \"PeriodStart\"");
             t.HasCheckConstraint("CK_Billing_Amount", "\"Amount\" > 0");
+            t.HasCheckConstraint("CK_Billing_RevenueShareBaseAmount", "\"RevenueShareBaseAmount\" > 0");
         });
         b.Entity<RevenueShareAllocation>().HasIndex(x => new { x.BillingRecordId, x.Kind }).IsUnique();
         b.Entity<RevenueShareAllocation>().ToTable(t => t.HasCheckConstraint("CK_Share", "\"Amount\" >= 0 AND \"Percent\" BETWEEN 0 AND 100"));
@@ -104,9 +106,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             {
                 string[] allowed = e.Entity switch
                 {
-                    BillingRecord => ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
+                    BillingRecord => allowBillingSnapshotCorrection
+                        ? ["PeriodStart", "PeriodEnd", "Status", "CancellationReason", "Amount", "RevenueShareBaseAmount"]
+                        : ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
                     Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
-                    RevenueShareAllocation or WorkerPaymentAllocation or CustomerReceiptAllocation => [],
+                    RevenueShareAllocation => allowBillingSnapshotCorrection ? ["Amount"] : [],
+                    WorkerPaymentAllocation or CustomerReceiptAllocation => [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
@@ -130,8 +135,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         return new DeletionScope(this, previous);
     }
 
+    internal IDisposable PermitBillingSnapshotCorrection()
+    {
+        var previous = allowBillingSnapshotCorrection;
+        allowBillingSnapshotCorrection = true;
+        return new SnapshotScope(this, previous);
+    }
+
     private sealed class DeletionScope(AppDbContext context, bool previous) : IDisposable
     {
         public void Dispose() => context.allowInvoiceLineDeletion = previous;
+    }
+
+    private sealed class SnapshotScope(AppDbContext context, bool previous) : IDisposable
+    {
+        public void Dispose() => context.allowBillingSnapshotCorrection = previous;
     }
 }

@@ -81,7 +81,7 @@ public class HomeController(AppDbContext db, AccessScope access) : AppController
         }
         else if (r.Access.IsAccountingFirm)
         {
-            lines.Add("Billing ID,Customer,Service,Period start,Period end,Status,Billing MYR,Firm percent,Firm share MYR,Customer invoice state,Customer invoiced MYR,Received MYR,Outstanding MYR");
+            lines.Add("Billing ID,Customer,Service,Period start,Period end,Status,Customer billing MYR,Firm percent,Firm share MYR,Customer invoice state,Customer invoiced MYR,Received MYR,Outstanding MYR");
             foreach (var b in r.Bills)
             {
                 var share = b.Shares.Single(x => x.Kind == ShareKind.Firm);
@@ -90,7 +90,7 @@ public class HomeController(AppDbContext db, AccessScope access) : AppController
         }
         else if (r.Access.IsManager)
         {
-            lines.Add("Billing ID,Customer,Service,Period start,Period end,Billing status,Work status,Billing MYR,Manager percent,Manager share MYR,Manager invoice MYR");
+            lines.Add("Billing ID,Customer,Service,Period start,Period end,Billing status,Work status,Customer billing MYR,Manager percent,Manager share MYR,Manager invoice MYR");
             foreach (var b in r.Bills)
             {
                 var share = b.Shares.Single(x => x.Kind == ShareKind.Manager);
@@ -100,12 +100,12 @@ public class HomeController(AppDbContext db, AccessScope access) : AppController
         }
         else
         {
-            lines.Add("Billing ID,Customer,Service,Period start,Period end,Status,Billing MYR,Firm MYR,Manager MYR,LCM gross MYR,Worker entitlement MYR,LCM retained MYR,Customer invoice state,Customer invoiced MYR,Customer received MYR,Customer outstanding MYR");
+            lines.Add("Billing ID,Customer,Service,Period start,Period end,Status,Customer billing MYR,Revenue-share base MYR,Firm MYR,Manager MYR,LCM gross MYR,Worker entitlement MYR,LCM retained MYR,Customer invoice state,Customer invoiced MYR,Customer received MYR,Customer outstanding MYR");
             foreach (var b in r.Bills)
             {
                 var gross = b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
                 var cost = b.WorkItem.Assignments.Where(x => !x.IsCancelled).Sum(x => x.Entitlement);
-                lines.Add(string.Join(',', b.Id, Csv(b.CustomerName), Csv(b.ServiceName), b.PeriodStart.ToString("yyyy-MM-dd"), b.PeriodEnd.ToString("yyyy-MM-dd"), b.Status, N(b.Amount), N(b.Shares.Single(x => x.Kind == ShareKind.Firm).Amount), N(b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount), N(gross), N(cost), N(gross - cost), b.CustomerInvoiceState, N(b.CustomerInvoicedAmount), N(b.CustomerReceivedAmount), N(b.CustomerOutstandingAmount)));
+                lines.Add(string.Join(',', b.Id, Csv(b.CustomerName), Csv(b.ServiceName), b.PeriodStart.ToString("yyyy-MM-dd"), b.PeriodEnd.ToString("yyyy-MM-dd"), b.Status, N(b.Amount), N(b.RevenueShareBaseAmount), N(b.Shares.Single(x => x.Kind == ShareKind.Firm).Amount), N(b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount), N(gross), N(cost), N(gross - cost), b.CustomerInvoiceState, N(b.CustomerInvoicedAmount), N(b.CustomerReceivedAmount), N(b.CustomerOutstandingAmount)));
             }
         }
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(string.Join("\r\n", lines))).ToArray(), "text/csv", "billing-report.csv");

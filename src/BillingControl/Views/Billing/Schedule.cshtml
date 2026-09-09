@@ -38,6 +38,10 @@
 </label>
 <label>Through <input name="end" type="date" value="@end.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
 </label>
+@if(s.Frequency == Frequency.AdHoc) {
+<label>Customer billing amount (RM) <input type="number" name="customerBillingAmount" min="0.01" max="9999999999.99" step="0.01" value="@e.BillingAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required class="form-control form-control-sm" /></label>
+<label>Revenue-share base (RM) <input type="number" name="revenueShareBaseAmount" min="0.01" max="9999999999.99" step="0.01" value="@e.BillingAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required class="form-control form-control-sm" /></label>
+}
 <button class="btn btn-primary btn-sm">Generate</button>
 </form> } else { <span class="text-muted">No next period</span> }
 <details class="manual-period">
@@ -49,9 +53,11 @@
 </label>
 <label>Through <input type="date" name="end" required class="form-control form-control-sm" />
 </label>
+<label>Customer billing amount (RM) <input type="number" name="customerBillingAmount" min="0.01" max="9999999999.99" step="0.01" value="@e.BillingAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required class="form-control form-control-sm" /></label>
+<label>Revenue-share base (RM) <input type="number" name="revenueShareBaseAmount" min="0.01" max="9999999999.99" step="0.01" value="@e.BillingAmount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" required class="form-control form-control-sm" /></label>
 <button class="btn btn-outline-secondary btn-sm">Generate manual</button>
 </form>
-<small>@(s.Frequency == Frequency.AdHoc ? "Ad-Hoc periods may start and end on any valid dates and do not create recurring advice." : "For scheduled frequencies this replaces the current advised period, so it must start at the current Next start and moves the next billing start to the day after the manual period ends. Active overlapping periods are rejected.")</small>
+<small>@(s.Frequency == Frequency.AdHoc ? "Ad-Hoc periods may start and end on any valid dates and do not create recurring advice." : "For scheduled frequencies this replaces the current advised period, so it must start at the current Next start and moves the next billing start to the day after the manual period ends. Active overlapping periods are rejected.") Customer billing amount is billed to the end customer. Revenue-share base is used for the 35% / 25% / 40% shares.</small>
 </details>
 } else { <span class="text-muted">Read-only</span> }
 </td>

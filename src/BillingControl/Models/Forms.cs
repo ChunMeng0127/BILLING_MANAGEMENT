@@ -58,6 +58,8 @@ public class BillingRecordEditForm
     public long WorkItemVersion { get; set; }
     [DataType(DataType.Date)] public DateOnly PeriodStart { get; set; }
     [DataType(DataType.Date)] public DateOnly PeriodEnd { get; set; }
+    [Range(typeof(decimal), "0.01", "9999999999.99")] public decimal CustomerBillingAmount { get; set; }
+    [Range(typeof(decimal), "0.01", "9999999999.99")] public decimal RevenueShareBaseAmount { get; set; }
     public BillingStatus Status { get; set; }
     [StringLength(2000)] public string? Notes { get; set; }
 }
