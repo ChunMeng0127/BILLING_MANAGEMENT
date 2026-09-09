@@ -35,7 +35,7 @@ public class EngagementsController(AppDbContext db, AccessScope access, BillingS
         if (id == null) return View(new EngagementForm());
         var e = await access.Engagements(a).Include(x => x.Schedule).SingleOrDefaultAsync(x => x.Id == id); if (e == null) return NotFound();
         ViewBag.HasBilling = await db.BillingRecords.AnyAsync(x => x.EngagementId == e.Id);
-        return View(new EngagementForm { Id = e.Id, Version = e.Version, CustomerId = e.CustomerId, ServiceId = e.ServiceId, BusinessPartyId = e.BusinessPartyId, ManagerId = e.ManagerId, StartDate = e.StartDate, EndDate = e.EndDate, BillingAmount = e.BillingAmount, FirmPercent = e.FirmPercent, ManagerPercent = e.ManagerPercent, LcmPercent = e.LcmPercent, Frequency = e.Schedule.Frequency, NextPeriodStart = e.Schedule.NextPeriodStart, AnchorDay = e.Schedule.AnchorDay, Status = e.Status, Notes = e.Notes });
+        return View(new EngagementForm { Id = e.Id, Version = e.Version, ScheduleVersion = e.Schedule.Version, CustomerId = e.CustomerId, ServiceId = e.ServiceId, BusinessPartyId = e.BusinessPartyId, ManagerId = e.ManagerId, StartDate = e.StartDate, EndDate = e.EndDate, BillingAmount = e.BillingAmount, FirmPercent = e.FirmPercent, ManagerPercent = e.ManagerPercent, LcmPercent = e.LcmPercent, Frequency = e.Schedule.Frequency, NextPeriodStart = e.Schedule.NextPeriodStart, AnchorDay = e.Schedule.AnchorDay, Status = e.Status, Notes = e.Notes });
     }
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Edit(EngagementForm form)
@@ -53,6 +53,7 @@ public class EngagementsController(AppDbContext db, AccessScope access, BillingS
                 var e = form.Id == 0 ? new Engagement { Schedule = new() } : await access.Engagements(a).Include(x => x.Schedule).SingleOrDefaultAsync(x => x.Id == form.Id);
                 if (e == null) return NotFound();
                 Require(form.Id == 0 || form.Version == e.Version, "This engagement changed. Refresh before saving.");
+                Require(form.Id == 0 || form.ScheduleVersion == e.Schedule.Version, "The billing schedule changed. Refresh the engagement before saving.");
                 if (form.Id != 0 && await db.BillingRecords.AnyAsync(x => x.EngagementId == form.Id))
                     Require(e.CustomerId == form.CustomerId && e.ServiceId == form.ServiceId && e.BusinessPartyId == form.BusinessPartyId && e.ManagerId == form.ManagerId,
                         "Customer, service, accounting firm and manager cannot be changed after billing has been generated. End this engagement and create a new engagement for the new arrangement.");

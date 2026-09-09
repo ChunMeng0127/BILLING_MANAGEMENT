@@ -10,7 +10,7 @@ public class BillingService
     private readonly AppDbContext db;
     public BillingService(AppDbContext db) { this.db = db; }
 
-    public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule = false)
+    public async Task<BillingRecord> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule = false, bool manualReplacement = false)
     {
         return await FinancialTransaction.Serializable(db, async () =>
         {
@@ -19,6 +19,12 @@ public class BillingService
         Require(e.Customer.IsActive && e.Service.IsActive && e.BusinessParty.IsActive && e.Manager.IsActive, "Reactivate this engagement's master records before generating billing.");
         Require(start >= e.StartDate && end >= start && (e.EndDate == null || end <= e.EndDate), "Service period must fall within the engagement dates.");
         Require(!await db.BillingRecords.AnyAsync(x => x.EngagementId == engagementId && x.Status != BillingStatus.Cancelled && x.PeriodStart <= end && x.PeriodEnd >= start), "An active billing record already covers all or part of this service period.");
+        if (manualReplacement)
+        {
+            Require(!advanceSchedule, "Choose either the scheduled period or manual replacement, not both.");
+            if (Months(e.Schedule.Frequency) > 0 || e.Schedule.Frequency == Frequency.OneOff)
+                Require(e.Schedule.NextPeriodStart != null && start == e.Schedule.NextPeriodStart, "A manual replacement must start at the current scheduled period start.");
+        }
         if (advanceSchedule)
         {
             Require(e.Schedule.NextPeriodStart == start, "Schedule changed. Refresh before generating.");
@@ -32,6 +38,17 @@ public class BillingService
         bill.Shares = [new() { Kind = ShareKind.Firm, PartyName = e.BusinessParty.Name, Percent = e.FirmPercent, Amount = amounts[0] }, new() { Kind = ShareKind.Manager, PartyName = e.Manager.Name, Percent = e.ManagerPercent, Amount = amounts[1] }, new() { Kind = ShareKind.Lcm, PartyName = "LCM MGT Sdn Bhd", Percent = e.LcmPercent, Amount = amounts[2] }];
         db.BillingRecords.Add(bill);
         if (advanceSchedule) { var next = Next(start, e.Schedule.Frequency, e.Schedule.AnchorDay); e.Schedule.NextPeriodStart = Months(e.Schedule.Frequency) == 0 || (e.EndDate != null && next > e.EndDate) ? null : next; }
+        else if (manualReplacement)
+        {
+            if (Months(e.Schedule.Frequency) == 0)
+                e.Schedule.NextPeriodStart = null;
+            else
+            {
+                var next = end.AddDays(1);
+                e.Schedule.NextPeriodStart = e.EndDate is { } stop && next > stop ? null : next;
+                if (e.Schedule.NextPeriodStart != null) e.Schedule.AnchorDay = e.Schedule.NextPeriodStart.Value.Day;
+            }
+        }
         await db.SaveChangesAsync(); return bill;
         });
     }

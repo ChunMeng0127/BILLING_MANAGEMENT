@@ -25,6 +25,7 @@ public class EngagementForm
 {
     public int Id { get; set; }
     public long Version { get; set; }
+    public long ScheduleVersion { get; set; }
     [Range(1, int.MaxValue)] public int CustomerId { get; set; }
     [Range(1, int.MaxValue)] public int ServiceId { get; set; }
     [Range(1, int.MaxValue)] public int BusinessPartyId { get; set; }

@@ -34,6 +34,7 @@
 @if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="advanceSchedule" value="@(s.Frequency!=Frequency.AdHoc ? "true" : "false")" />
+<input type="hidden" name="manualReplacement" value="false" />
 <label>From <input name="start" type="date" value="@start.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
 </label>
 <label>Through <input name="end" type="date" value="@end.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
@@ -44,13 +45,15 @@
 <summary>Manual / replacement period</summary>
 <form asp-action="Generate" method="post" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
+<input type="hidden" name="advanceSchedule" value="false" />
+<input type="hidden" name="manualReplacement" value="@(s.Frequency==Frequency.AdHoc ? "false" : "true")" />
 <label>From <input type="date" name="start" required class="form-control form-control-sm" />
 </label>
 <label>Through <input type="date" name="end" required class="form-control form-control-sm" />
 </label>
 <button class="btn btn-outline-secondary btn-sm">Generate manual</button>
 </form>
-<small>Does not advance the schedule. Active overlapping periods are rejected.</small>
+<small>@(s.Frequency == Frequency.AdHoc ? "Ad-Hoc periods may start and end on any valid dates and do not create recurring advice." : "For scheduled frequencies this replaces the current advised period, so it must start at the current Next start and moves the next billing start to the day after the manual period ends. Active overlapping periods are rejected.")</small>
 </details>
 } else { <span class="text-muted">Read-only</span> }
 </td>

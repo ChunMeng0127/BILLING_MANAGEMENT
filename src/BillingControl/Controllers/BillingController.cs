@@ -101,12 +101,12 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
-    public async Task<IActionResult> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule)
+    public async Task<IActionResult> Generate(int engagementId, DateOnly start, DateOnly end, bool advanceSchedule, bool manualReplacement)
     {
         ValidForm();
         var a = await access.CurrentAsync();
         if (!await access.Engagements(a).AnyAsync(x => x.Id == engagementId)) return NotFound();
-        var bill = await billing.Generate(engagementId, start, end, advanceSchedule);
+        var bill = await billing.Generate(engagementId, start, end, advanceSchedule, manualReplacement);
         TempData["Success"] = "Billing period and work item created.";
         return RedirectToAction(nameof(Details), new { id = bill.Id });
     }
