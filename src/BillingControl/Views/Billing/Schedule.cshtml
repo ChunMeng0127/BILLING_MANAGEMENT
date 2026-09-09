@@ -33,8 +33,7 @@
 <a class="btn btn-outline-secondary btn-sm" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
 @if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
-<input type="hidden" name="advanceSchedule" value="@(s.Frequency!=Frequency.AdHoc ? "true" : "false")" />
-<input type="hidden" name="manualReplacement" value="false" />
+<input type="hidden" name="mode" value="@(s.Frequency==Frequency.AdHoc ? "AdHocManual" : "Scheduled")" />
 <label>From <input name="start" type="date" value="@start.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
 </label>
 <label>Through <input name="end" type="date" value="@end.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
@@ -45,8 +44,7 @@
 <summary>Manual / replacement period</summary>
 <form asp-action="Generate" method="post" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
-<input type="hidden" name="advanceSchedule" value="false" />
-<input type="hidden" name="manualReplacement" value="@(s.Frequency==Frequency.AdHoc ? "false" : "true")" />
+<input type="hidden" name="mode" value="@(s.Frequency==Frequency.AdHoc ? "AdHocManual" : "Replacement")" />
 <label>From <input type="date" name="start" required class="form-control form-control-sm" />
 </label>
 <label>Through <input type="date" name="end" required class="form-control form-control-sm" />

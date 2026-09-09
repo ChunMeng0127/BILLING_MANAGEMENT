@@ -69,9 +69,9 @@ public class IntegrationTests
             };
             context.AddRange(worker, engagement); await context.SaveChangesAsync(); workerId = worker.Id;
             var finance = new BillingService(context);
-            var first = await finance.Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31));
-            var second = await finance.Generate(engagement.Id, new(2026, 2, 1), new(2026, 2, 28));
-            var third = await finance.Generate(engagement.Id, new(2026, 3, 1), new(2026, 3, 31));
+            var first = await finance.Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+            var second = await finance.Generate(engagement.Id, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+            var third = await finance.Generate(engagement.Id, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
             await finance.Assign(first.WorkItem.Id, worker.Id, 50m); await finance.Assign(second.WorkItem.Id, worker.Id, 50m); await finance.Assign(third.WorkItem.Id, worker.Id, 50m);
             bill1Id = first.Id; bill2Id = second.Id; bill3Id = third.Id;
             assignment1Id = await context.WorkerAssignments.Where(x => x.WorkItemId == first.WorkItem.Id).Select(x => x.Id).SingleAsync();
@@ -130,10 +130,10 @@ public class IntegrationTests
     public async Task FinancialWorkflowSnapshotsDuplicatesAndPayments()
     {
         await using var db = await Fresh(); var id = await Engagement(db); var service = new BillingService(db);
-        var bill = await service.Generate(id, new(2026, 1, 1), new(2026, 1, 31), true);
+        var bill = await service.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         Assert.Equal(new DateOnly(2026, 2, 1), (await db.BillingSchedules.SingleAsync()).NextPeriodStart);
-        await Assert.ThrowsAsync<BusinessException>(() => service.Generate(id, new(2026, 1, 1), new(2026, 1, 31)));
-        await Assert.ThrowsAsync<BusinessException>(() => service.Generate(id, new(2026, 1, 15), new(2026, 2, 15)));
+        await Assert.ThrowsAsync<BusinessException>(() => service.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled));
+        await Assert.ThrowsAsync<BusinessException>(() => service.Generate(id, new(2026, 1, 15), new(2026, 2, 15), BillingGenerationMode.Scheduled));
         var e = await db.Engagements.SingleAsync(); e.FirmPercent = 10; e.ManagerPercent = 20; e.LcmPercent = 70; await db.SaveChangesAsync(); db.ChangeTracker.Clear();
         var old = await db.BillingRecords.Include(x => x.Shares).SingleAsync(); Assert.Equal(400m, old.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount); Assert.Equal(40m, old.Shares.Single(x => x.Kind == ShareKind.Lcm).Percent);
         var w = new Worker { Name = "Worker 1", Type = WorkerType.Freelancer }; db.Add(w); await db.SaveChangesAsync();
@@ -141,7 +141,7 @@ public class IntegrationTests
         var a = await db.WorkerAssignments.SingleAsync(); Assert.Equal(280m, a.Entitlement);
         await service.Pay(w.Id, new(2026, 1, 31), "PARTIAL", Guid.NewGuid(), new() { [a.Id] = 100 });
         await Assert.ThrowsAsync<BusinessException>(() => service.Pay(w.Id, new(2026, 1, 31), "OVER", Guid.NewGuid(), new() { [a.Id] = 181 }));
-        var next = await service.Generate(id, new(2026, 2, 1), new(2026, 2, 28)); await service.Assign(next.WorkItem.Id, w.Id, 40);
+        var next = await service.Generate(id, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled); await service.Assign(next.WorkItem.Id, w.Id, 40);
         var second = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == next.WorkItem.Id); Assert.Equal(280m, second.Entitlement);
         var request = Guid.NewGuid(); await service.Pay(w.Id, new(2026, 2, 28), "MULTI", request, new() { [a.Id] = 180, [second.Id] = 100 });
         Assert.Equal(380m, await db.WorkerPaymentAllocations.SumAsync(x => x.Amount));
@@ -161,14 +161,14 @@ public class IntegrationTests
     [PostgresFact]
     public async Task DatabaseRejectsDuplicatePeriodAndOverAllocationAndForeignWorker()
     {
-        await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
+        await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         var workers = new[] { new Worker { Name = "One" }, new Worker { Name = "Two" } }; db.AddRange(workers); await db.SaveChangesAsync();
         await svc.Assign(bill.WorkItem.Id, workers[0].Id, 70);
         await Assert.ThrowsAsync<BusinessException>(() => svc.Assign(bill.WorkItem.Id, workers[1].Id, 40));
         var a = await db.WorkerAssignments.SingleAsync(); await Assert.ThrowsAsync<BusinessException>(() => svc.Pay(workers[1].Id, new(2026, 1, 31), "WRONG", Guid.NewGuid(), new() { [a.Id] = 1 }));
         await using var other = Db(); other.BillingRecords.Add(new() { EngagementId = id, PeriodStart = new(2026, 1, 1), PeriodEnd = new(2026, 1, 31), Amount = 1000, CustomerName = "Duplicate", ServiceName = "Test" });
         await Assert.ThrowsAsync<DbUpdateException>(() => other.SaveChangesAsync());
-        await svc.Cancel("assignment", a.Id, "Reassign"); await svc.Cancel("billing", bill.Id, "Replace"); var replacement = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31)); Assert.NotEqual(bill.Id, replacement.Id);
+        await svc.Cancel("assignment", a.Id, "Reassign"); await svc.Cancel("billing", bill.Id, "Replace"); var replacement = await svc.Generate(id, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled); Assert.NotEqual(bill.Id, replacement.Id);
     }
     [PostgresFact]
     public async Task InvoiceDocumentsSupportSplitsConsolidationLimitsReceiptsCancellationAndConcurrency()
@@ -201,10 +201,10 @@ public class IntegrationTests
         };
         db.AddRange(secondEngagement, sameCustomerEngagement, otherFirmEngagement); await db.SaveChangesAsync();
         var billing = new BillingService(db);
-        var bill1 = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
-        var bill2 = await billing.Generate(secondEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
-        var sameCustomerBill = await billing.Generate(sameCustomerEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
-        var otherFirmBill = await billing.Generate(otherFirmEngagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+        var bill1 = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var bill2 = await billing.Generate(secondEngagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var sameCustomerBill = await billing.Generate(sameCustomerEngagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var otherFirmBill = await billing.Generate(otherFirmEngagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         var invoices = new InvoiceService(db);
 
         var sameCustomerConsolidated = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-CONSOLIDATED", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 100, [sameCustomerBill.Id] = 100 });
@@ -252,7 +252,7 @@ public class IntegrationTests
         firstEngagement.BillingAmount = 2000; firstEngagement.FirmPercent = 10; firstEngagement.ManagerPercent = 20; firstEngagement.LcmPercent = 70; await db.SaveChangesAsync();
         Assert.Equal(originalLcm, (await db.BillingRecords.Include(x => x.Shares).SingleAsync(x => x.Id == bill1.Id)).Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
 
-        var bill3 = await billing.Generate(id, new(2026, 2, 1), new(2026, 2, 28));
+        var bill3 = await billing.Generate(id, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
         var c1 = Db(); var c2 = Db();
         async Task Attempt(AppDbContext context, string number)
         {
@@ -262,7 +262,7 @@ public class IntegrationTests
         await Task.WhenAll(Attempt(c1, "CONCURRENT-A"), Attempt(c2, "CONCURRENT-B")); await c1.DisposeAsync(); await c2.DisposeAsync();
         Assert.Equal(600m, await db.InvoiceLines.Where(x => x.BillingRecordId == bill3.Id && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status != InvoiceStatus.Cancelled).SumAsync(x => x.AllocatedAmount));
 
-        var bill4 = await billing.Generate(id, new(2026, 3, 1), new(2026, 3, 31));
+        var bill4 = await billing.Generate(id, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
         var receiptInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "RECEIPT-CONCURRENCY", new(2026, 3, 31), new Dictionary<int, decimal> { [bill4.Id] = 1000 });
         async Task ReceiptAttempt()
         {
@@ -278,7 +278,7 @@ public class IntegrationTests
     {
         await using var db = Db(); await db.Database.EnsureDeletedAsync();
         await db.Database.MigrateAsync("20260907031528_EntityScopedAccess");
-        var id = await Engagement(db); var billing = new BillingService(db); var bill = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31));
+        var id = await Engagement(db); var billing = new BillingService(db); var bill = await billing.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"BillingRecords\" SET \"BillingDate\"={new DateOnly(2026, 1, 31)}, \"InvoiceNumber\"={"OLD-001"}, \"Status\"={(int)BillingStatus.Billed} WHERE \"Id\"={bill.Id}");
         var request = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"CustomerReceipts\" (\"BillingRecordId\", \"ReceiptDate\", \"Amount\", \"Reference\", \"RequestId\", \"IsCancelled\", \"CancellationReason\", \"CreatedAt\", \"CreatedBy\", \"UpdatedAt\", \"UpdatedBy\", \"Version\") VALUES ({bill.Id}, {new DateOnly(2026, 2, 1)}, {125m}, {"OLD-RECEIPT"}, {request}, {false}, {null}, {DateTime.UtcNow}, {"legacy"}, {DateTime.UtcNow}, {"legacy"}, {1})");
@@ -293,7 +293,7 @@ public class IntegrationTests
     [PostgresFact]
     public async Task ConcurrentPaymentsCannotOverpay()
     {
-        await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31)); var w = new Worker { Name = "Concurrency" }; db.Add(w); await db.SaveChangesAsync(); await svc.Assign(bill.WorkItem.Id, w.Id, 70); var a = await db.WorkerAssignments.SingleAsync();
+        await using var db = await Fresh(); var id = await Engagement(db); var svc = new BillingService(db); var bill = await svc.Generate(id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled); var w = new Worker { Name = "Concurrency" }; db.Add(w); await db.SaveChangesAsync(); await svc.Assign(bill.WorkItem.Id, w.Id, 70); var a = await db.WorkerAssignments.SingleAsync();
         async Task Attempt() { await using var ctx = Db(); try { await new BillingService(ctx).Pay(w.Id, new(2026, 1, 31), "Concurrent", Guid.NewGuid(), new() { [a.Id] = 200 }); } catch (BusinessException) { } }
         await Task.WhenAll(Attempt(), Attempt()); Assert.Equal(200m, await db.WorkerPaymentAllocations.SumAsync(x => x.Amount));
     }
@@ -313,9 +313,9 @@ public class IntegrationTests
             var firm = new BusinessParty { Name = "Original Firm" }; var manager = new Manager { Name = "Original Manager" };
             var otherCustomer = new Customer { Name = "Replacement Customer" }; var otherService = new Service { Name = "Replacement Service" };
             var otherFirm = new BusinessParty { Name = "Replacement Firm" }; var otherManager = new Manager { Name = "Replacement Manager" };
-            var engagement = new Engagement { Customer = customer, Service = service, BusinessParty = firm, Manager = manager, StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 2, 1), AnchorDay = 1 } };
+            var engagement = new Engagement { Customer = customer, Service = service, BusinessParty = firm, Manager = manager, StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 } };
             db.AddRange(engagement, otherCustomer, otherService, otherFirm, otherManager); await db.SaveChangesAsync();
-            await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31));
+            await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
             engagementId = engagement.Id; customerId = customer.Id; serviceId = service.Id; firmId = firm.Id; managerId = manager.Id;
             otherCustomerId = otherCustomer.Id; otherServiceId = otherService.Id; otherFirmId = otherFirm.Id; otherManagerId = otherManager.Id;
             var loadedEngagement = await db.Engagements.Include(x => x.Schedule).AsNoTracking().SingleAsync(x => x.Id == engagementId);
@@ -403,7 +403,7 @@ public class IntegrationTests
                 Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
             };
             db.AddRange(worker, engagement); await db.SaveChangesAsync();
-            var bill = await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31), true);
+            var bill = await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
             await new BillingService(db).Assign(bill.WorkItem.Id, worker.Id, 50m);
             customerId = customer.Id; serviceId = service.Id; firmId = firm.Id; managerId = manager.Id; workerId = worker.Id; engagementId = engagement.Id; billingId = bill.Id;
             assignmentId = await db.WorkerAssignments.Where(x => x.WorkItemId == bill.WorkItem.Id).Select(x => x.Id).SingleAsync();
@@ -512,7 +512,7 @@ public class IntegrationTests
             var old = await db.BillingRecords.Include(x => x.Shares).SingleAsync(x => x.Id == billingId);
             Assert.Equal(new DateOnly(2026, 1, 1), old.PeriodStart); Assert.Equal("Original customer", old.CustomerName); Assert.Equal("Original firm", old.Shares.Single(x => x.Kind == ShareKind.Firm).PartyName);
         }
-        var future = await new BillingService(Db()).Generate(engagementId, new(2026, 4, 1), new(2026, 7, 14), true);
+        var future = await new BillingService(Db()).Generate(engagementId, new(2026, 4, 1), new(2026, 7, 14), BillingGenerationMode.Scheduled);
         Assert.Equal(new DateOnly(2026, 7, 15), (await Db().BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == engagementId)).NextPeriodStart);
         Assert.Equal("Edited customer", future.CustomerName); Assert.Equal("Edited service", future.ServiceName);
 
@@ -585,12 +585,31 @@ public class IntegrationTests
         using var admin = await SignedIn(app, "manual-admin@example.com", password);
         var schedulePage = await admin.GetStringAsync("/Billing/Schedule");
         Assert.Contains("replaces the current advised period", schedulePage);
-        Assert.Contains("name=\"manualReplacement\" value=\"true\"", schedulePage);
+        Assert.Contains("name=\"mode\" value=\"Scheduled\"", schedulePage);
+        Assert.Contains("name=\"mode\" value=\"Replacement\"", schedulePage);
+        Assert.Contains("name=\"mode\" value=\"AdHocManual\"", schedulePage);
+
+        var forgedUnrestricted = await PostWithToken(admin, "/Billing/Schedule", "/Billing/Generate", new()
+        {
+            ["engagementId"] = yearlyId.ToString(), ["start"] = "2024-08-01", ["end"] = "2025-12-31",
+            ["advanceSchedule"] = "false", ["manualReplacement"] = "false"
+        }, "/Billing/Schedule");
+        Assert.Equal(HttpStatusCode.Redirect, forgedUnrestricted.StatusCode);
+        Assert.EndsWith("/Billing/Schedule", forgedUnrestricted.Headers.Location!.ToString());
+        using (var db = Db()) Assert.False(await db.BillingRecords.AnyAsync(x => x.EngagementId == yearlyId));
+
+        await using (var db = Db())
+        {
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(monthlyId, new(2026, 1, 1), new(2026, 1, 15), null));
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(monthlyId, new(2026, 1, 1), new(2026, 1, 15), BillingGenerationMode.AdHocManual));
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(adHocId, new(2026, 3, 1), new(2026, 3, 10), BillingGenerationMode.Scheduled));
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(oneOffId, new(2026, 1, 1), new(2026, 2, 28), BillingGenerationMode.AdHocManual));
+        }
 
         int yearlyBillingId;
         await using (var db = Db())
         {
-            var bill = await new BillingService(db).Generate(yearlyId, new(2024, 8, 1), new(2025, 12, 31), false, true);
+            var bill = await new BillingService(db).Generate(yearlyId, new(2024, 8, 1), new(2025, 12, 31), BillingGenerationMode.Replacement);
             yearlyBillingId = bill.Id;
         }
         await using (var db = Db())
@@ -607,63 +626,63 @@ public class IntegrationTests
         }
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(yearlyId, new(2026, 1, 1), new(2026, 12, 31), true);
+            await new BillingService(db).Generate(yearlyId, new(2026, 1, 1), new(2026, 12, 31), BillingGenerationMode.Scheduled);
             Assert.Equal(new DateOnly(2027, 1, 1), (await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == yearlyId)).NextPeriodStart);
         }
 
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(shortYearlyId, new(2024, 8, 1), new(2025, 2, 28), false, true);
+            await new BillingService(db).Generate(shortYearlyId, new(2024, 8, 1), new(2025, 2, 28), BillingGenerationMode.Replacement);
             var schedule = await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == shortYearlyId);
             Assert.Equal(new DateOnly(2025, 3, 1), schedule.NextPeriodStart); Assert.Equal(1, schedule.AnchorDay);
         }
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(shortYearlyId, new(2025, 3, 1), new(2026, 2, 28), true);
+            await new BillingService(db).Generate(shortYearlyId, new(2025, 3, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
             Assert.Equal(new DateOnly(2026, 3, 1), (await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == shortYearlyId)).NextPeriodStart);
         }
 
         await using (var db = Db())
-            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(monthlyId, new(2026, 1, 2), new(2026, 1, 31), false, true));
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(monthlyId, new(2026, 1, 2), new(2026, 1, 31), BillingGenerationMode.Replacement));
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(monthlyId, new(2026, 1, 1), new(2026, 1, 15), false, true);
+            await new BillingService(db).Generate(monthlyId, new(2026, 1, 1), new(2026, 1, 15), BillingGenerationMode.Replacement);
             var schedule = await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == monthlyId);
             Assert.Equal(new DateOnly(2026, 1, 16), schedule.NextPeriodStart); Assert.Equal(16, schedule.AnchorDay);
         }
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(monthlyId, new(2026, 1, 16), new(2026, 2, 15), true);
+            await new BillingService(db).Generate(monthlyId, new(2026, 1, 16), new(2026, 2, 15), BillingGenerationMode.Scheduled);
             Assert.Equal(new DateOnly(2026, 2, 16), (await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == monthlyId)).NextPeriodStart);
         }
 
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(quarterlyId, new(2026, 1, 1), new(2026, 5, 31), false, true);
+            await new BillingService(db).Generate(quarterlyId, new(2026, 1, 1), new(2026, 5, 31), BillingGenerationMode.Replacement);
             var schedule = await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == quarterlyId);
             Assert.Equal(new DateOnly(2026, 6, 1), schedule.NextPeriodStart); Assert.Equal(1, schedule.AnchorDay);
         }
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(quarterlyId, new(2026, 6, 1), new(2026, 8, 31), true);
+            await new BillingService(db).Generate(quarterlyId, new(2026, 6, 1), new(2026, 8, 31), BillingGenerationMode.Scheduled);
             Assert.Equal(new DateOnly(2026, 9, 1), (await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == quarterlyId)).NextPeriodStart);
         }
 
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(overlapId, new(2026, 2, 1), new(2026, 2, 28));
-            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(overlapId, new(2026, 2, 1), new(2026, 2, 15), false, true));
+            await new BillingService(db).Generate(overlapId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(overlapId, new(2026, 2, 1), new(2026, 2, 15), BillingGenerationMode.Replacement));
         }
         await using (var db = Db())
-            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(endDateId, new(2024, 8, 1), new(2025, 7, 1), false, true));
+            await Assert.ThrowsAsync<BusinessException>(() => new BillingService(db).Generate(endDateId, new(2024, 8, 1), new(2025, 7, 1), BillingGenerationMode.Replacement));
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(oneOffId, new(2026, 1, 1), new(2026, 2, 28), false, true);
+            await new BillingService(db).Generate(oneOffId, new(2026, 1, 1), new(2026, 2, 28), BillingGenerationMode.Replacement);
             Assert.Null((await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == oneOffId)).NextPeriodStart);
         }
         await using (var db = Db())
         {
-            await new BillingService(db).Generate(adHocId, new(2026, 3, 5), new(2026, 3, 10));
+            await new BillingService(db).Generate(adHocId, new(2026, 3, 5), new(2026, 3, 10), BillingGenerationMode.AdHocManual);
             Assert.Null((await db.BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == adHocId)).NextPeriodStart);
         }
     }
@@ -743,8 +762,8 @@ public class IntegrationTests
             db.AddRange(workerA, workerB, engagementA, engagementB); await db.SaveChangesAsync();
             firmAId = firmA.Id; firmBId = firmB.Id; managerAId = managerA.Id; managerBId = managerB.Id; workerAId = workerA.Id; workerBId = workerB.Id;
             var finance = new BillingService(db);
-            var billA = await finance.Generate(engagementA.Id, new(2026, 1, 1), new(2026, 1, 31));
-            var billB = await finance.Generate(engagementB.Id, new(2026, 1, 1), new(2026, 1, 31));
+            var billA = await finance.Generate(engagementA.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+            var billB = await finance.Generate(engagementB.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
             await finance.Assign(billA.WorkItem.Id, workerA.Id, 70m); await finance.Assign(billB.WorkItem.Id, workerB.Id, 60m);
             var invoiceService = new InvoiceService(db);
             invoiceAId = (await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "ALPHA-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = billA.Amount })).Id;

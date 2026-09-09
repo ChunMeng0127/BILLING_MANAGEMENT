@@ -36,6 +36,7 @@ public class Manager : Master { }
 public enum WorkerType { Self, Family, Friend, Employee, Freelancer, Contractor }
 public class Worker : Master { public WorkerType Type { get; set; } [EmailAddress, StringLength(254)] public string? Email { get; set; } }
 public enum Frequency { Monthly, Every2Months, Quarterly, HalfYearly, Yearly, OneOff, AdHoc }
+public enum BillingGenerationMode { Scheduled, Replacement, AdHocManual }
 public enum EngagementStatus { Active, Paused, Closed }
 public enum BillingStatus { Upcoming, WorkInProgress, Completed, ReadyToBill, Billed, PartiallyPaid, Paid, Cancelled }
 public enum WorkStatus { Upcoming, InProgress, Completed }
