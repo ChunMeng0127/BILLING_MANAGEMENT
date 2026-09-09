@@ -121,6 +121,23 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
         return View(new ReceiptForm());
     }
 
+    [Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> EditReceipt(int id)
+    {
+        var receipt = await db.CustomerReceipts.SingleOrDefaultAsync(x => x.Id == id);
+        if (receipt == null) return NotFound();
+        return View(new ReceiptEditForm { Id = receipt.Id, Version = receipt.Version, ReceiptDate = receipt.ReceiptDate, Reference = receipt.Reference });
+    }
+
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> EditReceipt(ReceiptEditForm form)
+    {
+        ValidForm();
+        await invoices.EditReceipt(form.Id, form.ReceiptDate, form.Reference, form.Version);
+        TempData["Success"] = "Receipt date and reference corrected. Allocation amounts remain immutable; cancel and create a replacement receipt to change allocations.";
+        return RedirectToAction(nameof(Details), new { id = await db.CustomerReceiptAllocations.Where(x => x.CustomerReceiptId == form.Id).Select(x => x.InvoiceId).FirstOrDefaultAsync() });
+    }
+
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Receive(ReceiptForm form)
     {

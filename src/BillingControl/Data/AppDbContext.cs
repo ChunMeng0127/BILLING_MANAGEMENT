@@ -108,7 +108,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
                     RevenueShareAllocation or WorkerPaymentAllocation or CustomerReceiptAllocation => [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
-                    WorkerAssignment or WorkerPayment or CustomerReceipt => ["IsCancelled", "CancellationReason"],
+                    WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
+                    WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
+                    CustomerReceipt => ["ReceiptDate", "Reference", "IsCancelled", "CancellationReason"],
                     _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
                 };
                 if (e.Properties.Any(p => p.IsModified && !allowed.Contains(p.Metadata.Name)))

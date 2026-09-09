@@ -1,0 +1,12 @@
+@model ReceiptEditForm
+@{ ViewData["Title"] = "Edit customer receipt"; }
+<a class="back-link" href="/Invoices">← Invoice register</a>
+<div class="page-heading"><div><p class="eyebrow">RECEIPT CORRECTION</p><h1>Edit customer receipt</h1><p>Correct the date or reference while preserving the posted allocation audit trail.</p></div></div>
+<form asp-action="EditReceipt" method="post" class="panel form-panel narrow">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" />
+    <label asp-for="ReceiptDate" class="form-label">Receipt date<input asp-for="ReceiptDate" type="date" class="form-control" required /></label>
+    <label asp-for="Reference" class="form-label">Reference<input asp-for="Reference" class="form-control" maxlength="160" required /></label>
+    <p class="hint">Receipt allocation amounts are immutable. To correct allocations, cancel this receipt and create a replacement receipt.</p>
+    <div class="form-actions"><button class="btn btn-primary">Save correction</button><a class="btn btn-outline-secondary" href="/Invoices">Cancel</a></div>
+</form>

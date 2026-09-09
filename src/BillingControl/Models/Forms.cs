@@ -93,3 +93,27 @@ public class ReceiptForm
     public Guid RequestId { get; set; } = Guid.NewGuid();
     public Dictionary<int, decimal?> Allocations { get; set; } = [];
 }
+
+public class ReceiptEditForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
+    [DataType(DataType.Date)] public DateOnly ReceiptDate { get; set; }
+    [Required, StringLength(160)] public string Reference { get; set; } = "";
+}
+
+public class WorkerAssignmentEditForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
+    [Range(1, int.MaxValue)] public int WorkerId { get; set; }
+    [Range(typeof(decimal), "0.0001", "100")] public decimal Percent { get; set; }
+}
+
+public class WorkerPaymentEditForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
+    [DataType(DataType.Date)] public DateOnly PaymentDate { get; set; }
+    [Required, StringLength(160)] public string Reference { get; set; } = "";
+}

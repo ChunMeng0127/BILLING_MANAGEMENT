@@ -1,0 +1,12 @@
+@model WorkerAssignmentEditForm
+@{ ViewData["Title"] = "Edit worker assignment"; WorkerAssignment assignment = ViewBag.Assignment; List<Worker> workers = ViewBag.Workers; var paid = assignment.Allocations.Where(x => !x.WorkerPayment.IsCancelled).Sum(x => x.Amount); }
+<a class="back-link" href="/Work/Assignments">← Worker assignments</a>
+<div class="page-heading"><div><p class="eyebrow">ASSIGNMENT CORRECTION</p><h1>Edit worker assignment</h1><p>@assignment.WorkItem.BillingRecord.CustomerName · @assignment.WorkItem.BillingRecord.ServiceName · @assignment.WorkItem.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</p></div></div>
+<form asp-action="EditAssignment" method="post" class="panel form-panel narrow">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" />
+    <label asp-for="WorkerId" class="form-label">Worker<select asp-for="WorkerId" class="form-select" required>@foreach(var w in workers){<option value="@w.Id">@w.Name</option>}</select></label>
+    <label asp-for="Percent" class="form-label">Share of LCM gross (%)<input asp-for="Percent" type="number" min="0.0001" max="100" step="0.0001" class="form-control" required /></label>
+    <p class="hint">LCM gross snapshot: RM @assignment.LcmGrossSnapshot.ToString("N2") · Paid: RM @paid.ToString("N2"). Worker and percentage corrections are blocked after an active payment allocation exists.</p>
+    <div class="form-actions"><button class="btn btn-primary">Save correction</button><a class="btn btn-outline-secondary" href="/Work/Assignments">Cancel</a></div>
+</form>

@@ -1,0 +1,12 @@
+@model WorkerPaymentEditForm
+@{ ViewData["Title"] = "Edit worker payment"; }
+<a class="back-link" href="/Payments">← Worker payments</a>
+<div class="page-heading"><div><p class="eyebrow">PAYMENT CORRECTION</p><h1>Edit worker payment</h1><p>Correct payment metadata while preserving allocation history.</p></div></div>
+<form asp-action="Edit" method="post" class="panel form-panel narrow">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" />
+    <label asp-for="PaymentDate" class="form-label">Payment date<input asp-for="PaymentDate" type="date" class="form-control" required /></label>
+    <label asp-for="Reference" class="form-label">Reference<input asp-for="Reference" class="form-control" maxlength="160" required /></label>
+    <p class="hint">Payment allocation amounts are immutable. To correct allocations, cancel this payment and record a replacement payment.</p>
+    <div class="form-actions"><button class="btn btn-primary">Save correction</button><a class="btn btn-outline-secondary" href="/Payments">Cancel</a></div>
+</form>

@@ -72,4 +72,29 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         ViewBag.Access = a;
         return View(await access.WorkerAssignments(a).Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment).AsSplitQuery().OrderByDescending(x => x.Id).ToListAsync());
     }
+
+    [Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> EditAssignment(int id)
+    {
+        var a = await access.CurrentAsync();
+        var assignment = await access.WorkerAssignments(a)
+            .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
+            .Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment)
+            .SingleOrDefaultAsync(x => x.Id == id);
+        if (assignment == null) return NotFound();
+        ViewBag.Assignment = assignment;
+        ViewBag.Workers = await db.Workers.Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync();
+        return View(new WorkerAssignmentEditForm { Id = id, Version = assignment.Version, WorkerId = assignment.WorkerId, Percent = assignment.Percent });
+    }
+
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> EditAssignment(WorkerAssignmentEditForm form)
+    {
+        ValidForm();
+        var a = await access.CurrentAsync();
+        if (!await access.WorkerAssignments(a).AnyAsync(x => x.Id == form.Id)) return NotFound();
+        await billing.EditAssignment(form.Id, form.WorkerId, form.Percent, form.Version);
+        TempData["Success"] = "Worker assignment corrected and entitlement recalculated from the immutable LCM gross snapshot.";
+        return RedirectToAction(nameof(Assignments));
+    }
 }

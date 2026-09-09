@@ -276,6 +276,20 @@ public sealed class InvoiceService(AppDbContext db)
             return receipt;
         });
 
+    public Task<CustomerReceipt> EditReceipt(int id, DateOnly date, string reference, long version) =>
+        FinancialTransaction.Serializable(db, async () =>
+        {
+            var receipt = await db.CustomerReceipts.SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Receipt was not found.");
+            Require(!receipt.IsCancelled, "Cancelled receipts cannot be edited.");
+            Require(receipt.Version == version, "This receipt changed. Refresh before saving.");
+            Require(date != default && date <= DateOnly.FromDateTime(DateTime.Today), "Receipt date must be today or earlier.");
+            Require(!string.IsNullOrWhiteSpace(reference) && reference.Trim().Length <= 160, "Receipt reference is required (maximum 160 characters).");
+            receipt.ReceiptDate = date;
+            receipt.Reference = reference.Trim();
+            await db.SaveChangesAsync();
+            return receipt;
+        });
+
     public Task CancelInvoice(int id, string reason)
     {
         RequireReason(reason);

@@ -942,8 +942,8 @@ public class IntegrationTests
         await using var reset = await Fresh();
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "scope-test-keys")));
         const string password = "Scope-Password!123";
-        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, billAId, billBId, workAId, workBId, invoiceAId, invoiceBId, managerInvoiceAId;
-        long workBVersion;
+        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, billAId, billBId, workAId, workBId, assignmentBId, invoiceAId, invoiceBId, managerInvoiceAId;
+        long workBVersion, assignmentBVersion;
         string internalId, firmBUserId;
         using (var scope = app.Services.CreateScope())
         {
@@ -973,6 +973,7 @@ public class IntegrationTests
             await finance.Pay(workerB.Id, new(2026, 1, 31), "BETA-PAYMENT", Guid.NewGuid(), new() { [assignmentB.Id] = 100m });
             billAId = billA.Id; billBId = billB.Id; workAId = billA.WorkItem.Id; workBId = billB.WorkItem.Id;
             workBVersion = (await db.WorkItems.SingleAsync(x => x.Id == workBId)).Version;
+            assignmentBId = assignmentB.Id; assignmentBVersion = assignmentB.Version;
             var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
             async Task<AppUser> AddUser(string email, string role, int? businessPartyId = null, int? managerId = null, int? workerId = null)
             {
@@ -1020,6 +1021,8 @@ public class IntegrationTests
         var invoiceExportDenied = await workerClient.GetAsync("/Invoices/Export"); Assert.Equal(HttpStatusCode.Redirect, invoiceExportDenied.StatusCode); Assert.Contains("Denied", invoiceExportDenied.Headers.Location!.ToString());
         var forgedWork = await PostWithToken(workerClient, $"/Work/Details/{workAId}", "/Work/Update", new() { ["id"] = workBId.ToString(), ["version"] = workBVersion.ToString(), ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "forged" });
         Assert.Equal(HttpStatusCode.NotFound, forgedWork.StatusCode);
+        var forgedAssignment = await PostWithToken(workerClient, "/Work/Assignments", "/Work/EditAssignment", new() { ["Id"] = assignmentBId.ToString(), ["Version"] = assignmentBVersion.ToString(), ["WorkerId"] = workerBId.ToString(), ["Percent"] = "50" });
+        Assert.Equal(HttpStatusCode.NotFound, forgedAssignment.StatusCode);
         var workerDirectory = await workerClient.GetStringAsync("/Masters?kind=Workers"); Assert.Contains("Alpha Worker", workerDirectory); Assert.DoesNotContain("Beta Worker", workerDirectory);
 
         using var admin = await SignedIn(app, "scope-admin@example.com", password);
@@ -1053,6 +1056,52 @@ public class IntegrationTests
         var changed = await PostWithToken(admin, "/Users", "/Users/Update", new() { ["id"] = internalId, ["role"] = AppRoles.AccountingFirm, ["active"] = "true", ["businessPartyId"] = firmAId.ToString() });
         Assert.Equal(HttpStatusCode.Redirect, changed.StatusCode);
         var revoked = await internalUser.GetAsync("/"); Assert.Equal(HttpStatusCode.Redirect, revoked.StatusCode); Assert.Contains("/Account/Login", revoked.Headers.Location!.ToString());
+    }
+
+    [PostgresFact]
+    public async Task Part3CorrectionsPreserveAllocationAuditAndBlockUnsafeEdits()
+    {
+        await using var db = await Fresh();
+        var engagementId = await Engagement(db);
+        var workerOne = new Worker { Name = "Correction Worker One" };
+        var workerTwo = new Worker { Name = "Correction Worker Two" };
+        db.AddRange(workerOne, workerTwo); await db.SaveChangesAsync();
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        await billing.Assign(bill.WorkItem.Id, workerOne.Id, 50m);
+        var assignment = await db.WorkerAssignments.SingleAsync();
+        await billing.EditAssignment(assignment.Id, workerOne.Id, 60m, assignment.Version);
+        assignment = await db.WorkerAssignments.SingleAsync();
+        Assert.Equal(60m, assignment.Percent); Assert.Equal(240m, assignment.Entitlement); Assert.Equal(400m, assignment.LcmGrossSnapshot);
+        await billing.Assign(bill.WorkItem.Id, workerTwo.Id, 30m);
+        var assignmentTwo = await db.WorkerAssignments.SingleAsync(x => x.WorkerId == workerTwo.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerOne.Id, 80m, assignment.Version));
+        await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerTwo.Id, 20m, assignment.Version));
+
+        var invoices = new InvoiceService(db);
+        var invoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART3-RECEIPT", new(2026, 1, 31), new Dictionary<int, decimal> { [bill.Id] = bill.Amount });
+        var receipt = await invoices.CreateReceipt(new(2026, 1, 31), "PART3-ORIGINAL", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 250m });
+        var receiptVersion = (await db.CustomerReceipts.AsNoTracking().SingleAsync(x => x.Id == receipt.Id)).Version;
+        await invoices.EditReceipt(receipt.Id, new(2026, 2, 1), "PART3-CORRECTED", receiptVersion);
+        var editedReceipt = await db.CustomerReceipts.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == receipt.Id);
+        Assert.Equal(new DateOnly(2026, 2, 1), editedReceipt.ReceiptDate); Assert.Equal("PART3-CORRECTED", editedReceipt.Reference); Assert.Equal(250m, editedReceipt.Allocations.Single().Amount);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(receipt.Id, new(2026, 2, 2), "STALE", receiptVersion));
+        await invoices.CancelReceipt(receipt.Id, "Replace allocation");
+        var replacement = await invoices.CreateReceipt(new(2026, 2, 3), "PART3-REPLACEMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 500m });
+        Assert.NotEqual(receipt.Id, replacement.Id);
+        Assert.Equal(InvoiceStatus.PartiallyPaid, (await db.Invoices.SingleAsync(x => x.Id == invoice.Id)).Status);
+
+        await billing.Pay(workerOne.Id, new(2026, 2, 1), "PART3-PAYMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 50m });
+        var payment = await db.WorkerPayments.SingleAsync(x => x.Reference == "PART3-PAYMENT");
+        assignment = await db.WorkerAssignments.SingleAsync(x => x.Id == assignment.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerOne.Id, 55m, assignment.Version));
+        var paymentVersion = (await db.WorkerPayments.AsNoTracking().SingleAsync(x => x.Id == payment.Id)).Version;
+        await billing.EditPayment(payment.Id, new(2026, 2, 2), "PART3-PAYMENT-CORRECTED", paymentVersion);
+        var editedPayment = await db.WorkerPayments.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == payment.Id);
+        Assert.Equal(new DateOnly(2026, 2, 2), editedPayment.PaymentDate); Assert.Equal("PART3-PAYMENT-CORRECTED", editedPayment.Reference); Assert.Equal(50m, editedPayment.Allocations.Single().Amount);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.EditPayment(payment.Id, new(2026, 2, 3), "STALE", paymentVersion));
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Pay(workerOne.Id, new(2026, 2, 4), "OVERPAY", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 191m }));
+        Assert.Equal(30m, assignmentTwo.Percent);
     }
 
 }

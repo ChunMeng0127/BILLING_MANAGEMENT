@@ -102,6 +102,37 @@ public class BillingService
         await db.SaveChangesAsync();
         });
     }
+
+    public async Task EditAssignment(int id, int workerId, decimal percent, long version)
+    {
+        await FinancialTransaction.Serializable(db, async () =>
+        {
+            Percentage(percent);
+            Require(percent > 0, "Worker percentage must be greater than zero.");
+            var assignment = await db.WorkerAssignments
+                .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Shares)
+                .Include(x => x.WorkItem).ThenInclude(x => x.Assignments)
+                .Include(x => x.Allocations).ThenInclude(x => x.WorkerPayment)
+                .SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Worker assignment was not found.");
+            Require(!assignment.IsCancelled, "Cancelled worker assignments cannot be edited.");
+            Require(assignment.Version == version, "This worker assignment changed. Refresh before saving.");
+            Require(!assignment.Allocations.Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before changing this assignment.");
+            var worker = await db.Workers.SingleOrDefaultAsync(x => x.Id == workerId) ?? throw new BusinessException("Worker was not found.");
+            Require(worker.IsActive, "Worker is inactive.");
+            var active = assignment.WorkItem.Assignments.Where(x => !x.IsCancelled && x.Id != id).ToList();
+            Require(!active.Any(x => x.WorkerId == workerId), "This worker already has an active assignment for this work item.");
+            Require(active.Sum(x => x.Percent) + percent <= 100, "Combined worker percentages cannot exceed 100% of the LCM gross share.");
+            var gross = assignment.LcmGrossSnapshot;
+            Require(gross == assignment.WorkItem.BillingRecord.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount, "The LCM gross snapshot no longer matches the billing record.");
+            var entitlement = WorkerEntitlement(gross, percent);
+            Require(active.Sum(x => x.Entitlement) + entitlement <= gross, "Rounded worker entitlements would exceed the LCM gross share. Adjust the percentage.");
+            assignment.WorkerId = workerId;
+            assignment.WorkerName = worker.Name;
+            assignment.Percent = percent;
+            assignment.Entitlement = entitlement;
+            await db.SaveChangesAsync();
+        });
+    }
     public async Task Pay(int workerId, DateOnly date, string reference, Guid requestId, Dictionary<int, decimal> allocations)
     {
         await FinancialTransaction.Serializable(db, async () =>
@@ -117,6 +148,21 @@ public class BillingService
         var total = allocations.Values.Sum(); PositiveMoney(total);
         db.WorkerPayments.Add(new() { WorkerId = workerId, PaymentDate = date, Reference = reference.Trim(), RequestId = requestId, Amount = total, Allocations = allocations.Select(x => new WorkerPaymentAllocation { WorkerAssignmentId = x.Key, Amount = x.Value }).ToList() });
         await db.SaveChangesAsync();
+        });
+    }
+
+    public async Task EditPayment(int id, DateOnly date, string reference, long version)
+    {
+        await FinancialTransaction.Serializable(db, async () =>
+        {
+            var payment = await db.WorkerPayments.SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Worker payment was not found.");
+            Require(!payment.IsCancelled, "Cancelled worker payments cannot be edited.");
+            Require(payment.Version == version, "This worker payment changed. Refresh before saving.");
+            Require(date != default && date <= DateOnly.FromDateTime(DateTime.Today), "Payment date must be today or earlier.");
+            Require(!string.IsNullOrWhiteSpace(reference) && reference.Trim().Length <= 160, "Payment reference is required (maximum 160 characters).");
+            payment.PaymentDate = date;
+            payment.Reference = reference.Trim();
+            await db.SaveChangesAsync();
         });
     }
     public async Task UpdateBillingStatus(int id, BillingStatus status, long version)

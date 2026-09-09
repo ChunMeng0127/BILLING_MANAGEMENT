@@ -33,7 +33,12 @@
 <td class="money">@paid.ToString("N2")</td>
 <td class="money">@((a.IsCancelled?0:a.Entitlement-paid).ToString("N2"))</td>
 <td>@(a.IsCancelled?"Cancelled: "+a.CancellationReason:"Active")</td>
-@if(access.IsStaff) { <td>@if(!a.IsCancelled) { <a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a> @if(access.IsAdmin) { <details>
+@if(access.IsStaff) {
+<td>
+@if(!a.IsCancelled) {
+<a href="/Work/EditAssignment/@a.Id">Edit</a><span> · </span><a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a>
+@if(access.IsAdmin) {
+<details>
 <summary>Cancel</summary>
 <form asp-controller="Billing" asp-action="Cancel" method="post">
 <input type="hidden" name="kind" value="assignment" />
@@ -41,7 +46,11 @@
 <input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
 <button class="btn btn-outline-danger btn-sm">Cancel assignment</button>
 </form>
-</details> } }</td> }
+</details>
+}
+}
+</td>
+}
 </tr> }
 </tbody>
 </table>

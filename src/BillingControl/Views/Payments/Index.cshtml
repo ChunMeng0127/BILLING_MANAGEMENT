@@ -19,7 +19,7 @@
 <th data-type="amount">Amount (RM)</th>
 <th>Allocations</th>
 <th>Status</th>
-@if(access.IsAdmin) { <th data-nosort>Action</th> }
+@if(access.IsStaff) { <th data-nosort>Action</th> }
 </tr>
 </thead>
 <tbody>
@@ -32,7 +32,7 @@
 <td>@foreach(var a in p.Allocations) { <div>
 <a href="/Work/Details/@a.WorkerAssignment.WorkItemId">A-@a.WorkerAssignmentId · @a.WorkerAssignment.WorkItem.BillingRecord.CustomerName</a> : RM @a.Amount.ToString("N2")</div> }</td>
 <td>@(p.IsCancelled ? "Cancelled: "+p.CancellationReason : "Recorded")</td>
-@if(access.IsAdmin) { <td>@if(!p.IsCancelled) { <details>
+@if(access.IsStaff) { <td>@if(!p.IsCancelled) { <a href="/Payments/Edit/@p.Id">Edit date/reference</a> @if(access.IsAdmin) { <details>
 <summary>Cancel payment</summary>
 <form asp-controller="Billing" asp-action="Cancel" method="post">
 <input type="hidden" name="kind" value="payment" />
@@ -40,7 +40,7 @@
 <input name="reason" placeholder="Cancellation reason" aria-label="Cancellation reason" required class="form-control form-control-sm" />
 <button class="btn btn-outline-danger btn-sm">Cancel payment</button>
 </form>
-</details> }</td> }
+</details> } }</td> }
 </tr> }
 </tbody>
 </table>
