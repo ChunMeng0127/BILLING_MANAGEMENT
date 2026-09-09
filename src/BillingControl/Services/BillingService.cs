@@ -170,6 +170,9 @@ public class BillingService
             Require(!assignment.IsCancelled, "Cancelled worker assignments cannot be edited.");
             Require(assignment.Version == version, "This worker assignment changed. Refresh before saving.");
             Require(!assignment.Allocations.Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before changing this assignment.");
+            var hasProgress = await db.WeeklyProgressReports.AnyAsync(x => x.WorkerAssignmentId == id);
+            Require(!hasProgress || assignment.WorkerId == workerId,
+                "This assignment already has weekly progress history. Cancel it and create a new assignment to change the worker.");
             var worker = await db.Workers.SingleOrDefaultAsync(x => x.Id == workerId) ?? throw new BusinessException("Worker was not found.");
             Require(worker.IsActive, "Worker is inactive.");
             var active = assignment.WorkItem.Assignments.Where(x => !x.IsCancelled && x.Id != id).ToList();
@@ -180,7 +183,7 @@ public class BillingService
             var entitlement = WorkerEntitlement(gross, percent);
             Require(active.Sum(x => x.Entitlement) + entitlement <= gross, "Rounded worker entitlements would exceed the LCM gross share. Adjust the percentage.");
             assignment.WorkerId = workerId;
-            assignment.WorkerName = worker.Name;
+            if (!hasProgress) assignment.WorkerName = worker.Name;
             assignment.Percent = percent;
             assignment.Entitlement = entitlement;
             await db.SaveChangesAsync();

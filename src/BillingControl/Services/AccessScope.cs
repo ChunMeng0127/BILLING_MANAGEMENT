@@ -16,7 +16,7 @@ public static class AppRoles
     public const string Staff = Admin + "," + InternalUser;
     public const string BillingReaders = Admin + "," + InternalUser + "," + AccountingFirm + "," + Manager;
     public const string WorkReaders = Admin + "," + InternalUser + "," + Manager + "," + Worker;
-    public const string WorkEditors = WorkReaders;
+    public const string WorkEditors = Staff;
     public const string ProgressReaders = Staff + "," + Manager + "," + Worker;
     public const string ProgressEditors = Staff + "," + Worker;
     public const string PaymentReaders = Admin + "," + InternalUser + "," + Worker;
@@ -131,6 +131,13 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
         AppRoles.Worker => db.WorkerAssignments.Where(x => !x.IsCancelled && x.WorkerId == a.WorkerId),
         _ => db.WorkerAssignments.Where(_ => false)
     };
+
+    public IQueryable<WorkerAssignment> EligibleProgressAssignments(AccessProfile a, DateOnly week)
+    {
+        var end = week.AddDays(6);
+        return ProgressAssignments(a).Where(x => !x.IsCancelled && x.WorkItem.BillingRecord.Status != BillingStatus.Cancelled
+            && x.WorkItem.BillingRecord.PeriodStart <= end && x.WorkItem.BillingRecord.PeriodEnd >= week);
+    }
 
     public IQueryable<WeeklyProgressReport> ProgressReports(AccessProfile a) => a.Role switch
     {

@@ -1,0 +1,14 @@
+@model WeeklyProgressReport
+@inject BusinessClock Clock
+@{ ViewData["Title"] = "Weekly progress report"; }
+<a href="/Progress?weekStart=@Model.WeekStart.ToString("yyyy-MM-dd")">Back to weekly progress</a>
+<section class="panel form-panel wide">
+<h1>@Model.WorkerAssignment.WorkItem.BillingRecord.CustomerName</h1>
+<p>@Model.WorkerAssignment.WorkerName · @Model.WorkerAssignment.WorkItem.BillingRecord.ServiceName</p>
+<p>@Model.WeekStart.ToString("dd MMM yyyy") – @Model.WeekEnd.ToString("dd MMM yyyy")</p>
+<p>@Model.ProgressPercent.ToString("0.####")% · @Finance.Label(Model.ProgressStatus)</p>
+<p>@(Clock.IsLate(Model.SubmittedAt, Model.WeekEnd) ? "Late" : "Submitted") · @Clock.Local(Model.SubmittedAt).ToString("dd MMM yyyy HH:mm")</p>
+<h2>Work done</h2><p>@Model.WorkDone</p>
+<h2>Next action</h2><p>@Model.NextAction</p>
+<h2>Issues or blockers</h2><p>@Model.IssuesOrBlockers</p>
+</section>

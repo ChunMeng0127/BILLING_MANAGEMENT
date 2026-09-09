@@ -34,6 +34,8 @@ builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<BillingScheduleService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<AccessScope>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<BusinessClock>();
 builder.Services.AddScoped<ProgressReportService>();
 builder.Services.AddScoped<IAuthorizationHandler, ValidAccessProfileHandler>();
 builder.Services.AddRateLimiter(o =>

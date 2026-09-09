@@ -125,7 +125,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     WorkerPaymentAllocation => [],
                     CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
-                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkDone", "NextAction", "IssuesOrBlockers", "SubmittedAt"],
+                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkDone", "NextAction", "IssuesOrBlockers"],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                     CustomerReceipt => allowReceiptAllocationCorrection

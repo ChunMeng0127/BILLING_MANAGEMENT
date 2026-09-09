@@ -9,7 +9,12 @@
 </div>
 @if(access.IsStaff || access.IsManager) { <a class="btn btn-outline-secondary" href="/Billing/Details/@Model.BillingRecordId">View billing →</a> }
 </div>
-@if(Model.BillingRecord.Status!=BillingStatus.Cancelled) {
+@if(!access.IsStaff) {
+<section class="panel form-panel wide"><h2>Work progress</h2><p>Status: @Finance.Label(Model.Status)</p><p>@Model.Notes</p>
+@if(access.IsWorker) { <a href="/Progress">Submit weekly progress</a> }
+</section>
+}
+@if(access.IsStaff && Model.BillingRecord.Status!=BillingStatus.Cancelled) {
 <form method="post" asp-action="Update" class="panel form-panel wide">
 <h2>Work progress</h2>
 <input type="hidden" name="id" value="@Model.Id" />

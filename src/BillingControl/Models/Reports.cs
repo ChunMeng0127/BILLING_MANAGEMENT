@@ -42,8 +42,8 @@ public class ProgressReportRow
     public WeeklyProgressReport? Report { get; set; }
     public DateOnly WeekStart { get; set; }
     public DateOnly WeekEnd => WeekStart.AddDays(6);
-    public bool IsLate => Report == null && WeekStart < ProgressReportService.CurrentWeekStart();
-    public string ReportingStatus => Assignment.IsCancelled ? "Cancelled" : Report != null ? "Submitted" : IsLate ? "Late" : "Missing";
+    public bool IsLate { get; set; }
+    public string ReportingStatus => Report == null ? "Missing" : IsLate ? "Late" : "Submitted";
 }
 
 public class ProgressReportModel
@@ -53,7 +53,7 @@ public class ProgressReportModel
     public DateOnly CurrentWeekStart { get; set; }
     public List<ProgressReportRow> Rows { get; set; } = [];
     public int Required => Rows.Count(x => !x.Assignment.IsCancelled);
-    public int Submitted => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null);
-    public int Missing => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null && x.WeekStart >= CurrentWeekStart);
-    public int Late => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null && x.WeekStart < CurrentWeekStart);
+    public int Submitted => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null && !x.IsLate);
+    public int Missing => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null);
+    public int Late => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null && x.IsLate);
 }

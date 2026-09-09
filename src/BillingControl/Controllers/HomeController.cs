@@ -9,7 +9,7 @@ using System.Text;
 
 namespace BillingControl.Controllers;
 
-public class HomeController(AppDbContext db, AccessScope access) : AppController
+public class HomeController(AppDbContext db, AccessScope access, BusinessClock clock) : AppController
 {
     private async Task<ReportModel> Report(ReportFilter f)
     {
@@ -41,14 +41,13 @@ public class HomeController(AppDbContext db, AccessScope access) : AppController
         var model = new ReportModel { Access = a, Filter = f, Bills = await q.AsSplitQuery().OrderByDescending(x => x.PeriodStart).ToListAsync() };
         if (a.IsStaff || a.IsManager || a.IsWorker)
         {
-            var currentWeek = ProgressReportService.CurrentWeekStart();
-            var assignmentQuery = access.ProgressAssignments(a).Where(x => !x.IsCancelled);
+            var currentWeek = clock.CurrentWeekStart;
+            var assignmentQuery = access.EligibleProgressAssignments(a, currentWeek);
+            var reports = await assignmentQuery.SelectMany(x => x.ProgressReports.Where(r => r.WeekStart == currentWeek)).AsNoTracking().ToListAsync();
             model.ProgressRequired = await assignmentQuery.CountAsync();
-            model.ProgressSubmitted = await access.ProgressReports(a).Where(x => !x.WorkerAssignment.IsCancelled).CountAsync(x => x.WeekStart == currentWeek);
-            model.ProgressMissing = Math.Max(0, model.ProgressRequired - model.ProgressSubmitted);
-            var previousWeek = currentWeek.AddDays(-7);
-            model.ProgressLate = await assignmentQuery.Where(x => x.WorkItem.BillingRecord.PeriodStart <= previousWeek.AddDays(6) && x.WorkItem.BillingRecord.PeriodEnd >= previousWeek)
-                .CountAsync(x => !access.ProgressReports(a).Where(r => !r.WorkerAssignment.IsCancelled).Any(r => r.WorkerAssignmentId == x.Id && r.WeekStart == previousWeek));
+            model.ProgressLate = reports.Count(x => clock.IsLate(x.SubmittedAt, x.WeekEnd));
+            model.ProgressSubmitted = reports.Count - model.ProgressLate;
+            model.ProgressMissing = model.ProgressRequired - reports.Count;
         }
         return model;
     }

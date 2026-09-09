@@ -15,7 +15,7 @@ public class PostgresFactAttribute : FactAttribute
 {
     public PostgresFactAttribute() { if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BILLING_TEST_CONNECTION"))) Skip = "Set BILLING_TEST_CONNECTION to an isolated PostgreSQL database (name must end in _test)."; }
 }
-public class IntegrationTests
+public partial class IntegrationTests
 {
     private static string Connection => Environment.GetEnvironmentVariable("BILLING_TEST_CONNECTION")!;
     private static AppDbContext Db() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Connection).Options);
@@ -1127,7 +1127,8 @@ public class IntegrationTests
             Assert.Equal(HttpStatusCode.Redirect, receiptEditDenied.StatusCode); Assert.Contains("Denied", receiptEditDenied.Headers.Location!.ToString());
         }
         var forgedWork = await PostWithToken(workerClient, $"/Work/Details/{workAId}", "/Work/Update", new() { ["id"] = workBId.ToString(), ["version"] = workBVersion.ToString(), ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "forged" });
-        Assert.Equal(HttpStatusCode.NotFound, forgedWork.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, forgedWork.StatusCode);
+        Assert.Contains("Denied", forgedWork.Headers.Location!.ToString());
         var forgedAssignment = await PostWithToken(workerClient, "/Work/Assignments", "/Work/EditAssignment", new() { ["Id"] = assignmentBId.ToString(), ["Version"] = assignmentBVersion.ToString(), ["WorkerId"] = workerBId.ToString(), ["Percent"] = "50" });
         Assert.Equal(HttpStatusCode.Redirect, forgedAssignment.StatusCode);
         Assert.Contains("Denied", forgedAssignment.Headers.Location!.ToString());
@@ -1406,8 +1407,10 @@ public class IntegrationTests
     [PostgresFact]
     public async Task WeeklyProgressReportsEnforceWeeksUniquenessConcurrencyAndEntityScope()
     {
+        var time = new FixedProgressTime();
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         await using var reset = await Fresh();
-        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "weekly-progress-keys")));
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "weekly-progress-keys")).ConfigureServices(services => services.AddSingleton<TimeProvider>(time)));
         const string password = "Weekly-Progress-Password!123";
         int workId, assignmentAId, assignmentBId, reportBId, workerAId, workerBId, managerId, firmId;
         long reportVersion;
@@ -1424,7 +1427,7 @@ public class IntegrationTests
             workId = bill.WorkItem.Id; workerAId = workerA.Id; workerBId = workerB.Id; managerId = manager.Id; firmId = firm.Id;
             assignmentAId = await db.WorkerAssignments.Where(x => x.WorkItemId == workId && x.WorkerId == workerA.Id).Select(x => x.Id).SingleAsync();
             assignmentBId = await db.WorkerAssignments.Where(x => x.WorkItemId == workId && x.WorkerId == workerB.Id).Select(x => x.Id).SingleAsync();
-            var reporting = new ProgressReportService(db); var week = ProgressReportService.CurrentWeekStart();
+            var reporting = new ProgressReportService(db, clock); var week = clock.CurrentWeekStart;
             var reportA = await reporting.SaveAsync(new AccessProfile("worker-a", AppRoles.Worker, null, null, workerA.Id), new WeeklyProgressForm { WorkerAssignmentId = assignmentAId, WeekStart = week, ProgressPercent = 40, ProgressStatus = ProgressStatus.InProgress, WorkDone = "Reconciled the assigned source documents", NextAction = "Complete the review", IssuesOrBlockers = "Waiting for one bank statement" });
             var reportB = await reporting.SaveAsync(new AccessProfile("worker-b", AppRoles.Worker, null, null, workerB.Id), new WeeklyProgressForm { WorkerAssignmentId = assignmentBId, WeekStart = week, ProgressPercent = 100, ProgressStatus = ProgressStatus.Completed, WorkDone = "Completed the assigned work" });
             reportBId = reportB.Id; reportVersion = reportA.Version;
@@ -1445,10 +1448,10 @@ public class IntegrationTests
         using var workerClient = await SignedIn(app, "progress-worker-a@example.com", password);
         var workerPage = await workerClient.GetStringAsync("/Progress"); Assert.Contains("Progress Customer", workerPage); Assert.Contains("Submitted", workerPage); Assert.DoesNotContain("Progress Worker B", workerPage); Assert.DoesNotContain("LCM gross", workerPage);
         Assert.Equal(HttpStatusCode.NotFound, (await workerClient.GetAsync($"/Progress/Edit/{reportBId}")).StatusCode);
-        var forged = await PostWithToken(workerClient, "/Progress", "/Progress/Save", new() { ["WorkerAssignmentId"] = assignmentBId.ToString(), ["WeekStart"] = ProgressReportService.CurrentWeekStart().ToString("yyyy-MM-dd"), ["ProgressPercent"] = "20", ["ProgressStatus"] = ProgressStatus.InProgress.ToString(), ["WorkDone"] = "Forged", ["NextAction"] = "Continue" });
-        Assert.Equal(HttpStatusCode.Redirect, forged.StatusCode); Assert.Contains("own active assignment", await workerClient.GetStringAsync("/Progress"));
+        var forged = await PostWithToken(workerClient, "/Progress", "/Progress/Save", new() { ["WorkerAssignmentId"] = assignmentBId.ToString(), ["WeekStart"] = clock.CurrentWeekStart.ToString("yyyy-MM-dd"), ["ProgressPercent"] = "20", ["ProgressStatus"] = ProgressStatus.InProgress.ToString(), ["WorkDone"] = "Forged", ["NextAction"] = "Continue" });
+        Assert.Equal(HttpStatusCode.NotFound, forged.StatusCode);
         var blockedWorkUpdate = await PostWithToken(workerClient, $"/Work/Details/{workId}", "/Work/Update", new() { ["id"] = workId.ToString(), ["version"] = "1", ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "worker must use report" });
-        Assert.Equal(HttpStatusCode.Redirect, blockedWorkUpdate.StatusCode); Assert.Contains("Only Admin and InternalUser", await workerClient.GetStringAsync($"/Work/Details/{workId}"));
+        Assert.Equal(HttpStatusCode.Redirect, blockedWorkUpdate.StatusCode); Assert.Contains("Denied", blockedWorkUpdate.Headers.Location!.ToString());
         using var managerClient = await SignedIn(app, "progress-manager@example.com", password); var managerPage = await managerClient.GetStringAsync("/Progress"); Assert.Contains("Progress Customer", managerPage); Assert.Contains("Progress Worker A", managerPage); Assert.DoesNotContain("Entitlement", managerPage);
         using var firmClient = await SignedIn(app, "progress-firm@example.com", password); var firmDenied = await firmClient.GetAsync("/Progress"); Assert.Equal(HttpStatusCode.Redirect, firmDenied.StatusCode); Assert.Contains("Denied", firmDenied.Headers.Location!.ToString());
         using var adminClient = await SignedIn(app, "progress-admin@example.com", password); var adminPage = await adminClient.GetStringAsync("/Progress"); Assert.Contains("Progress Worker A", adminPage); Assert.Contains("Progress Worker B", adminPage);

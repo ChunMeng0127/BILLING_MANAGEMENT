@@ -30,7 +30,7 @@ with client.open(base + "/Account/Login", data=body, timeout=30) as response:
     assert "Business overview" in response.read().decode(), "Production login failed"
 identity_cookie = [c for c in cookies if c.name == ".AspNetCore.Identity.Application"]
 assert identity_cookie and identity_cookie[0].secure, "Identity cookie is not Secure"
-for path, expected in [("/Users", "User management"), ("/Billing/Schedule", "Billing schedule")]:
+for path, expected in [("/Users", "User management"), ("/Billing/Schedule", "Billing schedule"), ("/Progress", "Weekly worker progress")]:
     with client.open(base + path, timeout=30) as response:
         assert expected in response.read().decode(), "Protected page failed: " + path
 print("Production HTTPS redirect, login, Secure cookie, Admin and billing pages passed.")
