@@ -47,6 +47,21 @@ public static class Finance
         BillingInvoiceState.PartiallyInvoiced => "Partially Invoiced",
         BillingInvoiceState.FullyInvoiced => "Fully Invoiced",
         WorkStatus.InProgress => "In Progress",
+        WorkflowStatus.DocumentRequested => "Document Requested",
+        WorkflowStatus.DocumentReceived => "Document Received",
+        WorkflowStatus.AssignedNotStarted => "Assigned / Not Started",
+        WorkflowStatus.AssignmentStarted => "Assignment Started",
+        WorkflowStatus.StartPreparing => "Start Preparing",
+        WorkflowStatus.QueriesSent => "Queries Sent",
+        WorkflowStatus.DraftManagementReportSent => "Draft Management Report Sent",
+        WorkflowStatus.PendingReview => "Pending Review",
+        WorkflowStatus.AmendmentRevision => "Amendment / Revision",
+        WorkflowStatus.FinalManagementReportSent => "Final Management Report Sent",
+        WorkflowStatus.Completed => "Completed",
+        WorkflowHistoryAction.WeeklyUpdate => "Weekly Update",
+        WorkflowHistoryAction.BatchUpdate => "Batch Update",
+        WorkflowHistoryAction.Hidden => "Hidden",
+        WorkflowHistoryAction.Unhidden => "Unhidden",
         ProgressStatus.NotStarted => "Not Started",
         ProgressStatus.InProgress => "In Progress",
         ProgressStatus.Blocked => "Blocked",
@@ -60,6 +75,13 @@ public static class Finance
         InvoiceStatus.Cancelled => "Cancelled",
         _ => value.ToString() ?? ""
     };
+    public static bool RequiresWorkflowVersion(WorkflowStatus status) => status is WorkflowStatus.QueriesSent or WorkflowStatus.DraftManagementReportSent;
+    public static string WorkflowLabel(WorkflowStatus? status, int? version)
+    {
+        if (status is null) return "Legacy progress";
+        var label = Label(status.Value);
+        return RequiresWorkflowVersion(status.Value) && version is > 0 ? $"{label} — Ver {version.Value:D2}" : label;
+    }
 }
 public class BusinessException : Exception
 {

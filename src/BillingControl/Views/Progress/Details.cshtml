@@ -6,9 +6,15 @@
 <h1>@Model.WorkerAssignment.WorkItem.BillingRecord.CustomerName</h1>
 <p>@Model.WorkerAssignment.WorkerName · @Model.WorkerAssignment.WorkItem.BillingRecord.ServiceName</p>
 <p>@Model.WeekStart.ToString("dd MMM yyyy") – @Model.WeekEnd.ToString("dd MMM yyyy")</p>
-<p>@Model.ProgressPercent.ToString("0.####")% · @Finance.Label(Model.ProgressStatus)</p>
+<p>@Model.ProgressPercent.ToString("0.####")% · @(Model.WorkflowStatusAtSubmission is null ? Finance.Label(Model.ProgressStatus) + " (legacy)" : Finance.WorkflowLabel(Model.WorkflowStatusAtSubmission, Model.WorkflowVersionAtSubmission))</p>
 <p>@(Clock.IsLate(Model.SubmittedAt, Model.WeekEnd) ? "Late" : "Submitted") · @Clock.Local(Model.SubmittedAt).ToString("dd MMM yyyy HH:mm")</p>
 <h2>Work done</h2><p>@Model.WorkDone</p>
 <h2>Next action</h2><p>@Model.NextAction</p>
 <h2>Issues or blockers</h2><p>@Model.IssuesOrBlockers</p>
+<h2>Current assignment workflow</h2>
+<p>@Finance.WorkflowLabel(Model.WorkerAssignment.CurrentWorkflowStatus, Model.WorkerAssignment.CurrentWorkflowVersion) · @Model.WorkerAssignment.CurrentProgressPercent.ToString("0.##")%</p>
+@if (Model.WorkerAssignment.WorkflowHistory.Count > 0) {
+<h2>Workflow history</h2>
+<ol class="timeline">@foreach (var item in Model.WorkerAssignment.WorkflowHistory.OrderByDescending(x => x.ChangedAt)) { <li><strong>@Finance.WorkflowLabel(item.NewWorkflowStatus, item.NewWorkflowVersion)</strong> · @Finance.Label(item.Action) · @Clock.Local(item.ChangedAt).ToString("dd MMM yyyy HH:mm")</li> }</ol>
+}
 </section>

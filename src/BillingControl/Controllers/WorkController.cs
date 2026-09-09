@@ -16,7 +16,9 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         var staff = a.IsStaff;
         var worker = a.IsWorker;
         ViewBag.Access = a;
-        return View(await access.WorkItems(a).Include(x => x.BillingRecord).Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && y.WorkerId == a.WorkerId))).OrderByDescending(x => x.Id).ToListAsync());
+        IQueryable<WorkItem> items = access.WorkItems(a).Include(x => x.BillingRecord).Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId)));
+        if (worker) items = items.Where(x => x.Assignments.Any(y => !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId && y.CurrentWorkflowStatus != WorkflowStatus.Completed));
+        return View(await items.OrderByDescending(x => x.Id).ToListAsync());
     }
 
     [Authorize(Roles = AppRoles.WorkReaders)]
@@ -27,9 +29,11 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         var worker = a.IsWorker;
         var item = await access.WorkItems(a)
             .Include(x => x.BillingRecord).ThenInclude(x => x.Shares.Where(_ => staff))
-            .Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && y.WorkerId == a.WorkerId)))
+            .Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId)))
             .ThenInclude(x => x.Allocations)
             .ThenInclude(x => x.WorkerPayment)
+            .Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId)))
+            .ThenInclude(x => x.WorkflowHistory)
             .AsSplitQuery()
             .SingleOrDefaultAsync(x => x.Id == id);
         if (item == null) return NotFound();

@@ -11,7 +11,7 @@
 <partial name="_ReportFilters" model="Model.Filter" />
 <partial name="_Metrics" model="Model" />
 @if (Model.Access.IsStaff || Model.Access.IsManager || Model.Access.IsWorker) {
-<section class="panel progress-summary"><div class="panel-heading"><div><h2>Weekly worker progress</h2><p>Current Monday–Sunday week; only assignments whose work period intersects this week</p></div><a href="/Progress">Open progress register →</a></div><div class="flow-list"><div><span>Required</span><strong>@Model.ProgressRequired</strong></div><div><span>Submitted</span><strong>@Model.ProgressSubmitted</strong></div><div><span>Missing</span><strong>@Model.ProgressMissing</strong></div><div><span>Late</span><strong>@Model.ProgressLate</strong></div></div></section>
+<section class="panel progress-summary"><div class="panel-heading"><div><h2>Weekly worker progress</h2><p>Current Monday–Sunday week; active worker assignments determine reporting responsibility</p></div><a href="/Progress">Open progress register →</a></div><div class="flow-list"><div><span>Required</span><strong>@Model.ProgressRequired</strong></div><div><span>Submitted</span><strong>@Model.ProgressSubmitted</strong></div><div><span>Missing</span><strong>@Model.ProgressMissing</strong></div><div><span>Late</span><strong>@Model.ProgressLate</strong></div></div></section>
 }
 <div class="dashboard-grid">
 @if (!Model.Access.IsWorker) { <section class="panel">

@@ -1,29 +1,52 @@
 @model ProgressReportModel
 @inject BusinessClock Clock
-@{ ViewData["Title"] = "Weekly progress"; }
+@{ ViewData["Title"] = "Worker workflow"; var canBatch = Model.Access.IsStaff || Model.Access.IsWorker; }
 <div class="page-heading">
-<div><p class="eyebrow">WORK DELIVERY</p><h1>Weekly worker progress</h1><p>Reports are recorded against an active worker assignment for Monday–Sunday.</p></div>
+<div><p class="eyebrow">WORK DELIVERY</p><h1>Worker assignments and weekly updates</h1><p>An active worker assignment controls work-list visibility and weekly reporting. Billing service dates do not.</p></div>
 <a class="btn btn-outline-secondary" href="/Work">View work items →</a>
 </div>
 <div class="panel form-panel wide">
 <form method="get" class="inline-form">
 <label>Reporting week <input type="date" name="weekStart" value="@Model.WeekStart.ToString("yyyy-MM-dd")" class="form-control" /></label>
-<button class="btn btn-outline-secondary">Load week</button>
+<label>Show <select name="filter" class="form-select">@foreach (var f in Enum.GetValues<AssignmentListFilter>()) { if (f == AssignmentListFilter.Hidden && !Model.Access.IsStaff) { continue; } <option value="@f" selected="@(f == Model.Filter)">@f</option> }</select></label>
+<button class="btn btn-outline-secondary">Load</button>
 </form>
-<p class="hint">Current week starts @Model.CurrentWeekStart.ToString("dd MMM yyyy"). Past missing weeks remain available for late submission.</p>
+<p class="hint">Current week starts @Model.CurrentWeekStart.ToString("dd MMM yyyy"). Missing is calculated only for assignments responsible for the selected week; no missing report rows are stored.</p>
 </div>
 <div class="metrics compact">
-<div class="metric"><span>Required</span><strong>@Model.Required</strong><p>Active assignments in scope</p></div>
+<div class="metric"><span>Required</span><strong>@Model.Required</strong><p>Responsible this week</p></div>
 <div class="metric"><span>Submitted</span><strong>@Model.Submitted</strong><p>Submitted by Sunday</p></div>
 <div class="metric"><span>Missing</span><strong>@Model.Missing</strong><p>No report exists</p></div>
 <div class="metric"><span>Late</span><strong>@Model.Late</strong><p>Submitted after Sunday</p></div>
 </div>
 <div class="panel">
-@if (Model.Rows.Count == 0) { <div class="empty-state"><h3>No active assignments in this scope</h3><p>Progress reports appear after a worker is assigned to a billing work item.</p></div> }
-else { <table class="table data-grid"><thead><tr><th>Week</th><th>Worker</th><th>Customer</th><th>Service</th><th>Billing period</th>@if (Model.Access.IsWorker) { <th data-type="amount">Assigned %</th><th data-type="amount">Entitlement (RM)</th> }<th>Work ref</th><th data-type="amount">Progress %</th><th>Status</th><th>Submitted</th><th>Reporting</th><th data-nosort>Action</th></tr></thead><tbody>
-@foreach (var row in Model.Rows) { var a = row.Assignment; var r = row.Report; var canEdit = Model.Access.IsStaff || (!a.IsCancelled && Model.Access.IsWorker && row.WeekStart >= Model.CurrentWeekStart); <tr>
-<td>@row.WeekStart.ToString("dd MMM yyyy") – @row.WeekEnd.ToString("dd MMM yyyy")</td><td>@a.WorkerName</td><td>@a.WorkItem.BillingRecord.CustomerName</td><td>@a.WorkItem.BillingRecord.ServiceName</td><td>@a.WorkItem.BillingRecord.PeriodStart.ToString("dd MMM yyyy") – @a.WorkItem.BillingRecord.PeriodEnd.ToString("dd MMM yyyy")</td>@if (Model.Access.IsWorker) { <td>@a.Percent.ToString("0.##")%</td><td class="money">@a.Entitlement.ToString("N2")</td> }<td><a href="/Work/Details/@a.WorkItemId">W-@a.WorkItemId.ToString("D5")</a></td>
-<td>@(r == null ? "—" : r.ProgressPercent.ToString("0.##"))</td><td>@(r == null ? "—" : Finance.Label(r.ProgressStatus))</td><td>@(r == null ? "—" : Clock.Local(r.SubmittedAt).ToString("dd MMM yyyy HH:mm"))</td><td>@row.ReportingStatus</td><td>@if (r != null) { <a href="/Progress/Details/@r.Id">View</a>@if(canEdit) { <span> · </span><a href="/Progress/Edit/@r.Id">Edit</a> } } else if (Model.Access.IsWorker && !a.IsCancelled && row.WeekStart <= Model.CurrentWeekStart) { <a href="/Progress/Edit?assignmentId=@a.Id&weekStart=@row.WeekStart.ToString("yyyy-MM-dd")">Submit</a> } else { <span class="hint">Read-only</span> }</td>
-</tr> }
-</tbody></table> }
+@if (Model.Rows.Count == 0) { <div class="empty-state"><h3>No assignments in this view</h3><p>Active assignments appear as soon as a worker is assigned. Completed and hidden assignments remain available in their respective filters.</p></div> }
+else {
+<form method="post" asp-action="Batch" data-workflow-batch>
+<input type="hidden" name="ReturnWeekStart" value="@Model.WeekStart.ToString("yyyy-MM-dd")" /><input type="hidden" name="ReturnFilter" value="@Model.Filter" />
+@if (canBatch) {
+<div class="inline-form workflow-batch-bar">
+<label>Bulk action<select name="Action" class="form-select" data-batch-action><option value="UpdateWorkflow">Update workflow status</option>@if (Model.Access.IsStaff) { <option value="Hide">Hide from worker list</option><option value="Unhide">Unhide</option> }</select></label>
+<span data-batch-workflow-fields><label>Workflow status<select name="WorkflowStatus" class="form-select" data-workflow-status>@foreach (var s in Enum.GetValues<WorkflowStatus>()) { <option value="@s">@Finance.Label(s)</option> }</select></label>
+<label data-workflow-version-container hidden>Version<input name="WorkflowVersion" type="number" min="1" step="1" class="form-control" data-workflow-version-input /></label></span>
+<button class="btn btn-primary">Apply</button>
+</div>
+<p class="hint">Batch changes update only current assignment workflow/history. They never create weekly reports.</p>
+}
+<table class="table data-grid"><thead><tr>@if (canBatch) { <th data-nosort><input type="checkbox" aria-label="Select all visible assignments" data-workflow-select-all /></th> }<th>Customer</th><th>Service</th><th>Assignment / Work ID</th><th>Worker</th><th>Workflow status</th><th>Workflow version</th><th data-type="amount">Progress %</th><th>Weekly report status</th><th>Last weekly update</th><th>Last updated</th><th data-nosort>Actions</th></tr></thead><tbody>
+@foreach (var row in Model.Rows) {
+    var a = row.Assignment;
+    var canSelect = canBatch && !a.IsCancelled && a.WorkItem.BillingRecord.Status != BillingStatus.Cancelled && (Model.Access.IsStaff || (Model.Access.IsWorker && AssignmentWorkflowService.IsActive(a)));
+    var canEdit = Model.Access.IsStaff || (Model.Access.IsWorker && AssignmentWorkflowService.IsActive(a) && row.WeekStart >= Model.CurrentWeekStart);
+    var nextQueries = Math.Max(a.WorkflowHistory.Where(x => x.NewWorkflowStatus == WorkflowStatus.QueriesSent && x.NewWorkflowVersion != null).Select(x => x.NewWorkflowVersion!.Value).Concat(a.ProgressReports.Where(x => x.WorkflowStatusAtSubmission == WorkflowStatus.QueriesSent && x.WorkflowVersionAtSubmission != null).Select(x => x.WorkflowVersionAtSubmission!.Value)).DefaultIfEmpty(0).Max() + 1, 1);
+    var nextDraft = Math.Max(a.WorkflowHistory.Where(x => x.NewWorkflowStatus == WorkflowStatus.DraftManagementReportSent && x.NewWorkflowVersion != null).Select(x => x.NewWorkflowVersion!.Value).Concat(a.ProgressReports.Where(x => x.WorkflowStatusAtSubmission == WorkflowStatus.DraftManagementReportSent && x.WorkflowVersionAtSubmission != null).Select(x => x.WorkflowVersionAtSubmission!.Value)).DefaultIfEmpty(0).Max() + 1, 1);
+    <tr data-next-queries-version="@nextQueries" data-next-draft-version="@nextDraft">
+    @if (canBatch) { <td>@if (canSelect) { <input type="checkbox" name="AssignmentIds" value="@a.Id" data-workflow-select /><input type="hidden" name="Versions[@a.Id]" value="@a.Version" /> }</td> }
+    <td>@a.WorkItem.BillingRecord.CustomerName</td><td>@a.WorkItem.BillingRecord.ServiceName</td><td><a href="/Work/Details/@a.WorkItemId">A-@a.Id.ToString("D5") / W-@a.WorkItemId.ToString("D5")</a></td><td>@a.WorkerName</td><td>@Finance.Label(a.CurrentWorkflowStatus)</td><td>@(a.CurrentWorkflowVersion is > 0 ? "Ver " + a.CurrentWorkflowVersion.Value.ToString("D2") : "—")</td><td>@a.CurrentProgressPercent.ToString("0.##")%</td><td>@row.ReportingStatus</td><td>@(row.LatestReport == null ? "—" : Clock.Local(row.LatestReport.SubmittedAt).ToString("dd MMM yyyy HH:mm"))</td><td>@Clock.Local(a.UpdatedAt).ToString("dd MMM yyyy HH:mm")</td>
+    <td><a href="/Work/Details/@a.WorkItemId">View</a>@if (row.Report != null) { <span> · </span><a href="/Progress/Details/@row.Report.Id">Weekly update</a>@if (canEdit) { <span> · </span><a href="/Progress/Edit/@row.Report.Id">Edit</a> } } else if (Model.Access.IsWorker && row.RequiresReport && row.WeekStart <= Model.CurrentWeekStart) { <span> · </span><a href="/Progress/Edit?assignmentId=@a.Id&weekStart=@row.WeekStart.ToString("yyyy-MM-dd")">Submit weekly update</a> } else { <span> · </span><span class="hint">Read-only</span> }</td>
+    </tr>
+}
+</tbody></table>
+</form>
+}
 </div>

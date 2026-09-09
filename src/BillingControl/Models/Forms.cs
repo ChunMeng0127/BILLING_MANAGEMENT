@@ -128,8 +128,20 @@ public class WeeklyProgressForm
     [Range(1, int.MaxValue)] public int WorkerAssignmentId { get; set; }
     [DataType(DataType.Date)] public DateOnly WeekStart { get; set; }
     [Range(typeof(decimal), "0", "100")] public decimal ProgressPercent { get; set; }
-    public ProgressStatus ProgressStatus { get; set; }
+    public WorkflowStatus WorkflowStatus { get; set; } = WorkflowStatus.AssignedNotStarted;
+    public int? WorkflowVersion { get; set; }
     [Required, StringLength(4000)] public string WorkDone { get; set; } = "";
     [StringLength(2000)] public string? NextAction { get; set; }
     [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
+}
+
+public class BatchWorkflowForm
+{
+    public List<int> AssignmentIds { get; set; } = [];
+    public Dictionary<int, long> Versions { get; set; } = [];
+    public BatchWorkflowAction Action { get; set; } = BatchWorkflowAction.UpdateWorkflow;
+    public WorkflowStatus WorkflowStatus { get; set; } = WorkflowStatus.AssignedNotStarted;
+    public int? WorkflowVersion { get; set; }
+    public DateOnly? ReturnWeekStart { get; set; }
+    public AssignmentListFilter ReturnFilter { get; set; } = AssignmentListFilter.Active;
 }

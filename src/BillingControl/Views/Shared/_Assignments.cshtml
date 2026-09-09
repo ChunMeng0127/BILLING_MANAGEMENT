@@ -14,6 +14,8 @@
 <th data-type="amount">Entitlement (RM)</th>
 <th data-type="amount">Paid (RM)</th>
 <th data-type="amount">Due (RM)</th>
+<th>Workflow</th>
+<th data-type="amount">Progress %</th>
 <th>Status</th>
 @if(access.IsStaff) { <th data-nosort>Action</th> }
 </tr>
@@ -32,6 +34,8 @@
 <td class="money">@a.Entitlement.ToString("N2")</td>
 <td class="money">@paid.ToString("N2")</td>
 <td class="money">@((a.IsCancelled?0:a.Entitlement-paid).ToString("N2"))</td>
+<td>@Finance.WorkflowLabel(a.CurrentWorkflowStatus, a.CurrentWorkflowVersion)</td>
+<td>@a.CurrentProgressPercent.ToString("0.##")%</td>
 <td>@(a.IsCancelled?"Cancelled: "+a.CancellationReason:"Active")</td>
 @if(access.IsStaff) {
 <td>

@@ -10,21 +10,22 @@
 @if(access.IsStaff || access.IsManager) { <a class="btn btn-outline-secondary" href="/Billing/Details/@Model.BillingRecordId">View billing →</a> }
 </div>
 @if(!access.IsStaff) {
-<section class="panel form-panel wide"><h2>Work progress</h2><p>Status: @Finance.Label(Model.Status)</p><p>@Model.Notes</p>
+<section class="panel form-panel wide"><h2>Shared work coordination</h2><p>Shared coordination status: @Finance.Label(Model.Status)</p><p>@Model.Notes</p>
 @if(access.IsWorker) { <a href="/Progress">Submit weekly progress</a> }
 </section>
 }
 @if(access.IsStaff && Model.BillingRecord.Status!=BillingStatus.Cancelled) {
 <form method="post" asp-action="Update" class="panel form-panel wide">
-<h2>Work progress</h2>
+<h2>Shared work coordination</h2>
+<p class="hint">This staff-only status and note are separate from each worker assignment's workflow, which is recorded through Weekly Updates.</p>
 <input type="hidden" name="id" value="@Model.Id" />
 <input type="hidden" name="version" value="@Model.Version" />
-<label class="form-label">Status<select name="status" class="form-select">@foreach(var s in Enum.GetValues<WorkStatus>()) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select>
+<label class="form-label">Shared coordination status<select name="status" class="form-select">@foreach(var s in Enum.GetValues<WorkStatus>()) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select>
 </label>
 <label class="form-label" for="notes">Work notes</label>
 <textarea id="notes" name="notes" class="form-control" rows="3" maxlength="2000">@Model.Notes</textarea>
 <div class="form-actions">
-<button class="btn btn-primary">Save progress</button>
+<button class="btn btn-primary">Save shared work</button>
 </div>
 </form>
 @if(access.IsStaff) { <section class="panel form-panel wide">

@@ -7,6 +7,15 @@
     `${shown} of ${total} Rows shown`;
   const defaultGridEmptyMessage =
     "No rows to show. Add a record or clear your filters.";
+  const versionedWorkflow = new Set([
+    "QueriesSent",
+    "DraftManagementReportSent",
+  ]);
+  const workflowVersionRequired = (status) => versionedWorkflow.has(status);
+  const workflowSuggestedVersion = (status, candidates = []) =>
+    workflowVersionRequired(status)
+      ? Math.max(1, ...candidates.map(Number).filter((value) => Number.isInteger(value) && value > 0))
+      : 0;
   const gridEmptyMessage = (eligibleCount, dataset) =>
     eligibleCount === 0 && dataset.emptyEligibleMessage
       ? dataset.emptyEligibleMessage
@@ -17,6 +26,8 @@
       eligibleGridRows,
       gridRowCountText,
       gridEmptyMessage,
+      workflowVersionRequired,
+      workflowSuggestedVersion,
     };
   if (typeof document === "undefined") return;
 
@@ -418,5 +429,62 @@
       render();
     });
     render();
+  });
+
+  const workflowDefaultVersion = (root, status, rows = []) => {
+    const attribute =
+      status === "QueriesSent"
+        ? "nextQueriesVersion"
+        : "nextDraftVersion";
+    const values = rows
+      .map((row) => Number(row.dataset[attribute]))
+      .filter((value) => Number.isInteger(value) && value > 0);
+    const own = Number(root.dataset[attribute]);
+    return workflowSuggestedVersion(status, [...values, own]);
+  };
+  const syncWorkflowVersion = (root, rows = [], reset = false) => {
+    const status = root.querySelector("[data-workflow-status]");
+    const container = root.querySelector("[data-workflow-version-container]");
+    const input = root.querySelector("[data-workflow-version-input]");
+    if (!status || !container || !input) return;
+    const required = workflowVersionRequired(status.value);
+    container.hidden = !required;
+    input.required = required;
+    if (!required) input.value = "";
+    else if (reset || input.value === "")
+      input.value = String(workflowDefaultVersion(root, status.value, rows));
+  };
+  document.querySelectorAll("[data-workflow-form]").forEach((form) => {
+    const status = form.querySelector("[data-workflow-status]");
+    syncWorkflowVersion(form);
+    status?.addEventListener("change", () => syncWorkflowVersion(form, [], true));
+  });
+  document.querySelectorAll("[data-workflow-batch]").forEach((form) => {
+    const action = form.querySelector("[data-batch-action]");
+    const fields = form.querySelector("[data-batch-workflow-fields]");
+    const selectedRows = () =>
+      [...form.querySelectorAll("[data-workflow-select]:checked")]
+        .map((input) => input.closest("tr"))
+        .filter(Boolean);
+    const sync = (reset = false) => {
+      const changingWorkflow = !action || action.value === "UpdateWorkflow";
+      if (fields) fields.hidden = !changingWorkflow;
+      if (changingWorkflow) syncWorkflowVersion(form, selectedRows(), reset);
+    };
+    form.querySelectorAll("[data-workflow-select]").forEach((input) =>
+      input.addEventListener("change", () => sync()),
+    );
+    form.querySelector("[data-workflow-status]")?.addEventListener("change", () =>
+      sync(true),
+    );
+    action?.addEventListener("change", () => sync());
+    form.querySelector("[data-workflow-select-all]")?.addEventListener("change", (event) => {
+      const check = event.currentTarget.checked;
+      form.querySelectorAll("[data-workflow-select]").forEach((input) => {
+        if (!input.closest("tr").hidden) input.checked = check;
+      });
+      sync();
+    });
+    sync();
   });
 })();

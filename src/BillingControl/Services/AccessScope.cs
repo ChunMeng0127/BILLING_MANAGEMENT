@@ -113,7 +113,7 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
     {
         AppRoles.Admin or AppRoles.InternalUser => db.WorkItems,
         AppRoles.Manager => db.WorkItems.Where(x => x.BillingRecord.Engagement.ManagerId == a.ManagerId),
-        AppRoles.Worker => db.WorkItems.Where(x => x.Assignments.Any(y => !y.IsCancelled && y.WorkerId == a.WorkerId)),
+        AppRoles.Worker => db.WorkItems.Where(x => x.Assignments.Any(y => !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId)),
         _ => db.WorkItems.Where(_ => false)
     };
 
@@ -128,22 +128,23 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
     {
         AppRoles.Admin or AppRoles.InternalUser => db.WorkerAssignments,
         AppRoles.Manager => db.WorkerAssignments.Where(x => x.WorkItem.BillingRecord.Engagement.ManagerId == a.ManagerId),
-        AppRoles.Worker => db.WorkerAssignments.Where(x => !x.IsCancelled && x.WorkerId == a.WorkerId),
+        // Hidden assignments are never exposed to the linked worker, including through forged URLs.
+        AppRoles.Worker => db.WorkerAssignments.Where(x => !x.IsCancelled && !x.IsHidden && x.WorkerId == a.WorkerId),
         _ => db.WorkerAssignments.Where(_ => false)
     };
 
     public IQueryable<WorkerAssignment> EligibleProgressAssignments(AccessProfile a, DateOnly week)
     {
-        var end = week.AddDays(6);
         return ProgressAssignments(a).Where(x => !x.IsCancelled && x.WorkItem.BillingRecord.Status != BillingStatus.Cancelled
-            && x.WorkItem.BillingRecord.PeriodStart <= end && x.WorkItem.BillingRecord.PeriodEnd >= week);
+            && !x.IsHidden && x.CurrentWorkflowStatus != WorkflowStatus.Completed
+            && (x.ReportingResumedFromWeek == null || x.ReportingResumedFromWeek <= week));
     }
 
     public IQueryable<WeeklyProgressReport> ProgressReports(AccessProfile a) => a.Role switch
     {
         AppRoles.Admin or AppRoles.InternalUser => db.WeeklyProgressReports,
         AppRoles.Manager => db.WeeklyProgressReports.Where(x => x.WorkerAssignment.WorkItem.BillingRecord.Engagement.ManagerId == a.ManagerId),
-        AppRoles.Worker => db.WeeklyProgressReports.Where(x => !x.WorkerAssignment.IsCancelled && x.WorkerAssignment.WorkerId == a.WorkerId),
+        AppRoles.Worker => db.WeeklyProgressReports.Where(x => !x.WorkerAssignment.IsCancelled && !x.WorkerAssignment.IsHidden && x.WorkerAssignment.WorkerId == a.WorkerId),
         _ => db.WeeklyProgressReports.Where(_ => false)
     };
 

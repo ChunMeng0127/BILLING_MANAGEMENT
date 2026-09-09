@@ -40,10 +40,12 @@ public class ProgressReportRow
 {
     public WorkerAssignment Assignment { get; set; } = null!;
     public WeeklyProgressReport? Report { get; set; }
+    public WeeklyProgressReport? LatestReport { get; set; }
     public DateOnly WeekStart { get; set; }
     public DateOnly WeekEnd => WeekStart.AddDays(6);
+    public bool RequiresReport { get; set; }
     public bool IsLate { get; set; }
-    public string ReportingStatus => Report == null ? "Missing" : IsLate ? "Late" : "Submitted";
+    public string ReportingStatus => Report != null ? IsLate ? "Late" : "Submitted" : RequiresReport ? "Missing" : "Not required";
 }
 
 public class ProgressReportModel
@@ -51,9 +53,10 @@ public class ProgressReportModel
     public AccessProfile Access { get; set; } = AccessProfile.None;
     public DateOnly WeekStart { get; set; }
     public DateOnly CurrentWeekStart { get; set; }
+    public AssignmentListFilter Filter { get; set; } = AssignmentListFilter.Active;
     public List<ProgressReportRow> Rows { get; set; } = [];
-    public int Required => Rows.Count(x => !x.Assignment.IsCancelled);
-    public int Submitted => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null && !x.IsLate);
-    public int Missing => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null);
-    public int Late => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null && x.IsLate);
+    public int Required => Rows.Count(x => x.RequiresReport);
+    public int Submitted => Rows.Count(x => x.RequiresReport && x.Report != null && !x.IsLate);
+    public int Missing => Rows.Count(x => x.RequiresReport && x.Report == null);
+    public int Late => Rows.Count(x => x.RequiresReport && x.Report != null && x.IsLate);
 }

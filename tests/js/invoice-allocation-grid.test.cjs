@@ -192,3 +192,12 @@ test("external page initialization preserves values until a user flow change", (
   assert.equal(row.input.value, "125.00");
   assert.deepEqual(events, ["grid:refresh", "grid:refresh", "grid:refresh"]);
 });
+
+test("workflow version helpers require and suggest versions only for versioned stages", () => {
+  assert.equal(dataGrid.workflowVersionRequired("QueriesSent"), true);
+  assert.equal(dataGrid.workflowVersionRequired("DraftManagementReportSent"), true);
+  assert.equal(dataGrid.workflowVersionRequired("PendingReview"), false);
+  assert.equal(dataGrid.workflowSuggestedVersion("QueriesSent", [1, 2, 0]), 2);
+  assert.equal(dataGrid.workflowSuggestedVersion("DraftManagementReportSent", []), 1);
+  assert.equal(dataGrid.workflowSuggestedVersion("PendingReview", [4]), 0);
+});

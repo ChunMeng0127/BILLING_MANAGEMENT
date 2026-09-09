@@ -40,6 +40,25 @@ public enum BillingGenerationMode { Scheduled, Replacement, AdHocManual }
 public enum EngagementStatus { Active, Paused, Closed }
 public enum BillingStatus { Upcoming, WorkInProgress, Completed, ReadyToBill, Billed, PartiallyPaid, Paid, Cancelled }
 public enum WorkStatus { Upcoming, InProgress, Completed }
+// Worker delivery workflow is deliberately separate from billing, invoicing and payment states.
+public enum WorkflowStatus
+{
+    DocumentRequested,
+    DocumentReceived,
+    AssignedNotStarted,
+    AssignmentStarted,
+    StartPreparing,
+    QueriesSent,
+    DraftManagementReportSent,
+    PendingReview,
+    AmendmentRevision,
+    FinalManagementReportSent,
+    Completed
+}
+public enum WorkflowHistoryAction { WeeklyUpdate, BatchUpdate, Hidden, Unhidden }
+public enum AssignmentListFilter { Active, Completed, Hidden, All }
+public enum BatchWorkflowAction { UpdateWorkflow, Hide, Unhide }
+// Retained only to read and preserve weekly reports created before workflow snapshots existed.
 public enum ProgressStatus { NotStarted, InProgress, Blocked, Completed }
 public class Engagement : Record
 {
@@ -121,8 +140,17 @@ public class WorkerAssignment : Record
     public decimal Entitlement { get; set; }
     public bool IsCancelled { get; set; }
     public string? CancellationReason { get; set; }
+    public WorkflowStatus CurrentWorkflowStatus { get; set; } = WorkflowStatus.AssignedNotStarted;
+    public int? CurrentWorkflowVersion { get; set; }
+    public decimal CurrentProgressPercent { get; set; }
+    public bool IsHidden { get; set; }
+    public DateTime? HiddenAt { get; set; }
+    public string? HiddenBy { get; set; }
+    /// <summary>Latest week from which responsibility resumed after an intentional pause.</summary>
+    public DateOnly? ReportingResumedFromWeek { get; set; }
     public List<WorkerPaymentAllocation> Allocations { get; set; } = [];
     public List<WeeklyProgressReport> ProgressReports { get; set; } = [];
+    public List<WorkerAssignmentWorkflowHistory> WorkflowHistory { get; set; } = [];
 }
 public class WeeklyProgressReport : Record
 {
@@ -131,11 +159,25 @@ public class WeeklyProgressReport : Record
     public DateOnly WeekStart { get; set; }
     public DateOnly WeekEnd { get; set; }
     public decimal ProgressPercent { get; set; }
+    // Legacy pre-workflow field. New reports use the immutable workflow snapshot below.
     public ProgressStatus ProgressStatus { get; set; }
+    public WorkflowStatus? WorkflowStatusAtSubmission { get; set; }
+    public int? WorkflowVersionAtSubmission { get; set; }
     [Required, StringLength(4000)] public string WorkDone { get; set; } = "";
     [StringLength(2000)] public string? NextAction { get; set; }
     [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
     public DateTime SubmittedAt { get; set; }
+}
+public class WorkerAssignmentWorkflowHistory : Record
+{
+    public int WorkerAssignmentId { get; set; }
+    public WorkerAssignment WorkerAssignment { get; set; } = null!;
+    public WorkflowStatus? PreviousWorkflowStatus { get; set; }
+    public int? PreviousWorkflowVersion { get; set; }
+    public WorkflowStatus NewWorkflowStatus { get; set; }
+    public int? NewWorkflowVersion { get; set; }
+    public WorkflowHistoryAction Action { get; set; }
+    public DateTime ChangedAt { get; set; }
 }
 public class WorkerPayment : Record
 {

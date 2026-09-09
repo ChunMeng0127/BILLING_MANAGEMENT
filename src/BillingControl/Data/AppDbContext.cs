@@ -24,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<WorkerAssignment> WorkerAssignments => Set<WorkerAssignment>();
     public DbSet<WeeklyProgressReport> WeeklyProgressReports => Set<WeeklyProgressReport>();
+    public DbSet<WorkerAssignmentWorkflowHistory> WorkerAssignmentWorkflowHistories => Set<WorkerAssignmentWorkflowHistory>();
     public DbSet<WorkerPayment> WorkerPayments => Set<WorkerPayment>();
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
@@ -84,7 +85,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<InvoiceLine>().HasIndex(x => new { x.InvoiceId, x.BillingRecordId }).IsUnique();
         b.Entity<InvoiceLine>().ToTable(t => t.HasCheckConstraint("CK_InvoiceLine_Amount", "\"AllocatedAmount\" > 0"));
         b.Entity<BillingRecord>().HasOne(x => x.WorkItem).WithOne(x => x.BillingRecord).HasForeignKey<WorkItem>(x => x.BillingRecordId);
-        b.Entity<WorkerAssignment>().ToTable(t => t.HasCheckConstraint("CK_Assignment", "\"Percent\" >= 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0"));
+        b.Entity<WorkerAssignment>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_Assignment", "\"Percent\" >= 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0");
+            t.HasCheckConstraint("CK_Assignment_CurrentProgress", "\"CurrentProgressPercent\" BETWEEN 0 AND 100");
+            t.HasCheckConstraint("CK_Assignment_CurrentWorkflowVersion", "\"CurrentWorkflowVersion\" IS NULL OR \"CurrentWorkflowVersion\" > 0");
+        });
+        b.Entity<WorkerAssignmentWorkflowHistory>().HasIndex(x => new { x.WorkerAssignmentId, x.ChangedAt });
+        b.Entity<WorkerAssignmentWorkflowHistory>().ToTable(t => t.HasCheckConstraint("CK_WorkflowHistory_NewVersion", "\"NewWorkflowVersion\" IS NULL OR \"NewWorkflowVersion\" > 0"));
         b.Entity<WeeklyProgressReport>().HasIndex(x => new { x.WorkerAssignmentId, x.WeekStart }).IsUnique();
         b.Entity<WeeklyProgressReport>().Property(x => x.WorkDone).HasMaxLength(4000);
         b.Entity<WeeklyProgressReport>().Property(x => x.NextAction).HasMaxLength(2000);
@@ -93,6 +101,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_WeeklyProgress_Dates", "\"WeekEnd\" >= \"WeekStart\"");
             t.HasCheckConstraint("CK_WeeklyProgress_Percent", "\"ProgressPercent\" BETWEEN 0 AND 100");
+            t.HasCheckConstraint("CK_WeeklyProgress_WorkflowVersion", "\"WorkflowVersionAtSubmission\" IS NULL OR \"WorkflowVersionAtSubmission\" > 0");
         });
         b.Entity<WorkerPayment>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<CustomerReceipt>().HasIndex(x => x.RequestId).IsUnique();
@@ -125,8 +134,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     WorkerPaymentAllocation => [],
                     CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
-                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkDone", "NextAction", "IssuesOrBlockers"],
-                    WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
+                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkflowStatusAtSubmission", "WorkflowVersionAtSubmission", "WorkDone", "NextAction", "IssuesOrBlockers"],
+                    WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                     CustomerReceipt => allowReceiptAllocationCorrection
                         ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
