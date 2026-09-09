@@ -1,20 +1,72 @@
 @model InvoiceEditForm
-@{ var invoice = ViewBag.Invoice as Invoice; var activeReceipts = invoice?.ReceiptAllocations.Count(x => !x.CustomerReceipt.IsCancelled) ?? 0; var flowLabel = Model.Flow switch { InvoiceFlow.AccountingFirmToCustomer => "Accounting Firm → Customer", InvoiceFlow.ManagerToAccountingFirm => "Manager → Accounting Firm", InvoiceFlow.LcmToManager => "LCM MGT → Manager", _ => Model.Flow.ToString() }; ViewData["Title"] = "Edit invoice"; }
+@{
+    var invoice = ViewBag.Invoice as Invoice;
+    List<BillingRecord> bills = ViewBag.Bills;
+    var activeReceipts = invoice?.ReceiptAllocations.Count(x => !x.CustomerReceipt.IsCancelled) ?? 0;
+    var flowLabel = Model.Flow switch
+    {
+        InvoiceFlow.AccountingFirmToCustomer => "Accounting Firm → Customer",
+        InvoiceFlow.ManagerToAccountingFirm => "Manager → Accounting Firm",
+        InvoiceFlow.LcmToManager => "LCM MGT → Manager",
+        _ => Model.Flow.ToString()
+    };
+    static string DataMoney(decimal value) => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+    ViewData["Title"] = "Edit invoice";
+}
 <a class="back-link" href="/Invoices/Details/@Model.Id">← Invoice details</a>
 <div class="page-heading"><div><p class="eyebrow">INVOICE CORRECTION</p><h1>Edit invoice</h1><p>@flowLabel · @invoice?.IssuerName → @invoice?.RecipientName</p></div></div>
 @if(activeReceipts > 0) { <div class="alert alert-warning">This invoice has active receipt allocations. Cancel the receipt before changing invoice allocations.</div> }
-<form method="post" asp-action="Edit" class="panel form-panel wide">
-<div asp-validation-summary="All" class="text-danger"></div>
-<input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" /><input asp-for="Flow" type="hidden" />
-<div class="form-grid">
-<label asp-for="InvoiceNumber" class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required maxlength="100" /></label>
-<label asp-for="InvoiceDate" class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label>
-<div><span class="form-label">Invoice flow</span><p class="form-control-plaintext">@flowLabel</p><p class="hint">Invoice flow is immutable after creation.</p></div>
-</div>
-<h2 class="section-title">Billing allocations</h2>
-<p class="hint">Adjust existing line amounts only. Flow-specific caps, grouping and concurrency are checked on the server. Leave no line blank.</p>
-<table class="table data-grid"><thead><tr><th>Billing record</th><th>Customer</th><th>Period</th><th data-type="amount">Current (RM)</th><th>Allocation (RM)</th></tr></thead><tbody>
-@foreach(var line in invoice?.Lines ?? []) { var value = Model.Allocations.GetValueOrDefault(line.BillingRecordId); <tr><td><a href="/Billing/Details/@line.BillingRecordId">B-@line.BillingRecordId.ToString("D5")</a></td><td>@line.BillingRecord.CustomerName</td><td>@line.BillingRecord.PeriodStart.ToString("yyyy-MM-dd") — @line.BillingRecord.PeriodEnd.ToString("yyyy-MM-dd")</td><td class="money">@line.AllocatedAmount.ToString("N2")</td><td><input name="Allocations[@line.BillingRecordId]" value="@(value?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" type="number" min="0.01" step="0.01" class="form-control" required /></td></tr> }
-</tbody></table>
-<div class="form-actions"><button class="btn btn-primary">Save invoice correction</button><a class="btn btn-outline-secondary" href="/Invoices/Details/@Model.Id">Cancel</a></div>
+<form method="post" asp-action="Edit" class="panel form-panel wide invoice-create-form">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" /><input asp-for="Flow" type="hidden" />
+    <div class="form-grid invoice-header-grid">
+        <label asp-for="InvoiceNumber" class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required maxlength="100" /></label>
+        <label asp-for="InvoiceDate" class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label>
+        <div><span class="form-label">Invoice flow</span><p class="form-control-plaintext">@flowLabel</p><p class="hint">Invoice flow is immutable after creation.</p></div>
+    </div>
+    <h2 class="section-title">Billing allocations</h2>
+    <p class="hint">Select eligible billing records for this flow. Blank or zero removes a current line; positive amounts are checked against the remaining flow cap. @if(activeReceipts > 0){<text>Allocation inputs are locked while active receipts exist.</text>}</p>
+    <table class="table data-grid invoice-allocation-table">
+        <thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-type="amount">Flow cap</th><th data-type="amount">Allocated elsewhere</th><th data-type="amount">Available</th><th data-type="amount">Current</th><th data-nosort>Allocation</th></tr></thead>
+        <tbody>
+        @foreach(var b in bills)
+        {
+            var cap = Model.Flow switch
+            {
+                InvoiceFlow.AccountingFirmToCustomer => b.Amount,
+                InvoiceFlow.ManagerToAccountingFirm => b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount,
+                InvoiceFlow.LcmToManager => b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount,
+                _ => 0m
+            };
+            var allocatedElsewhere = b.InvoiceLines.Where(x => x.InvoiceId != Model.Id && x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == Model.Flow).Sum(x => x.AllocatedAmount);
+            var available = Math.Max(0m, cap - allocatedElsewhere);
+            var current = Model.Allocations.GetValueOrDefault(b.Id);
+            var isCurrent = current.HasValue;
+            var sameFirm = invoice?.BusinessPartyId == b.Engagement.BusinessPartyId;
+            var sameCustomer = invoice?.CustomerId == b.Engagement.CustomerId;
+            var sameManager = invoice?.ManagerId == b.Engagement.ManagerId;
+            var headerMatches = Model.Flow switch
+            {
+                InvoiceFlow.AccountingFirmToCustomer => sameFirm && sameCustomer,
+                InvoiceFlow.ManagerToAccountingFirm => sameFirm && sameManager,
+                InvoiceFlow.LcmToManager => sameManager,
+                _ => false
+            };
+            if (!isCurrent && (!headerMatches || available <= 0)) continue;
+            <tr class="invoice-allocation-row">
+                <td><a href="/Billing/Details/@b.Id">B-@b.Id.ToString("D5")</a>@if(isCurrent){<span class="badge">Current</span>}</td>
+                <td>@b.CustomerName</td>
+                <td>@b.Engagement.BusinessParty.Name</td>
+                <td>@b.Engagement.Manager.Name</td>
+                <td>@b.PeriodStart.ToString("yyyy-MM-dd") — @b.PeriodEnd.ToString("yyyy-MM-dd")</td>
+                <td class="money">@cap.ToString("N2")</td>
+                <td class="money">@allocatedElsewhere.ToString("N2")</td>
+                <td class="money">@available.ToString("N2")</td>
+                <td class="money">@(current?.ToString("N2") ?? "—")</td>
+                <td><input name="Allocations[@b.Id]" value="@(current?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" type="number" min="0" max="@DataMoney(available)" step="0.01" class="form-control" readonly="@(activeReceipts > 0 ? "readonly" : null)" /></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <div class="form-actions"><button class="btn btn-primary">Save invoice correction</button><a class="btn btn-outline-secondary" href="/Invoices/Details/@Model.Id">Cancel</a></div>
 </form>

@@ -7,6 +7,7 @@ namespace BillingControl.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<AppUser>(options)
 {
+    private bool allowInvoiceLineDeletion;
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<BusinessParty> BusinessParties => Set<BusinessParty>();
@@ -94,7 +95,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     {
         foreach (var e in ChangeTracker.Entries<Record>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
-            if (e.State == EntityState.Deleted) throw new InvalidOperationException("Use cancellation or deactivate records instead of deleting them.");
+            if (e.State == EntityState.Deleted)
+            {
+                if (e.Entity is InvoiceLine && allowInvoiceLineDeletion) continue;
+                throw new InvalidOperationException("Use cancellation or deactivate records instead of deleting them.");
+            }
             if (e.State == EntityState.Modified)
             {
                 string[] allowed = e.Entity switch
@@ -102,7 +107,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     BillingRecord => ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
                     Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
                     RevenueShareAllocation or WorkerPaymentAllocation or CustomerReceiptAllocation => [],
-                    InvoiceLine => ["AllocatedAmount"],
+                    InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
                     WorkerAssignment or WorkerPayment or CustomerReceipt => ["IsCancelled", "CancellationReason"],
                     _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
                 };
@@ -114,5 +119,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             e.Entity.UpdatedAt = DateTime.UtcNow; e.Entity.UpdatedBy = actor; e.Entity.Version++;
         }
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    internal IDisposable PermitInvoiceLineDeletion()
+    {
+        var previous = allowInvoiceLineDeletion;
+        allowInvoiceLineDeletion = true;
+        return new DeletionScope(this, previous);
+    }
+
+    private sealed class DeletionScope(AppDbContext context, bool previous) : IDisposable
+    {
+        public void Dispose() => context.allowInvoiceLineDeletion = previous;
     }
 }

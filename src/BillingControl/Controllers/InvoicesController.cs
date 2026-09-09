@@ -46,7 +46,15 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
             .Include(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
             .AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id);
         if (invoice == null) return NotFound();
-        ViewBag.Access = a; ViewBag.Invoice = invoice;
+        var bills = await db.BillingRecords
+            .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
+            .Include(x => x.Engagement).ThenInclude(x => x.Manager)
+            .Include(x => x.Shares)
+            .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice)
+            .Where(x => x.Status != BillingStatus.Cancelled)
+            .OrderByDescending(x => x.PeriodStart)
+            .AsSplitQuery().ToListAsync();
+        ViewBag.Access = a; ViewBag.Invoice = invoice; ViewBag.Bills = bills;
         return View(new InvoiceEditForm
         {
             Id = invoice.Id, Version = invoice.Version, InvoiceNumber = invoice.InvoiceNumber, InvoiceDate = invoice.InvoiceDate, Flow = invoice.Flow,

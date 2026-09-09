@@ -756,6 +756,78 @@ public class IntegrationTests
         Assert.Equal(HttpStatusCode.Redirect, (await externalClient.GetAsync($"/Invoices/Edit/{invoice.Id}")).StatusCode);
     }
     [PostgresFact]
+    public async Task InvoiceCorrectionsSupportMembershipChangesAndSameTotalConcurrency()
+    {
+        await using var db = await Fresh();
+        var engagementId = await Engagement(db);
+        var billing = new BillingService(db);
+        var first = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var second = await billing.Generate(engagementId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+        var third = await billing.Generate(engagementId, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
+        var invoices = new InvoiceService(db);
+        var invoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "EDIT-MEMBERSHIP", new(2026, 3, 31), new Dictionary<int, decimal> { [first.Id] = 600m, [second.Id] = 400m });
+        var staleVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        await invoices.EditInvoice(invoice.Id, "EDIT-MEMBERSHIP", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 500m, [second.Id] = 500m }, staleVersion);
+        var changedVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        Assert.True(changedVersion > staleVersion);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "EDIT-MEMBERSHIP", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 400m, [second.Id] = 600m }, staleVersion));
+        var sameTotal = await db.InvoiceLines.AsNoTracking().Where(x => x.InvoiceId == invoice.Id).ToDictionaryAsync(x => x.BillingRecordId, x => x.AllocatedAmount);
+        Assert.Equal(500m, sameTotal[first.Id]); Assert.Equal(500m, sameTotal[second.Id]);
+
+        await invoices.EditInvoice(invoice.Id, "EDIT-DATE", new(2026, 4, 1), new Dictionary<int, decimal> { [first.Id] = 500m, [second.Id] = 500m }, changedVersion);
+        var metadataVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        Assert.True(metadataVersion > changedVersion);
+        await invoices.EditInvoice(invoice.Id, "EDIT-MEMBERSHIP", new(2026, 4, 1), new Dictionary<int, decimal> { [first.Id] = 300m, [third.Id] = 700m }, metadataVersion);
+        var replaced = await db.Invoices.AsNoTracking().Include(x => x.Lines).SingleAsync(x => x.Id == invoice.Id);
+        Assert.Equal(1000m, replaced.Total); Assert.Equal(new[] { first.Id, third.Id }.OrderBy(x => x), replaced.Lines.Select(x => x.BillingRecordId).OrderBy(x => x));
+        var secondAfterRemoval = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).AsNoTracking().SingleAsync(x => x.Id == second.Id);
+        var thirdAfterAdd = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).AsNoTracking().SingleAsync(x => x.Id == third.Id);
+        Assert.Equal(BillingInvoiceState.Unbilled, secondAfterRemoval.CustomerInvoiceState); Assert.Equal(BillingInvoiceState.PartiallyInvoiced, thirdAfterAdd.CustomerInvoiceState);
+
+        var versionAfterReplacement = replaced.Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "NEGATIVE", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = -1m, [third.Id] = 1001m }, versionAfterReplacement));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "EMPTY", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 0m, [third.Id] = 0m }, versionAfterReplacement));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "OVER-CAP", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 1000.01m }, versionAfterReplacement));
+
+        var other = new Engagement
+        {
+            Customer = new Customer { Name = "Other correction customer" }, Service = new Service { Name = "Other correction service" },
+            BusinessParty = new BusinessParty { Name = "Other correction firm" }, Manager = new Manager { Name = "Other correction manager" },
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m,
+            Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        db.Engagements.Add(other); await db.SaveChangesAsync();
+        var otherBill = await billing.Generate(other.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "WRONG-PARTY", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 300m, [otherBill.Id] = 700m }, versionAfterReplacement));
+        await billing.Cancel("billing", otherBill.Id, "Cancelled correction candidate");
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "CANCELLED-LINE", invoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 300m, [otherBill.Id] = 700m }, versionAfterReplacement));
+
+        var firstEngagement = await db.Engagements.AsNoTracking().SingleAsync(x => x.Id == engagementId);
+        var otherManagerEngagement = new Engagement
+        {
+            Customer = new Customer { Name = "Manager mismatch customer" }, Service = new Service { Name = "Manager mismatch service" },
+            BusinessPartyId = firstEngagement.BusinessPartyId, Manager = new Manager { Name = "Manager mismatch" },
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m,
+            Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        db.Engagements.Add(otherManagerEngagement); await db.SaveChangesAsync();
+        var otherManagerBill = await billing.Generate(otherManagerEngagement.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var managerInvoice = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MANAGER-EDIT", new(2026, 4, 1), new Dictionary<int, decimal> { [first.Id] = 100m });
+        var managerVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == managerInvoice.Id)).Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(managerInvoice.Id, managerInvoice.InvoiceNumber, managerInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 100m, [otherManagerBill.Id] = 100m }, managerVersion));
+        var lcmInvoice = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-EDIT", new(2026, 4, 1), new Dictionary<int, decimal> { [first.Id] = 100m });
+        var lcmVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == lcmInvoice.Id)).Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(lcmInvoice.Id, lcmInvoice.InvoiceNumber, lcmInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 100m, [otherManagerBill.Id] = 100m }, lcmVersion));
+
+        var receipt = await invoices.CreateReceipt(new(2026, 4, 1), "EDIT-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 100m });
+        var receiptVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        await invoices.EditInvoice(invoice.Id, "EDIT-AFTER-RECEIPT", new(2026, 4, 2), new Dictionary<int, decimal> { [first.Id] = 300m, [third.Id] = 700m }, receiptVersion);
+        var afterReceiptMetadata = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
+        Assert.Equal(InvoiceFlow.AccountingFirmToCustomer, afterReceiptMetadata.Flow); Assert.Equal(InvoiceStatus.PartiallyPaid, afterReceiptMetadata.Status);
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(invoice.Id, "RECEIPT-MEMBERSHIP", afterReceiptMetadata.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 300m, [second.Id] = 700m }, afterReceiptMetadata.Version));
+        Assert.NotEqual(0, receipt.Id);
+    }
+    [PostgresFact]
     public async Task AuthenticationAndFullPageRender()
     {
         await using var db = await Fresh();
