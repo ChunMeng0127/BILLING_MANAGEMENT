@@ -214,21 +214,30 @@ public sealed class InvoiceService(AppDbContext db)
 
     private static void ValidateHeaderConsistency(Invoice invoice, IReadOnlyCollection<BillingRecord> bills)
     {
-        var firmId = bills.Select(x => x.Engagement.BusinessPartyId).Distinct().Single();
-        var customerId = bills.Select(x => x.Engagement.CustomerId).Distinct().Single();
-        var managerId = bills.Select(x => x.Engagement.ManagerId).Distinct().Single();
         switch (invoice.Flow)
         {
             case InvoiceFlow.AccountingFirmToCustomer:
-                Require(invoice.BusinessPartyId == firmId && invoice.CustomerId == customerId && invoice.ManagerId == null,
+                var customerFirmIds = bills.Select(x => x.Engagement.BusinessPartyId).Distinct().ToArray();
+                var customerIds = bills.Select(x => x.Engagement.CustomerId).Distinct().ToArray();
+                Require(customerFirmIds.Length == 1 && customerIds.Length == 1,
+                    "The selected customer invoice records must belong to one accounting firm and one end customer.");
+                var customerFirmId = customerFirmIds[0];
+                var customerId = customerIds[0];
+                Require(invoice.BusinessPartyId == customerFirmId && invoice.CustomerId == customerId && invoice.ManagerId == null,
                     "The selected billing records do not match this invoice's accounting firm and customer.");
                 break;
             case InvoiceFlow.ManagerToAccountingFirm:
-                Require(invoice.BusinessPartyId == firmId && invoice.ManagerId == managerId && invoice.CustomerId == null,
+                var managerFirmIds = bills.Select(x => x.Engagement.BusinessPartyId).Distinct().ToArray();
+                var managerIds = bills.Select(x => x.Engagement.ManagerId).Distinct().ToArray();
+                Require(managerFirmIds.Length == 1 && managerIds.Length == 1,
+                    "The selected manager invoice records must belong to one manager and one accounting firm.");
+                Require(invoice.BusinessPartyId == managerFirmIds[0] && invoice.ManagerId == managerIds[0] && invoice.CustomerId == null,
                     "The selected billing records do not match this invoice's manager and accounting firm.");
                 break;
             case InvoiceFlow.LcmToManager:
-                Require(invoice.BusinessPartyId == null && invoice.CustomerId == null && invoice.ManagerId == managerId,
+                var lcmManagerIds = bills.Select(x => x.Engagement.ManagerId).Distinct().ToArray();
+                Require(lcmManagerIds.Length == 1, "The selected LCM invoice records must belong to one manager.");
+                Require(invoice.BusinessPartyId == null && invoice.CustomerId == null && invoice.ManagerId == lcmManagerIds[0],
                     "The selected billing records do not match this invoice's manager.");
                 break;
             default:

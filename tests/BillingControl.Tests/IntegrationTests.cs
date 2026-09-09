@@ -828,6 +828,61 @@ public class IntegrationTests
         Assert.NotEqual(0, receipt.Id);
     }
     [PostgresFact]
+    public async Task InvoiceCorrectionHeaderValidationUsesOnlyFlowRelevantParties()
+    {
+        await using var db = await Fresh();
+        var baseEngagementId = await Engagement(db);
+        var baseEngagement = await db.Engagements.AsNoTracking().SingleAsync(x => x.Id == baseEngagementId);
+        var sameCustomerFirm = new Engagement
+        {
+            CustomerId = baseEngagement.CustomerId, Service = new Service { Name = "Second service" }, BusinessPartyId = baseEngagement.BusinessPartyId, ManagerId = baseEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        var secondCustomer = new Engagement
+        {
+            Customer = new Customer { Name = "Second customer" }, Service = new Service { Name = "Second customer service" }, BusinessPartyId = baseEngagement.BusinessPartyId, ManagerId = baseEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        var secondFirm = new Engagement
+        {
+            CustomerId = baseEngagement.CustomerId, Service = new Service { Name = "Second firm service" }, BusinessParty = new BusinessParty { Name = "Second firm" }, ManagerId = baseEngagement.ManagerId,
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        var secondManager = new Engagement
+        {
+            Customer = new Customer { Name = "Second manager customer" }, Service = new Service { Name = "Second manager service" }, BusinessPartyId = baseEngagement.BusinessPartyId, Manager = new Manager { Name = "Second manager" },
+            StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new BillingSchedule { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+        };
+        db.Engagements.AddRange(sameCustomerFirm, secondCustomer, secondFirm, secondManager); await db.SaveChangesAsync();
+        var billing = new BillingService(db);
+        var baseBill = await billing.Generate(baseEngagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var sameCustomerFirmBill = await billing.Generate(sameCustomerFirm.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var secondCustomerBill = await billing.Generate(secondCustomer.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var secondFirmBill = await billing.Generate(secondFirm.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var secondManagerBill = await billing.Generate(secondManager.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var invoices = new InvoiceService(db);
+
+        var customerInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "FLOW-CUSTOMER", new(2026, 2, 1), new Dictionary<int, decimal> { [baseBill.Id] = 100m });
+        var customerVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == customerInvoice.Id)).Version;
+        await invoices.EditInvoice(customerInvoice.Id, customerInvoice.InvoiceNumber, customerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [sameCustomerFirmBill.Id] = 100m }, customerVersion);
+        var customerSameFirmVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == customerInvoice.Id)).Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(customerInvoice.Id, customerInvoice.InvoiceNumber, customerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondCustomerBill.Id] = 100m }, customerSameFirmVersion));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(customerInvoice.Id, customerInvoice.InvoiceNumber, customerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondFirmBill.Id] = 100m }, customerSameFirmVersion));
+
+        var managerInvoice = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "FLOW-MANAGER", new(2026, 2, 1), new Dictionary<int, decimal> { [baseBill.Id] = 100m });
+        var managerVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == managerInvoice.Id)).Version;
+        await invoices.EditInvoice(managerInvoice.Id, managerInvoice.InvoiceNumber, managerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondCustomerBill.Id] = 100m }, managerVersion);
+        var managerConsolidatedVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == managerInvoice.Id)).Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(managerInvoice.Id, managerInvoice.InvoiceNumber, managerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondFirmBill.Id] = 100m }, managerConsolidatedVersion));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(managerInvoice.Id, managerInvoice.InvoiceNumber, managerInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondManagerBill.Id] = 100m }, managerConsolidatedVersion));
+
+        var lcmInvoice = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "FLOW-LCM", new(2026, 2, 1), new Dictionary<int, decimal> { [baseBill.Id] = 100m });
+        var lcmVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == lcmInvoice.Id)).Version;
+        await invoices.EditInvoice(lcmInvoice.Id, lcmInvoice.InvoiceNumber, lcmInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondCustomerBill.Id] = 100m, [secondFirmBill.Id] = 100m }, lcmVersion);
+        var lcmConsolidatedVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == lcmInvoice.Id)).Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditInvoice(lcmInvoice.Id, lcmInvoice.InvoiceNumber, lcmInvoice.InvoiceDate, new Dictionary<int, decimal> { [baseBill.Id] = 100m, [secondCustomerBill.Id] = 100m, [secondManagerBill.Id] = 100m }, lcmConsolidatedVersion));
+    }
+    [PostgresFact]
     public async Task AuthenticationAndFullPageRender()
     {
         await using var db = await Fresh();
