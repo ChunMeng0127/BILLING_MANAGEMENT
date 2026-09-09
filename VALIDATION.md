@@ -30,7 +30,7 @@
 - Browser checks: text search with Enter and empty results, year/month/day date filter display and month search, inclusive amount ranges with reversed bounds, Cancel preserving filters, Clear filters, column visibility and multiple-column sort indicators. No browser console errors were captured.
 - Responsive register checked at 390×844: page width remained 390px; wide table content scrolled within its 360px container. Desktop layout was also inspected.
 - PostgreSQL custom-format backup restored successfully into a separate `billing_restore_test` database. Restored user count (1), billing (RM1,000), worker entitlement (RM280) and payments (RM100) matched the source demo.
-- JavaScript syntax check and CI YAML parsing passed. Docker is unavailable on this Windows PC; the production image and Compose smoke test passed in GitHub Actions for both `master` run [34305353691](https://github.com/ChunMeng0127/BILLING_MANAGEMENT/actions/runs/34305353691) and `codex/accounting-mvp` run [34305353782](https://github.com/ChunMeng0127/BILLING_MANAGEMENT/actions/runs/34305353782).
+- JavaScript syntax check and CI YAML parsing passed. Docker is unavailable on this Windows PC; the production image and Compose smoke test passed in GitHub Actions for this commit in `master` run [34328333060](https://github.com/ChunMeng0127/BILLING_MANAGEMENT/actions/runs/34328333060) and `codex/accounting-mvp` run [34328332907](https://github.com/ChunMeng0127/BILLING_MANAGEMENT/actions/runs/34328332907).
 
 ## Earlier deployment verification (before Part 4.6; Part 4.6 was not deployed to Hostinger)
 
