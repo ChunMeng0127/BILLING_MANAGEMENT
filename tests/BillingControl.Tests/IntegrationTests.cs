@@ -1147,7 +1147,10 @@ public class IntegrationTests
         var newInvoiceText = WebUtility.HtmlDecode(newInvoice);
         Assert.Contains("Accounting Firm → Customer", newInvoiceText); Assert.Contains("Manager → Accounting Firm", newInvoiceText); Assert.Contains("LCM MGT → Manager", newInvoiceText);
         Assert.Contains("invoice-create-form", newInvoice); Assert.Contains("invoice-allocation-table", newInvoice); Assert.DoesNotContain("Allocated for selected flow (RM)", newInvoice);
-        var adminBilling = await admin.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", adminBilling); Assert.Contains("Beta Scope Customer", adminBilling); Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
+        var adminBilling = await admin.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", adminBilling); Assert.Contains("Beta Scope Customer", adminBilling);
+        var adminBillingDetails = await admin.GetStringAsync($"/Billing/Details/{billBId}");
+        Assert.Contains("Receipt total (RM)", adminBillingDetails); Assert.Contains("Allocated to invoice (RM)", adminBillingDetails); Assert.Contains("Attributed to this BillingRecord (RM)", adminBillingDetails);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
         using var internalUser = await SignedIn(app, "internal@example.com", password);
         var internalBilling = await internalUser.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", internalBilling); Assert.Contains("Beta Scope Customer", internalBilling);
         var internalInvoices = await internalUser.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", internalInvoices); Assert.Contains("ALPHA-MGR-INV", internalInvoices); Assert.Contains("BETA-INV", internalInvoices);
@@ -1302,6 +1305,45 @@ public class IntegrationTests
         await invoices.CancelReceipt(currentReceipt.Id, "Part46 cancellation");
         var cancelledVersion = await db.CustomerReceipts.AsNoTracking().Where(x => x.Id == currentReceipt.Id).Select(x => x.Version).SingleAsync();
         await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(currentReceipt.Id, currentReceipt.ReceiptDate, currentReceipt.Reference, cancelledVersion, new Dictionary<int, decimal> { [overpayInvoice.Id] = 800m }));
+    }
+
+    [PostgresFact]
+    public async Task ConsolidatedInvoiceReceiptAttributionUsesInvoiceLineProportion()
+    {
+        await using var db = await Fresh();
+        var billing = new BillingService(db);
+        var engagementId = await Engagement(db);
+        var first = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var second = await billing.Generate(engagementId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+        var invoices = new InvoiceService(db);
+        var invoice = await invoices.CreateInvoice(
+            InvoiceFlow.AccountingFirmToCustomer,
+            "PART46-PROPORTIONAL",
+            new(2026, 2, 28),
+            new Dictionary<int, decimal> { [first.Id] = 1000m, [second.Id] = 1000m });
+        var receipt = await invoices.CreateReceipt(
+            new(2026, 2, 28),
+            "PART46-PARTIAL",
+            Guid.NewGuid(),
+            new Dictionary<int, decimal> { [invoice.Id] = 1000m });
+
+        db.ChangeTracker.Clear();
+        var records = await db.BillingRecords
+            .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+            .AsNoTracking()
+            .Where(x => x.Id == first.Id || x.Id == second.Id)
+            .OrderBy(x => x.Id)
+            .ToListAsync();
+        var savedInvoice = await db.Invoices.Include(x => x.Lines).ThenInclude(x => x.BillingRecord).AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
+        var savedReceipt = await db.CustomerReceipts.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == receipt.Id);
+
+        Assert.Equal(2000m, savedInvoice.Total);
+        Assert.Equal(1000m, savedReceipt.Amount);
+        Assert.Equal(1000m, savedReceipt.Allocations.Single().Amount);
+        Assert.Equal(500m, records[0].CustomerReceivedAmount);
+        Assert.Equal(500m, records[1].CustomerReceivedAmount);
+        Assert.Equal(savedReceipt.Amount, records.Sum(x => x.CustomerReceivedAmount));
+        Assert.Equal(savedInvoice.Total, savedInvoice.Lines.Sum(x => x.AllocatedAmount));
     }
 
 }

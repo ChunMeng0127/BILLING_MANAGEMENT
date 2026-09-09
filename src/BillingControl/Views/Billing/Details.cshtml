@@ -1,5 +1,32 @@
 @model BillingRecord
-@{ ViewData["Title"] = "B-"+Model.Id.ToString("D5"); AccessProfile access=ViewBag.Access; var cost=access.IsStaff ? Model.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement) : 0m; var gross=access.IsStaff ? Model.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount : 0m; var visibleInvoices=Model.InvoiceLines.Select(x=>x.Invoice).Where(x=>access.IsStaff || (access.IsAccountingFirm && x.BusinessPartyId==access.BusinessPartyId) || (access.IsManager && x.ManagerId==access.ManagerId)).DistinctBy(x=>x.Id).ToList(); }
+@{
+    ViewData["Title"] = "B-" + Model.Id.ToString("D5");
+    AccessProfile access = ViewBag.Access;
+    var cost = access.IsStaff ? Model.WorkItem.Assignments.Where(x => !x.IsCancelled).Sum(x => x.Entitlement) : 0m;
+    var gross = access.IsStaff ? Model.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount : 0m;
+    var visibleInvoices = Model.InvoiceLines.Select(x => x.Invoice)
+        .Where(x => access.IsStaff || (access.IsAccountingFirm && x.BusinessPartyId == access.BusinessPartyId) || (access.IsManager && x.ManagerId == access.ManagerId))
+        .DistinctBy(x => x.Id).ToList();
+    // A receipt allocation belongs to an invoice. Attribute it to this billing record
+    // using the same proportional formula as CustomerReceivedAmount, without counting
+    // the whole invoice allocation again for every line in a consolidated invoice.
+    var receiptRows = Model.InvoiceLines
+        .Where(line => line.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && line.Invoice.ReceiptAllocations.Any(x => x.CustomerReceipt != null))
+        .SelectMany(line => line.Invoice.ReceiptAllocations
+            .Where(allocation => allocation.CustomerReceipt != null)
+            .Select(allocation => new { Allocation = allocation, Invoice = line.Invoice, LineAmount = line.AllocatedAmount }))
+        .GroupBy(x => new { x.Allocation.Id, InvoiceId = x.Invoice.Id })
+        .Select(group => new
+        {
+            Allocation = group.First().Allocation,
+            Invoice = group.First().Invoice,
+            AttributedAmount = group.Sum(x => !x.Allocation.CustomerReceipt.IsCancelled && x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Total > 0
+                ? x.Allocation.Amount * x.LineAmount / x.Invoice.Total
+                : 0m)
+        })
+        .OrderByDescending(x => x.Allocation.CustomerReceipt.ReceiptDate)
+        .ToList();
+}
 <a class="back-link" href="/Billing">← Billing records</a>
 <div class="page-heading"><div><p class="eyebrow">@ViewData["Title"] · @Finance.Label(Model.Status)</p><h1>@Model.CustomerName</h1><p>@Model.ServiceName · @Model.PeriodStart.ToString("dd MMM yyyy") — @Model.PeriodEnd.ToString("dd MMM yyyy")</p></div>@if(access.IsStaff && Model.Status!=BillingStatus.Cancelled){<a class="btn btn-outline-secondary" href="/Billing/Edit/@Model.Id">Edit billing record</a>}
 @if(access.IsStaff || access.IsManager) { <a href="/Work/Details/@Model.WorkItem.Id" class="btn btn-outline-secondary">Open work item →</a> }
@@ -21,8 +48,8 @@
 <div><label class="form-label" for="status">Operational status</label><select name="status" id="status" class="form-select">@foreach(var s in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.ReadyToBill)) { <option value="@s" selected="@(s==Model.Status)">@Finance.Label(s)</option> }</select></div>
 <div class="align-end"><button class="btn btn-primary">Save status</button></div></form></section> }
 @if (access.IsStaff) { <section class="panel form-panel wide"><h2>Invoice and receipt documents</h2><p class="hint">Create invoices and allocate customer receipts through the invoice module.</p><div class="form-actions"><a class="btn btn-primary" href="/Invoices/Create">Create invoice</a><a class="btn btn-outline-secondary" href="/Invoices/Receipt">Allocate customer receipt</a></div></section> }
-@if(access.IsStaff || access.IsAccountingFirm) { <section class="panel"><div class="panel-heading"><h2>Customer receipt history</h2><p class="hint">Amounts show this billing record's allocation from each receipt. Amounts may be corrected; changing invoice membership requires cancellation and replacement.</p></div><table class="table data-grid"><thead><tr><th data-type="date">Date</th><th>Reference</th><th data-type="amount">Allocated to this billing record (RM)</th><th>Status</th>@if(access.IsStaff){<th data-nosort>Action</th>}</tr></thead><tbody>
-@foreach(var allocation in Model.InvoiceLines.SelectMany(x=>x.Invoice.ReceiptAllocations).Where(x=>x.CustomerReceipt!=null).DistinctBy(x=>x.Id)) { var r = allocation.CustomerReceipt; <tr><td>@r.ReceiptDate.ToString("yyyy-MM-dd")</td><td>@r.Reference</td><td>@allocation.Amount.ToString("N2")</td><td>@(r.IsCancelled ? "Cancelled: "+r.CancellationReason : "Recorded")</td>@if(access.IsStaff){<td>@if(!r.IsCancelled) { <a href="/Invoices/EditReceipt/@r.Id">Edit receipt</a> @if(access.IsAdmin) { <details><summary>Cancel</summary><form asp-action="Cancel" method="post" class="inline-form"><input type="hidden" name="kind" value="receipt" /><input type="hidden" name="id" value="@r.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Cancellation reason" required class="form-control form-control-sm" /><button class="btn btn-outline-danger btn-sm">Cancel receipt</button></form></details> } }</td>}</tr> }
+@if(access.IsStaff || access.IsAccountingFirm) { <section class="panel"><div class="panel-heading"><h2>Customer receipt history</h2><p class="hint">Receipt total is the whole receipt. Allocated to invoice is this receipt's allocation to the invoice, and attributed to this BillingRecord is its proportional share. Amounts may be corrected; changing invoice membership requires cancellation and replacement.</p></div><table class="table data-grid"><thead><tr><th data-type="date">Date</th><th>Reference</th><th data-type="amount">Receipt total (RM)</th><th data-type="amount">Allocated to invoice (RM)</th><th data-type="amount">Attributed to this BillingRecord (RM)</th><th>Status</th>@if(access.IsStaff){<th data-nosort>Action</th>}</tr></thead><tbody>
+@foreach(var row in receiptRows) { var r = row.Allocation.CustomerReceipt; <tr><td>@r.ReceiptDate.ToString("yyyy-MM-dd")</td><td>@r.Reference</td><td class="money">@r.Amount.ToString("N2")</td><td class="money">@row.Allocation.Amount.ToString("N2")</td><td class="money">@row.AttributedAmount.ToString("N2")</td><td>@(r.IsCancelled ? "Cancelled: "+r.CancellationReason : "Recorded")</td>@if(access.IsStaff){<td>@if(!r.IsCancelled) { <a href="/Invoices/EditReceipt/@r.Id">Edit receipt</a> @if(access.IsAdmin) { <details><summary>Cancel</summary><form asp-action="Cancel" method="post" class="inline-form"><input type="hidden" name="kind" value="receipt" /><input type="hidden" name="id" value="@r.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Cancellation reason" required class="form-control form-control-sm" /><button class="btn btn-outline-danger btn-sm">Cancel receipt</button></form></details> } }</td>}</tr> }
 </tbody></table></section> }
 @if(visibleInvoices.Count > 0) { <section class="panel"><div class="panel-heading"><h2>Invoice documents</h2><a href="/Invoices">View invoice register →</a></div><table class="table data-grid"><thead><tr><th>Invoice</th><th>Flow</th><th>Date</th><th>Issuer</th><th>Recipient</th><th>Total (RM)</th><th>Status</th></tr></thead><tbody>@foreach(var i in visibleInvoices) { <tr><td><a href="/Invoices/Details/@i.Id">@i.InvoiceNumber</a></td><td>@Finance.Label(i.Flow)</td><td>@i.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@i.IssuerName</td><td>@i.RecipientName</td><td class="money">@i.Total.ToString("N2")</td><td>@Finance.Label(i.Status)</td></tr> }</tbody></table></section> }
 @if (access.IsAdmin && Model.Status != BillingStatus.Cancelled) { <details class="panel cancellation"><summary>Cancel billing record</summary><p>Cancel active receipts and worker assignments first. The full history is retained.</p><form method="post" asp-action="Cancel" class="inline-form"><input type="hidden" name="kind" value="billing" /><input type="hidden" name="id" value="@Model.Id" /><input name="reason" aria-label="Cancellation reason" placeholder="Reason for cancellation" required maxlength="2000" class="form-control" /><button class="btn btn-outline-danger">Cancel billing</button></form></details> }
