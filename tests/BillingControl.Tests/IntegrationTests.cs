@@ -379,6 +379,150 @@ public class IntegrationTests
         Assert.DoesNotContain("Frozen Customer", await replacementManager.GetStringAsync("/Billing"));
     }
     [PostgresFact]
+    public async Task StaffCanEditMastersAndFutureBillingSchedulesWithoutChangingSnapshots()
+    {
+        await using var reset = await Fresh();
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "master-schedule-test-keys")));
+        const string password = "Master-Schedule-Password!123";
+        int customerId, serviceId, firmId, managerId, workerId, engagementId, billingId, assignmentId;
+        using (var scope = app.Services.CreateScope())
+        {
+            await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "BootstrapAdmin:Email", "master-admin@example.com" }, { "BootstrapAdmin:Password", password } }).Build());
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var customer = new Customer { Name = "Original customer", Email = "old@example.com", RegistrationNumber = "OLD-1" };
+            var service = new Service { Name = "Original service" };
+            var firm = new BusinessParty { Name = "Original firm" };
+            var manager = new Manager { Name = "Original manager" };
+            var worker = new Worker { Name = "Original worker", Type = WorkerType.Self };
+            var engagement = new Engagement
+            {
+                Customer = customer, Service = service, BusinessParty = firm, Manager = manager,
+                StartDate = new(2026, 1, 1), BillingAmount = 1000m,
+                Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 }
+            };
+            db.AddRange(worker, engagement); await db.SaveChangesAsync();
+            var bill = await new BillingService(db).Generate(engagement.Id, new(2026, 1, 1), new(2026, 1, 31), true);
+            await new BillingService(db).Assign(bill.WorkItem.Id, worker.Id, 50m);
+            customerId = customer.Id; serviceId = service.Id; firmId = firm.Id; managerId = manager.Id; workerId = worker.Id; engagementId = engagement.Id; billingId = bill.Id;
+            assignmentId = await db.WorkerAssignments.Where(x => x.WorkItemId == bill.WorkItem.Id).Select(x => x.Id).SingleAsync();
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            var externalUser = new AppUser { Email = "master-firm@example.com", UserName = "master-firm@example.com", EmailConfirmed = true, BusinessPartyId = firm.Id };
+            Seed.Check(await users.CreateAsync(externalUser, password)); Seed.Check(await users.AddToRoleAsync(externalUser, AppRoles.AccountingFirm));
+        }
+
+        using var admin = await SignedIn(app, "master-admin@example.com", password);
+        async Task SaveMaster(string kind, int id, string name, string? email = null, string? registration = null, WorkerType? workerType = null, bool active = true)
+        {
+            long version;
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                version = kind switch
+                {
+                    "Customers" => await db.Customers.Where(x => x.Id == id).Select(x => x.Version).SingleAsync(),
+                    "Services" => await db.Services.Where(x => x.Id == id).Select(x => x.Version).SingleAsync(),
+                    "Firms" => await db.BusinessParties.Where(x => x.Id == id).Select(x => x.Version).SingleAsync(),
+                    "Managers" => await db.Managers.Where(x => x.Id == id).Select(x => x.Version).SingleAsync(),
+                    "Workers" => await db.Workers.Where(x => x.Id == id).Select(x => x.Version).SingleAsync(),
+                    _ => throw new InvalidOperationException()
+                };
+            }
+            var fields = new Dictionary<string, string> { ["Id"] = id.ToString(), ["Version"] = version.ToString(), ["Name"] = name, ["Notes"] = $"Updated {kind}", ["IsActive"] = active ? "true" : "false", ["Type"] = (workerType ?? WorkerType.Self).ToString() };
+            if (email != null) fields["Email"] = email;
+            if (registration != null) fields["RegistrationNumber"] = registration;
+            var response = await PostWithToken(admin, $"/Masters/Edit?kind={kind}&id={id}", $"/Masters/Edit?kind={kind}", fields);
+            Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        }
+        await SaveMaster("Customers", customerId, "Edited customer", "new@example.com", "NEW-1");
+        await SaveMaster("Services", serviceId, "Edited service", active: false);
+        using (var scope = app.Services.CreateScope()) Assert.False((await scope.ServiceProvider.GetRequiredService<AppDbContext>().Services.FindAsync(serviceId))!.IsActive);
+        await SaveMaster("Services", serviceId, "Edited service");
+        await SaveMaster("Firms", firmId, "Edited firm");
+        await SaveMaster("Managers", managerId, "Edited manager");
+        await SaveMaster("Workers", workerId, "Edited worker", "worker@example.com", workerType: WorkerType.Contractor);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var bill = await db.BillingRecords.Include(x => x.Shares).SingleAsync(x => x.Id == billingId);
+            var assignment = await db.WorkerAssignments.SingleAsync(x => x.Id == assignmentId);
+            Assert.Equal("Original customer", bill.CustomerName); Assert.Equal("Original service", bill.ServiceName);
+            Assert.Equal("Original firm", bill.Shares.Single(x => x.Kind == ShareKind.Firm).PartyName);
+            Assert.Equal("Original manager", bill.Shares.Single(x => x.Kind == ShareKind.Manager).PartyName);
+            Assert.Equal("Original worker", assignment.WorkerName);
+            Assert.Equal("Edited customer", (await db.Customers.FindAsync(customerId))!.Name);
+            Assert.Equal("Edited worker", (await db.Workers.FindAsync(workerId))!.Name);
+        }
+        long engagementVersion;
+        using (var scope = app.Services.CreateScope()) engagementVersion = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Engagements.Where(x => x.Id == engagementId).Select(x => x.Version).SingleAsync();
+        var invalidPercentages = await PostWithToken(admin, $"/Engagements/Edit/{engagementId}", "/Engagements/Edit", new()
+        {
+            ["Id"] = engagementId.ToString(), ["Version"] = engagementVersion.ToString(), ["CustomerId"] = customerId.ToString(), ["ServiceId"] = serviceId.ToString(),
+            ["BusinessPartyId"] = firmId.ToString(), ["ManagerId"] = managerId.ToString(), ["StartDate"] = "2026-01-01", ["BillingAmount"] = "1000.00",
+            ["FirmPercent"] = "50", ["ManagerPercent"] = "30", ["LcmPercent"] = "30", ["Frequency"] = Frequency.Monthly.ToString(), ["NextPeriodStart"] = "2026-02-01", ["AnchorDay"] = "1", ["Status"] = EngagementStatus.Active.ToString(), ["Notes"] = "Invalid"
+        });
+        Assert.Equal(HttpStatusCode.OK, invalidPercentages.StatusCode); Assert.Contains("total exactly 100%", await invalidPercentages.Content.ReadAsStringAsync());
+
+        async Task<BillingScheduleForm> ScheduleForm()
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var e = await db.Engagements.Include(x => x.Schedule).AsNoTracking().SingleAsync(x => x.Id == engagementId);
+            return new BillingScheduleForm { EngagementId = e.Id, EngagementVersion = e.Version, Version = e.Schedule.Version, Frequency = e.Schedule.Frequency, NextPeriodStart = e.Schedule.NextPeriodStart, AnchorDay = e.Schedule.AnchorDay };
+        }
+        var schedule = await ScheduleForm();
+        schedule.Frequency = Frequency.Quarterly; schedule.NextPeriodStart = new(2026, 4, 1); schedule.AnchorDay = 15;
+        var scheduleResponse = await PostWithToken(admin, $"/Billing/EditSchedule/{engagementId}", "/Billing/EditSchedule", new()
+        {
+            ["EngagementId"] = schedule.EngagementId.ToString(), ["EngagementVersion"] = schedule.EngagementVersion.ToString(), ["Version"] = schedule.Version.ToString(),
+            ["Frequency"] = schedule.Frequency.ToString(), ["NextPeriodStart"] = "2026-04-01", ["AnchorDay"] = "15"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, scheduleResponse.StatusCode);
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var e = await db.Engagements.Include(x => x.Schedule).SingleAsync(x => x.Id == engagementId);
+            Assert.Equal(Frequency.Quarterly, e.Schedule.Frequency); Assert.Equal(new DateOnly(2026, 4, 1), e.Schedule.NextPeriodStart); Assert.Equal(15, e.Schedule.AnchorDay);
+            var old = await db.BillingRecords.Include(x => x.Shares).SingleAsync(x => x.Id == billingId);
+            Assert.Equal(new DateOnly(2026, 1, 1), old.PeriodStart); Assert.Equal("Original customer", old.CustomerName); Assert.Equal("Original firm", old.Shares.Single(x => x.Kind == ShareKind.Firm).PartyName);
+        }
+        var future = await new BillingService(Db()).Generate(engagementId, new(2026, 4, 1), new(2026, 7, 14), true);
+        Assert.Equal(new DateOnly(2026, 7, 15), (await Db().BillingSchedules.AsNoTracking().SingleAsync(x => x.EngagementId == engagementId)).NextPeriodStart);
+        Assert.Equal("Edited customer", future.CustomerName); Assert.Equal("Edited service", future.ServiceName);
+
+        var overlapping = await ScheduleForm(); overlapping.Frequency = Frequency.Monthly; overlapping.NextPeriodStart = new(2026, 1, 1); overlapping.AnchorDay = 1;
+        var overlapResponse = await PostWithToken(admin, $"/Billing/EditSchedule/{engagementId}", "/Billing/EditSchedule", new()
+        {
+            ["EngagementId"] = overlapping.EngagementId.ToString(), ["EngagementVersion"] = overlapping.EngagementVersion.ToString(), ["Version"] = overlapping.Version.ToString(),
+            ["Frequency"] = overlapping.Frequency.ToString(), ["NextPeriodStart"] = "2026-01-01", ["AnchorDay"] = "1"
+        });
+        Assert.Equal(HttpStatusCode.OK, overlapResponse.StatusCode); Assert.Contains("overlaps an existing billing record", await overlapResponse.Content.ReadAsStringAsync());
+        var outside = await ScheduleForm(); outside.NextPeriodStart = new(2025, 12, 1);
+        var outsideResponse = await PostWithToken(admin, $"/Billing/EditSchedule/{engagementId}", "/Billing/EditSchedule", new()
+        {
+            ["EngagementId"] = outside.EngagementId.ToString(), ["EngagementVersion"] = outside.EngagementVersion.ToString(), ["Version"] = outside.Version.ToString(),
+            ["Frequency"] = outside.Frequency.ToString(), ["NextPeriodStart"] = "2025-12-01", ["AnchorDay"] = outside.AnchorDay.ToString()
+        });
+        Assert.Equal(HttpStatusCode.OK, outsideResponse.StatusCode); Assert.Contains("inside the engagement dates", await outsideResponse.Content.ReadAsStringAsync());
+
+        var stale = await ScheduleForm(); var current = await ScheduleForm();
+        current.AnchorDay = 20;
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/Billing/EditSchedule/{engagementId}", "/Billing/EditSchedule", new()
+        {
+            ["EngagementId"] = current.EngagementId.ToString(), ["EngagementVersion"] = current.EngagementVersion.ToString(), ["Version"] = current.Version.ToString(),
+            ["Frequency"] = current.Frequency.ToString(), ["NextPeriodStart"] = current.NextPeriodStart!.Value.ToString("yyyy-MM-dd"), ["AnchorDay"] = "20"
+        })).StatusCode);
+        var staleResponse = await PostWithToken(admin, $"/Billing/EditSchedule/{engagementId}", "/Billing/EditSchedule", new()
+        {
+            ["EngagementId"] = stale.EngagementId.ToString(), ["EngagementVersion"] = stale.EngagementVersion.ToString(), ["Version"] = stale.Version.ToString(),
+            ["Frequency"] = stale.Frequency.ToString(), ["NextPeriodStart"] = stale.NextPeriodStart!.Value.ToString("yyyy-MM-dd"), ["AnchorDay"] = stale.AnchorDay.ToString()
+        });
+        Assert.Equal(HttpStatusCode.OK, staleResponse.StatusCode); Assert.Contains("changed. Refresh before saving", await staleResponse.Content.ReadAsStringAsync());
+
+        using var external = await SignedIn(app, "master-firm@example.com", password);
+        Assert.Equal(HttpStatusCode.Redirect, (await external.GetAsync($"/Masters/Edit?kind=Customers&id={customerId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await external.GetAsync($"/Billing/EditSchedule/{engagementId}")).StatusCode);
+    }
+    [PostgresFact]
     public async Task AuthenticationAndFullPageRender()
     {
         await using var db = await Fresh();

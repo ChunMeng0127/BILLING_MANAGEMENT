@@ -41,6 +41,15 @@ public class EngagementForm
     public EngagementStatus Status { get; set; }
     [StringLength(2000)] public string? Notes { get; set; }
 }
+public class BillingScheduleForm
+{
+    public int EngagementId { get; set; }
+    public long EngagementVersion { get; set; }
+    public long Version { get; set; }
+    public Frequency Frequency { get; set; }
+    [DataType(DataType.Date)] public DateOnly? NextPeriodStart { get; set; }
+    [Range(1, 31)] public int AnchorDay { get; set; } = 1;
+}
 public class UserForm
 {
     [Required, EmailAddress] public string Email { get; set; } = "";

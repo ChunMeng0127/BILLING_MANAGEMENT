@@ -1,0 +1,36 @@
+@model BillingScheduleForm
+@{ var engagement = ViewBag.Engagement as Engagement; ViewData["Title"] = "Edit billing schedule"; }
+<a class="back-link" href="/Billing/Schedule">← Billing schedule</a>
+<h1>Edit billing schedule</h1>
+@if (engagement != null)
+{
+<p class="text-muted">@engagement.Customer.Name · @engagement.Service.Name. Changes affect future billing only; existing billing records and snapshots remain unchanged.</p>
+}
+<form method="post" asp-action="EditSchedule" asp-route-id="@Model.EngagementId" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger"></div>
+<input asp-for="EngagementId" type="hidden" />
+<input asp-for="EngagementVersion" type="hidden" />
+<input asp-for="Version" type="hidden" />
+<div class="form-grid">
+<div>
+<label asp-for="Frequency" class="form-label">Billing frequency</label>
+<select asp-for="Frequency" class="form-select">
+@foreach (var frequency in Enum.GetValues<Frequency>()) { <option value="@frequency">@Finance.Label(frequency)</option> }
+</select>
+</div>
+<div>
+<label asp-for="NextPeriodStart" class="form-label">Next service period start</label>
+<input asp-for="NextPeriodStart" class="form-control" />
+<p class="hint">Leave blank to pause automatic generation. Ad-Hoc schedules use manual periods.</p>
+</div>
+<div>
+<label asp-for="AnchorDay" class="form-label">Recurring day of month</label>
+<input asp-for="AnchorDay" type="number" min="1" max="31" class="form-control" />
+<p class="hint">Use 31 for month-end schedules; shorter months adjust automatically.</p>
+</div>
+</div>
+<div class="form-actions">
+<button class="btn btn-primary">Save schedule</button>
+<a class="btn btn-outline-secondary" href="/Billing/Schedule">Cancel</a>
+</div>
+</form>

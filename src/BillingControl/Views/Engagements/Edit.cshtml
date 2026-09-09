@@ -83,6 +83,7 @@
 </textarea>
 <div class="form-actions">
 <button class="btn btn-primary">Save engagement</button>
+@if(Model.Id != 0) { <a class="btn btn-outline-secondary" href="/Billing/EditSchedule/@Model.Id">Edit schedule separately</a> }
 <a class="btn btn-outline-secondary" href="/Engagements">Cancel</a>
 </div>
 </form>

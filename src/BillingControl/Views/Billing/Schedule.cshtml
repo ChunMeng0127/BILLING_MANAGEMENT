@@ -30,6 +30,7 @@
 <td class="money">@e.BillingAmount.ToString("N2")</td>
 <td>
 @if(access.IsStaff) {
+<a class="btn btn-outline-secondary btn-sm" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
 @if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="advanceSchedule" value="@(s.Frequency!=Frequency.AdHoc ? "true" : "false")" />

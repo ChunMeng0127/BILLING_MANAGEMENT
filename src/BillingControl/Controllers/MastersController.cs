@@ -28,6 +28,8 @@ public class MastersController(AppDbContext db, AccessScope access) : AppControl
     [Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Edit(string kind, int? id)
     {
+        var a = await access.CurrentAsync();
+        if (!a.IsStaff) return Forbid();
         ViewBag.Kind = kind; var type = Kind(kind);
         if (id == null) return View(new MasterForm());
         var m = (Master?)await db.FindAsync(type, id.Value); if (m == null) return NotFound();
@@ -36,6 +38,8 @@ public class MastersController(AppDbContext db, AccessScope access) : AppControl
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Edit(string kind, MasterForm form)
     {
+        var a = await access.CurrentAsync();
+        if (!a.IsStaff) return Forbid();
         ViewBag.Kind = kind; var type = Kind(kind);
         if (!Enum.IsDefined(form.Type)) ModelState.AddModelError("Type", "Select a valid worker type.");
         if (!ModelState.IsValid) return View(form);

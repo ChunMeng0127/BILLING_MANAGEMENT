@@ -1,14 +1,16 @@
-# Validation — 7 September 2026
+# Validation — 9 September 2026
 
 ## Completed locally
 
 - .NET 10 Release build: **0 errors, 0 warnings**.
-- Automated tests: **28 passed, 0 failed, 0 skipped**, using the isolated local PostgreSQL 17 instance. This includes the allocation-form regression covering blank unused invoice, receipt and worker-payment rows, all-blank rejection, negative values and non-numeric input.
+- Automated tests: **29 passed, 0 failed, 0 skipped**, using the isolated local PostgreSQL 17 instance. This includes master-data edits for all five master types, active/inactive changes, historical snapshot preservation, future-only schedule edits, overlap/date rejection, stale schedule-version rejection and staff-only authorization, alongside the allocation-form regression covering blank unused invoice, receipt and worker-payment rows, all-blank rejection, negative values and non-numeric input.
 - JavaScript tests: **8 passed, 0 failed**. They cover per-flow eligibility, partial allocations, input maximums, clearing on Customer → Manager and Manager → LCM flow changes (including rows that remain eligible), preserved values on initial load and ordinary grid refreshes, eligible row counts, the all-allocated empty state and external initialization under the production Content Security Policy.
 - Applied the EF migrations through `InvoiceDocuments` to a fresh PostgreSQL database and seeded the initial Identity roles/admin and optional sample master records.
 - Verified allocation percentages, rounding, four worker-share rates, duplicate and overlapping service-period rejection, invoice splits/consolidation/partial allocation and all three flow caps, partial/multiple-assignment payments, historical snapshots after editing engagement percentages, cancellation rules and wrong-worker rejection.
 - Verified same-customer customer-invoice consolidation is allowed while mixed customers are rejected; Manager and LCM flows retain their permitted consolidation. Verified invoice numbers can be reused by different issuers and are rejected for the same issuer.
 - Verified customer, service, accounting firm and manager changes are rejected after billing exists, including forged POST values. Billing amount, percentages, valid schedule settings, end date, status and notes remain editable, and historical access stays with the original firm and manager.
+- Verified Admin/InternalUser master edits update current directory data without recalculating BillingRecord, revenue-share or WorkerAssignment snapshots. External roles are read-only for master and schedule edit routes.
+- Verified the dedicated Edit schedule screen updates future frequency, next period start and anchor day with engagement/schedule version checks; existing billing records remain unchanged, future generation follows the new settings, and overlapping or out-of-date settings are rejected.
 - Verified New Invoice displays separate customer, Manager and LCM caps, active allocated amounts and remaining balances and updates them when the selected flow changes. Allocation inputs clear only for an actual changed flow; `pageshow`, sorting/filtering and grid refreshes preserve entered values.
 - Verified New Invoice hides fully allocated rows per selected flow, keeps the same billing record available in other flows, reports eligible row counts, clears and disables hidden inputs, and shows the flow-specific empty state. The Allocate column provides a 110px minimum input within a 140px desktop column and retains mobile table scrolling.
 - Verified one receipt can cover several invoices for the same firm/customer, while mixed-customer and mixed-firm receipts and overpayments are rejected. Invoice and receipt cancellation recalculate the derived states.

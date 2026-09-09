@@ -37,6 +37,7 @@
 <td>@e.EndDate?.ToString("yyyy-MM-dd")</td>
 @if(access.IsStaff) { <td>
 <a href="/Engagements/Edit/@e.Id">Edit</a>
+<a class="ms-2" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
 </td> }
 </tr> }
 </tbody>
