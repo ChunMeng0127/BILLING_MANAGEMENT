@@ -1022,7 +1022,8 @@ public class IntegrationTests
         var forgedWork = await PostWithToken(workerClient, $"/Work/Details/{workAId}", "/Work/Update", new() { ["id"] = workBId.ToString(), ["version"] = workBVersion.ToString(), ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "forged" });
         Assert.Equal(HttpStatusCode.NotFound, forgedWork.StatusCode);
         var forgedAssignment = await PostWithToken(workerClient, "/Work/Assignments", "/Work/EditAssignment", new() { ["Id"] = assignmentBId.ToString(), ["Version"] = assignmentBVersion.ToString(), ["WorkerId"] = workerBId.ToString(), ["Percent"] = "50" });
-        Assert.Equal(HttpStatusCode.NotFound, forgedAssignment.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, forgedAssignment.StatusCode);
+        Assert.Contains("Denied", forgedAssignment.Headers.Location!.ToString());
         var workerDirectory = await workerClient.GetStringAsync("/Masters?kind=Workers"); Assert.Contains("Alpha Worker", workerDirectory); Assert.DoesNotContain("Beta Worker", workerDirectory);
 
         using var admin = await SignedIn(app, "scope-admin@example.com", password);
