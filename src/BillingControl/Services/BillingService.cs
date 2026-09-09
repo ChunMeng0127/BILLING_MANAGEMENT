@@ -67,7 +67,11 @@ public class BillingService
             Require(bill.Status != BillingStatus.Cancelled, "Cancelled billing records cannot be edited.");
             Require(bill.Version == version, "This billing record changed. Refresh before saving.");
             Require(bill.WorkItem.Version == workItemVersion, "The related work item changed. Refresh before saving.");
-            Require(Enum.IsDefined(status) && (status == bill.Status || status <= BillingStatus.ReadyToBill), "Invoice and payment states are calculated from active financial records.");
+            Require(Enum.IsDefined(status) &&
+                (bill.Status <= BillingStatus.ReadyToBill
+                    ? status <= BillingStatus.ReadyToBill
+                    : status == bill.Status),
+                "Invoice and payment states are calculated from active financial records and cannot be changed here.");
             Require(periodStart >= bill.Engagement.StartDate && periodEnd >= periodStart && (bill.Engagement.EndDate == null || periodEnd <= bill.Engagement.EndDate), "The service period must stay within the engagement dates.");
             var periodChanged = bill.PeriodStart != periodStart || bill.PeriodEnd != periodEnd;
             if (periodChanged)

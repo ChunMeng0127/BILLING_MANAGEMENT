@@ -46,7 +46,7 @@
 <td>@b.ServiceName</td>
 <td>@b.PeriodStart.ToString("yyyy-MM-dd")</td>
 <td>@b.PeriodEnd.ToString("yyyy-MM-dd")</td>
-<td>@b.CustomerInvoiceState</td>
+<td>@Finance.Label(b.CustomerInvoiceState)</td>
 <td>@(invoices.Count == 0 ? "—" : string.Join(", ", invoices.Select(x => x.InvoiceNumber)))</td>
 <td>
 <span class="badge status-@b.Status.ToString().ToLowerInvariant()">@Finance.Label(b.Status)</span>

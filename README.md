@@ -50,6 +50,7 @@ After setup, remove the bootstrap password from your shell/deployment configurat
 9. Record worker payments, allocating positive amounts to one or more outstanding assignments for that worker. Leave unused allocation rows blank; blank and zero rows are ignored. Entitlement and cash paid remain separate.
 10. Staff can use the View/Edit actions on customer receipts and worker payments to correct dates and references with version checks. Posted receipt and payment allocation rows remain immutable; an Admin can cancel the document and staff can enter a replacement when allocation correction is required.
 11. Staff can edit an active worker assignment before it has an active payment allocation. Worker changes and percentage corrections recalculate entitlement from the immutable LCM gross snapshot and reject combined percentages or rounded entitlements above the available share. Workers remain read-only.
+12. Corrections preserve CreatedAt/CreatedBy and advance UpdatedAt/UpdatedBy plus the version token. Once invoice or payment-derived billing status exists, a billing-record correction cannot forge it back to an operational status; cancel and recreate the dependent document when a financial correction is required.
 10. Use reports and CSV export to review revenue shares, costs, retained amounts and balances. Date filters include overlapping **service periods**; a worker filter selects whole billing records and their full costs. Cancelled records remain visible but are excluded from headline totals.
 
 Five roles are available:

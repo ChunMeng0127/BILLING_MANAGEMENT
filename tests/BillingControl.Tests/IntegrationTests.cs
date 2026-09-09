@@ -741,6 +741,15 @@ public class IntegrationTests
         var thirdVersions = await BillingVersions(third.Id);
         await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(third.Id, new(2026, 3, 2), new(2026, 3, 30), third.Status, "Assignment lock", thirdVersions.Version, thirdVersions.WorkItemVersion));
 
+        var fourth = await billing.Generate(engagementId, new(2026, 4, 1), new(2026, 4, 30), BillingGenerationMode.Scheduled);
+        var invoiceServiceForStatus = new InvoiceService(db);
+        await invoiceServiceForStatus.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "STATUS-LOCK", new(2026, 4, 30), new Dictionary<int, decimal> { [fourth.Id] = fourth.Amount });
+        var fourthVersions = await BillingVersions(fourth.Id);
+        var statusError = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(fourth.Id, fourth.PeriodStart, fourth.PeriodEnd, BillingStatus.ReadyToBill, "Forged status", fourthVersions.Version, fourthVersions.WorkItemVersion));
+        Assert.Contains("calculated from active financial records", statusError.Message);
+        var statusLocked = await db.BillingRecords.AsNoTracking().SingleAsync(x => x.Id == fourth.Id);
+        Assert.Equal(BillingStatus.Billed, statusLocked.Status);
+
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "correction-scope-test-keys")));
         const string password = "Correction-Scope-Password!123";
         using (var scope = app.Services.CreateScope())
@@ -942,7 +951,7 @@ public class IntegrationTests
         await using var reset = await Fresh();
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "scope-test-keys")));
         const string password = "Scope-Password!123";
-        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, billAId, billBId, workAId, workBId, assignmentBId, invoiceAId, invoiceBId, managerInvoiceAId;
+        int firmAId, firmBId, managerAId, managerBId, workerAId, workerBId, engagementAId, billAId, billBId, workAId, workBId, assignmentBId, invoiceAId, invoiceBId, managerInvoiceAId, receiptAId, paymentAId;
         long workBVersion, assignmentBVersion;
         string internalId, firmBUserId;
         using (var scope = app.Services.CreateScope())
@@ -956,7 +965,7 @@ public class IntegrationTests
             var engagementA = new Engagement { Customer = new() { Name = "Alpha Scope Customer" }, Service = service, BusinessParty = firmA, Manager = managerA, StartDate = new(2026, 1, 1), BillingAmount = 1000m, Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 } };
             var engagementB = new Engagement { Customer = new() { Name = "Beta Scope Customer" }, Service = service, BusinessParty = firmB, Manager = managerB, StartDate = new(2026, 1, 1), BillingAmount = 2000m, Schedule = new() { Frequency = Frequency.Monthly, NextPeriodStart = new(2026, 1, 1), AnchorDay = 1 } };
             db.AddRange(workerA, workerB, engagementA, engagementB); await db.SaveChangesAsync();
-            firmAId = firmA.Id; firmBId = firmB.Id; managerAId = managerA.Id; managerBId = managerB.Id; workerAId = workerA.Id; workerBId = workerB.Id;
+            firmAId = firmA.Id; firmBId = firmB.Id; managerAId = managerA.Id; managerBId = managerB.Id; workerAId = workerA.Id; workerBId = workerB.Id; engagementAId = engagementA.Id;
             var finance = new BillingService(db);
             var billA = await finance.Generate(engagementA.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
             var billB = await finance.Generate(engagementB.Id, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
@@ -965,7 +974,7 @@ public class IntegrationTests
             invoiceAId = (await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "ALPHA-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = billA.Amount })).Id;
             invoiceBId = (await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BETA-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billB.Id] = billB.Amount })).Id;
             managerInvoiceAId = (await invoiceService.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "ALPHA-MGR-INV", new(2026, 1, 31), new Dictionary<int, decimal> { [billA.Id] = 250 })).Id;
-            await invoiceService.CreateReceipt(new(2026, 1, 31), "ALPHA-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceAId] = 100m });
+            var alphaReceipt = await invoiceService.CreateReceipt(new(2026, 1, 31), "ALPHA-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceAId] = 100m });
             await invoiceService.CreateReceipt(new(2026, 1, 31), "BETA-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceBId] = 200m });
             var assignmentA = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == billA.WorkItem.Id);
             var assignmentB = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == billB.WorkItem.Id);
@@ -974,6 +983,8 @@ public class IntegrationTests
             billAId = billA.Id; billBId = billB.Id; workAId = billA.WorkItem.Id; workBId = billB.WorkItem.Id;
             workBVersion = (await db.WorkItems.SingleAsync(x => x.Id == workBId)).Version;
             assignmentBId = assignmentB.Id; assignmentBVersion = assignmentB.Version;
+            receiptAId = alphaReceipt.Id;
+            paymentAId = await db.WorkerPayments.Where(x => x.Reference == "ALPHA-PAYMENT").Select(x => x.Id).SingleAsync();
             var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
             async Task<AppUser> AddUser(string email, string role, int? businessPartyId = null, int? managerId = null, int? workerId = null)
             {
@@ -990,6 +1001,12 @@ public class IntegrationTests
         }
 
         using var firmClient = await SignedIn(app, "firm-a@example.com", password);
+        foreach (var path in new[] { $"/Masters/Edit?kind=Customers&id={engagementAId}", $"/Engagements/Edit/{engagementAId}", $"/Billing/EditSchedule/{engagementAId}", $"/Billing/Edit/{billAId}", $"/Invoices/Edit/{invoiceAId}", $"/Invoices/EditReceipt/{receiptAId}", $"/Work/EditAssignment/{assignmentBId}", $"/Payments/Edit/{paymentAId}" })
+        {
+            var forbiddenEdit = await firmClient.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Redirect, forbiddenEdit.StatusCode);
+            Assert.Contains("Denied", forbiddenEdit.Headers.Location!.ToString());
+        }
         var firmDashboard = await firmClient.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", firmDashboard); Assert.DoesNotContain("Beta Scope Customer", firmDashboard); Assert.Contains("1,000.00", firmDashboard); Assert.DoesNotContain("2,000.00", firmDashboard);
         var firmBilling = await firmClient.GetStringAsync("/Billing"); Assert.Contains("Alpha Scope Customer", firmBilling); Assert.DoesNotContain("Beta Scope Customer", firmBilling);
         Assert.Equal(HttpStatusCode.NotFound, (await firmClient.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
@@ -1071,9 +1088,11 @@ public class IntegrationTests
         var bill = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         await billing.Assign(bill.WorkItem.Id, workerOne.Id, 50m);
         var assignment = await db.WorkerAssignments.SingleAsync();
+        var assignmentCreatedAt = assignment.CreatedAt; var assignmentCreatedBy = assignment.CreatedBy;
         await billing.EditAssignment(assignment.Id, workerOne.Id, 60m, assignment.Version);
         assignment = await db.WorkerAssignments.SingleAsync();
         Assert.Equal(60m, assignment.Percent); Assert.Equal(240m, assignment.Entitlement); Assert.Equal(400m, assignment.LcmGrossSnapshot);
+        Assert.Equal(assignmentCreatedAt, assignment.CreatedAt); Assert.Equal(assignmentCreatedBy, assignment.CreatedBy);
         await billing.Assign(bill.WorkItem.Id, workerTwo.Id, 30m);
         var assignmentTwo = await db.WorkerAssignments.SingleAsync(x => x.WorkerId == workerTwo.Id);
         await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerOne.Id, 80m, assignment.Version));
@@ -1082,10 +1101,13 @@ public class IntegrationTests
         var invoices = new InvoiceService(db);
         var invoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART3-RECEIPT", new(2026, 1, 31), new Dictionary<int, decimal> { [bill.Id] = bill.Amount });
         var receipt = await invoices.CreateReceipt(new(2026, 1, 31), "PART3-ORIGINAL", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 250m });
+        var receiptCreatedAt = (await db.CustomerReceipts.AsNoTracking().SingleAsync(x => x.Id == receipt.Id)).CreatedAt;
+        var receiptCreatedBy = (await db.CustomerReceipts.AsNoTracking().SingleAsync(x => x.Id == receipt.Id)).CreatedBy;
         var receiptVersion = (await db.CustomerReceipts.AsNoTracking().SingleAsync(x => x.Id == receipt.Id)).Version;
         await invoices.EditReceipt(receipt.Id, new(2026, 2, 1), "PART3-CORRECTED", receiptVersion);
         var editedReceipt = await db.CustomerReceipts.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == receipt.Id);
         Assert.Equal(new DateOnly(2026, 2, 1), editedReceipt.ReceiptDate); Assert.Equal("PART3-CORRECTED", editedReceipt.Reference); Assert.Equal(250m, editedReceipt.Allocations.Single().Amount);
+        Assert.Equal(receiptCreatedAt, editedReceipt.CreatedAt); Assert.Equal(receiptCreatedBy, editedReceipt.CreatedBy);
         await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(receipt.Id, new(2026, 2, 2), "STALE", receiptVersion));
         await invoices.CancelReceipt(receipt.Id, "Replace allocation");
         var replacement = await invoices.CreateReceipt(new(2026, 2, 3), "PART3-REPLACEMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 500m });
@@ -1094,12 +1116,14 @@ public class IntegrationTests
 
         await billing.Pay(workerOne.Id, new(2026, 2, 1), "PART3-PAYMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 50m });
         var payment = await db.WorkerPayments.SingleAsync(x => x.Reference == "PART3-PAYMENT");
+        var paymentCreatedAt = payment.CreatedAt; var paymentCreatedBy = payment.CreatedBy;
         assignment = await db.WorkerAssignments.SingleAsync(x => x.Id == assignment.Id);
         await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerOne.Id, 55m, assignment.Version));
         var paymentVersion = (await db.WorkerPayments.AsNoTracking().SingleAsync(x => x.Id == payment.Id)).Version;
         await billing.EditPayment(payment.Id, new(2026, 2, 2), "PART3-PAYMENT-CORRECTED", paymentVersion);
         var editedPayment = await db.WorkerPayments.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == payment.Id);
         Assert.Equal(new DateOnly(2026, 2, 2), editedPayment.PaymentDate); Assert.Equal("PART3-PAYMENT-CORRECTED", editedPayment.Reference); Assert.Equal(50m, editedPayment.Allocations.Single().Amount);
+        Assert.Equal(paymentCreatedAt, editedPayment.CreatedAt); Assert.Equal(paymentCreatedBy, editedPayment.CreatedBy);
         await Assert.ThrowsAsync<BusinessException>(() => billing.EditPayment(payment.Id, new(2026, 2, 3), "STALE", paymentVersion));
         await Assert.ThrowsAsync<BusinessException>(() => billing.Pay(workerOne.Id, new(2026, 2, 4), "OVERPAY", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 191m }));
         Assert.Equal(30m, assignmentTwo.Percent);

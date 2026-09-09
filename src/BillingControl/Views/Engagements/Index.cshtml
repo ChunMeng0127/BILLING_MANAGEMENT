@@ -31,7 +31,7 @@
 <td class="money">@e.BillingAmount.ToString("N2")</td>
 <td>@if(access.IsStaff){ @($"{e.FirmPercent:0.####} / {e.ManagerPercent:0.####} / {e.LcmPercent:0.####}") } else if(access.IsAccountingFirm){ @e.FirmPercent.ToString("0.####") } else { @e.ManagerPercent.ToString("0.####") }</td>
 <td>
-<span class="badge status-active">@e.Status</span>
+<span class="badge status-active">@Finance.Label(e.Status)</span>
 </td>
 <td>@e.StartDate.ToString("yyyy-MM-dd")</td>
 <td>@e.EndDate?.ToString("yyyy-MM-dd")</td>

@@ -30,7 +30,27 @@ public static class Finance
         var date = start.AddMonths(Months(frequency));
         return new(date.Year, date.Month, Math.Min(anchorDay, DateTime.DaysInMonth(date.Year, date.Month)));
     }
-    public static string Label(object value) => value switch { Frequency.Every2Months => "Every 2 Months", Frequency.HalfYearly => "Half-Yearly", Frequency.OneOff => "One-Off", Frequency.AdHoc => "Ad-Hoc", BillingStatus.WorkInProgress => "Work In Progress", BillingStatus.ReadyToBill => "Ready to Bill", BillingStatus.PartiallyPaid => "Partially Paid", BillingInvoiceState.PartiallyInvoiced => "Partially Invoiced", BillingInvoiceState.FullyInvoiced => "Fully Invoiced", WorkStatus.InProgress => "In Progress", _ => value.ToString() ?? "" };
+    public static string Label(object value) => value switch
+    {
+        Frequency.Every2Months => "Every 2 Months",
+        Frequency.HalfYearly => "Half-Yearly",
+        Frequency.OneOff => "One-Off",
+        Frequency.AdHoc => "Ad-Hoc",
+        BillingStatus.WorkInProgress => "Work In Progress",
+        BillingStatus.ReadyToBill => "Ready to Bill",
+        BillingStatus.PartiallyPaid => "Partially Paid",
+        BillingInvoiceState.PartiallyInvoiced => "Partially Invoiced",
+        BillingInvoiceState.FullyInvoiced => "Fully Invoiced",
+        WorkStatus.InProgress => "In Progress",
+        InvoiceFlow.AccountingFirmToCustomer => "Accounting Firm → Customer",
+        InvoiceFlow.ManagerToAccountingFirm => "Manager → Accounting Firm",
+        InvoiceFlow.LcmToManager => "LCM MGT → Manager",
+        InvoiceStatus.Issued => "Issued",
+        InvoiceStatus.PartiallyPaid => "Partially Paid",
+        InvoiceStatus.Paid => "Paid",
+        InvoiceStatus.Cancelled => "Cancelled",
+        _ => value.ToString() ?? ""
+    };
 }
 public class BusinessException : Exception
 {
