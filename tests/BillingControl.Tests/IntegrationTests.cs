@@ -1346,4 +1346,61 @@ public class IntegrationTests
         Assert.Equal(savedInvoice.Total, savedInvoice.Lines.Sum(x => x.AllocatedAmount));
     }
 
+    [PostgresFact]
+    public async Task ZeroPercentWorkerAssignmentsRemainActiveWithoutEntitlement()
+    {
+        await using var db = await Fresh();
+        var billing = new BillingService(db);
+        var engagementId = await Engagement(db);
+        var workers = Enumerable.Range(1, 4).Select(i => new Worker { Name = $"Zero-share worker {i}" }).ToArray();
+        db.AddRange(workers);
+        await db.SaveChangesAsync();
+
+        var bill = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var gross = bill.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
+        await billing.Assign(bill.WorkItem.Id, workers[0].Id, 0m);
+        var zero = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == bill.WorkItem.Id && x.WorkerId == workers[0].Id);
+        Assert.Equal(0m, zero.Percent);
+        Assert.Equal(0m, zero.Entitlement);
+        Assert.False(zero.IsCancelled);
+        var zeroEntitlement = await db.WorkerAssignments.Where(x => x.WorkItemId == bill.WorkItem.Id && !x.IsCancelled).SumAsync(x => x.Entitlement);
+        Assert.Equal(0m, zeroEntitlement);
+        Assert.Equal(gross, gross - zeroEntitlement);
+
+        var noEntitlement = await Assert.ThrowsAsync<BusinessException>(() => billing.Pay(
+            workers[0].Id,
+            new(2026, 1, 31),
+            "ZERO-SHARE-PAYMENT",
+            Guid.NewGuid(),
+            new Dictionary<int, decimal> { [zero.Id] = 1m }));
+        Assert.Equal("This assignment has no unpaid worker entitlement.", noEntitlement.Message);
+
+        await billing.Assign(bill.WorkItem.Id, workers[1].Id, 70m);
+        Assert.Equal(120m, gross - await db.WorkerAssignments.Where(x => x.WorkItemId == bill.WorkItem.Id && !x.IsCancelled).SumAsync(x => x.Entitlement));
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Assign(bill.WorkItem.Id, workers[0].Id, 0m));
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Assign(bill.WorkItem.Id, workers[2].Id, 31m));
+
+        var second = await billing.Generate(engagementId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+        await billing.Assign(second.WorkItem.Id, workers[2].Id, 0m);
+        await billing.Assign(second.WorkItem.Id, workers[3].Id, 100m);
+        var secondAssignments = await db.WorkerAssignments.Where(x => x.WorkItemId == second.WorkItem.Id && !x.IsCancelled).ToListAsync();
+        Assert.Equal(100m, secondAssignments.Sum(x => x.Percent));
+        Assert.Equal(0m, secondAssignments.Single(x => x.WorkerId == workers[2].Id).Entitlement);
+        Assert.Equal(gross, secondAssignments.Single(x => x.WorkerId == workers[3].Id).Entitlement);
+
+        var seventy = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == bill.WorkItem.Id && x.WorkerId == workers[1].Id);
+        await billing.EditAssignment(seventy.Id, workers[1].Id, 0m, seventy.Version);
+        Assert.Equal(0m, await db.WorkerAssignments.Where(x => x.Id == seventy.Id).Select(x => x.Entitlement).SingleAsync());
+        zero = await db.WorkerAssignments.SingleAsync(x => x.Id == zero.Id);
+        await billing.EditAssignment(zero.Id, workers[0].Id, 70m, zero.Version);
+        var corrected = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == zero.Id);
+        Assert.Equal(70m, corrected.Percent);
+        Assert.Equal(280m, corrected.Entitlement);
+
+        await billing.Pay(workers[0].Id, new(2026, 2, 1), "ZERO-SHARE-CORRECTED-PAYMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [corrected.Id] = 100m });
+        var paid = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == corrected.Id);
+        var blocked = await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(paid.Id, workers[0].Id, 0m, paid.Version));
+        Assert.Contains("active worker payments", blocked.Message);
+    }
+
 }

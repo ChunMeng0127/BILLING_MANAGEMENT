@@ -23,7 +23,12 @@ public static class Finance
     public static decimal WorkerEntitlement(decimal lcmGross, decimal percent)
     { Percentage(percent); Require(lcmGross >= 0, "LCM gross share cannot be negative."); return Money(lcmGross * percent / 100m); }
     public static void ValidateAllocation(decimal amount, decimal entitlement, decimal alreadyPaid)
-    { PositiveMoney(amount); Require(amount <= entitlement - alreadyPaid, "Allocation exceeds this assignment's unpaid entitlement."); }
+    {
+        PositiveMoney(amount);
+        var unpaid = entitlement - alreadyPaid;
+        Require(unpaid > 0, "This assignment has no unpaid worker entitlement.");
+        Require(amount <= unpaid, "Allocation exceeds this assignment's unpaid entitlement.");
+    }
     public static int Months(Frequency frequency) => frequency switch { Frequency.Monthly => 1, Frequency.Every2Months => 2, Frequency.Quarterly => 3, Frequency.HalfYearly => 6, Frequency.Yearly => 12, _ => 0 };
     public static DateOnly Next(DateOnly start, Frequency frequency, int anchorDay)
     {

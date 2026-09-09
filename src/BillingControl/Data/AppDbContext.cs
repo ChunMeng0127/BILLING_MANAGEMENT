@@ -83,7 +83,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<InvoiceLine>().HasIndex(x => new { x.InvoiceId, x.BillingRecordId }).IsUnique();
         b.Entity<InvoiceLine>().ToTable(t => t.HasCheckConstraint("CK_InvoiceLine_Amount", "\"AllocatedAmount\" > 0"));
         b.Entity<BillingRecord>().HasOne(x => x.WorkItem).WithOne(x => x.BillingRecord).HasForeignKey<WorkItem>(x => x.BillingRecordId);
-        b.Entity<WorkerAssignment>().ToTable(t => t.HasCheckConstraint("CK_Assignment", "\"Percent\" > 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0"));
+        b.Entity<WorkerAssignment>().ToTable(t => t.HasCheckConstraint("CK_Assignment", "\"Percent\" >= 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0"));
         b.Entity<WorkerPayment>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<CustomerReceipt>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<WorkerPayment>().ToTable(t => t.HasCheckConstraint("CK_Payment", "\"Amount\" > 0"));

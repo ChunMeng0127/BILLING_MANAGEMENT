@@ -51,6 +51,7 @@
 </tbody>
 </table>
 </div>
+@if(!Model.Any(a => a.Entitlement - a.Allocations.Where(x => !x.WorkerPayment.IsCancelled).Sum(x => x.Amount) > 0)) { <p class="hint">No assignments have unpaid worker entitlement.</p> }
 <div class="form-actions">
 <button class="btn btn-primary">Record & allocate payment</button>
 <a class="btn btn-outline-secondary" href="/Payments">Cancel</a>

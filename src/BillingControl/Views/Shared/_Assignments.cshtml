@@ -27,7 +27,7 @@
 <td>@a.WorkItem.BillingRecord.CustomerName</td>
 <td>@a.WorkItem.BillingRecord.ServiceName</td>
 <td>@a.WorkItem.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</td>
-<td>@a.Percent.ToString("0.####")</td>
+<td>@a.Percent.ToString("0.####")%</td>
 @if(access.IsStaff) { <td class="money">@a.LcmGrossSnapshot.ToString("N2")</td> }
 <td class="money">@a.Entitlement.ToString("N2")</td>
 <td class="money">@paid.ToString("N2")</td>
@@ -36,7 +36,7 @@
 @if(access.IsStaff) {
 <td>
 @if(!a.IsCancelled) {
-<a href="/Work/EditAssignment/@a.Id">Edit</a><span> · </span><a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a>
+<a href="/Work/EditAssignment/@a.Id">Edit</a><span> · </span>@if(a.Entitlement - paid > 0) { <a href="/Payments/Create?workerId=@a.WorkerId">Pay worker</a> } else { <span class="hint">No unpaid entitlement</span> }
 @if(access.IsAdmin) {
 <details>
 <summary>Cancel</summary>

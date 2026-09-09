@@ -31,7 +31,7 @@
 <label>Worker<select name="workerId" required class="form-select">
 <option value="">Select worker</option>@foreach(Worker w in ViewBag.Workers) { <option value="@w.Id">@w.Name</option> }</select>
 </label>
-<label>Share of LCM gross (%)<input name="percent" type="number" min="0.0001" max="100" step="0.0001" value="70" required class="form-control" list="worker-rates" />
+<label>Share of LCM gross (%)<input name="percent" type="number" min="0" max="100" step="0.0001" value="70" required class="form-control" list="worker-rates" />
 </label>
 <datalist id="worker-rates">
 <option value="40"/>
@@ -41,6 +41,6 @@
 </datalist>
 <button class="btn btn-primary">Assign worker</button>
 </form>
-<p class="hint">Combined active assignments cannot exceed 100% of LCM's share. Entitlements are saved as historical amounts.</p>
+<p class="hint">Combined active assignments cannot exceed 100% of LCM's share. A 0% assignment keeps the worker responsible for the work without creating a worker entitlement. Entitlements are saved as historical amounts.</p>
 </section> } }
 @if(access.IsStaff || access.IsWorker) { <partial name="_Assignments" model="Model.Assignments" /> }

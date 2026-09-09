@@ -142,7 +142,7 @@ public class BillingService
     {
         await FinancialTransaction.Serializable(db, async () =>
         {
-        Percentage(percent); Require(percent > 0, "Worker percentage must be greater than zero.");
+        Percentage(percent);
         var work = await db.WorkItems.Include(x => x.BillingRecord).ThenInclude(x => x.Shares).Include(x => x.Assignments).SingleAsync(x => x.Id == workItemId);
         Require(work.BillingRecord.Status != BillingStatus.Cancelled, "Cannot assign cancelled billing.");
         var worker = await db.Workers.SingleAsync(x => x.Id == workerId); Require(worker.IsActive, "Worker is inactive.");
@@ -162,7 +162,6 @@ public class BillingService
         await FinancialTransaction.Serializable(db, async () =>
         {
             Percentage(percent);
-            Require(percent > 0, "Worker percentage must be greater than zero.");
             var assignment = await db.WorkerAssignments
                 .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Shares)
                 .Include(x => x.WorkItem).ThenInclude(x => x.Assignments)

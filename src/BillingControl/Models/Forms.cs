@@ -110,7 +110,7 @@ public class WorkerAssignmentEditForm
     public int Id { get; set; }
     public long Version { get; set; }
     [Range(1, int.MaxValue)] public int WorkerId { get; set; }
-    [Range(typeof(decimal), "0.0001", "100")] public decimal Percent { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal Percent { get; set; }
 }
 
 public class WorkerPaymentEditForm
