@@ -40,15 +40,25 @@ public partial class IntegrationTests
         var replacement = new Worker { Name = "Replacement reporting worker" };
         db.AddRange(worker, replacement); await db.SaveChangesAsync();
         await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
-        var assignment = await db.WorkerAssignments.SingleAsync();
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        var assignmentCreatedAt = new DateTime(2025, 12, 29, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignmentId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+            .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+        db.ChangeTracker.Clear();
+        var assignment = await db.WorkerAssignments.SingleAsync(x => x.Id == assignmentId);
         var profile = new AccessProfile("worker", AppRoles.Worker, null, null, worker.Id);
         var scope = new AccessScope(db, new Microsoft.AspNetCore.Http.HttpContextAccessor());
         var reporting = new ProgressReportService(db, clock);
-        WeeklyProgressForm Form(DateOnly week) => new() { WorkerAssignmentId = assignment.Id, WeekStart = week, ProgressPercent = 25, WorkflowStatus = WorkflowStatus.AssignmentStarted, WorkDone = "Reviewed documents", NextAction = "Finish review" };
+        WeeklyProgressForm Form(DateOnly week) => new() { WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = week, ProgressPercent = 25, WorkflowStatus = WorkflowStatus.AssignmentStarted, WorkDone = "Reviewed documents", NextAction = "Finish review" };
         var expected = new[] { new DateOnly(2025,12,29), new DateOnly(2026,1,5), new DateOnly(2026,1,12), new DateOnly(2026,1,19), new DateOnly(2026,1,26) };
-        foreach (var week in expected) Assert.Single(await scope.EligibleProgressAssignments(profile, week).ToListAsync());
-        Assert.Single(await scope.EligibleProgressAssignments(profile, new(2025,12,22)).ToListAsync());
-        Assert.Single(await scope.EligibleProgressAssignments(profile, new(2026,2,2)).ToListAsync());
+        var candidate = await scope.EligibleProgressAssignments(profile, clock.CurrentWeekStart)
+            .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
+            .Include(x => x.WorkflowHistory)
+            .SingleAsync();
+        foreach (var week in expected) Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(candidate, week, clock));
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(candidate, new(2025,12,22), clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(candidate, new(2026,2,2), clock));
         time.Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero);
         var outside = await reporting.SaveAsync(profile, Form(new(2026,9,7)));
         Assert.Equal(WorkflowStatus.AssignmentStarted, outside.WorkflowStatusAtSubmission);
@@ -84,6 +94,166 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task WorkerCurrentWeekReportEditUpdatesAssignmentStateAndPreservesSubmissionAudit()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Current week editor" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).SingleAsync();
+        var access = new AccessProfile("current-week-worker", AppRoles.Worker, null, null, worker.Id);
+        var reporting = new ProgressReportService(db, clock);
+        var first = await reporting.SaveAsync(access, new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id,
+            AssignmentVersion = assignment.Version,
+            WeekStart = clock.CurrentWeekStart,
+            WorkflowStatus = WorkflowStatus.StartPreparing,
+            ProgressPercent = 30,
+            WorkDone = "Started preparing the management accounts",
+            NextAction = "Send the first query"
+        });
+        var submittedAt = first.SubmittedAt;
+        var createdAt = first.CreatedAt;
+        var createdBy = first.CreatedBy;
+        var reportVersion = first.Version;
+        var assignmentVersion = assignment.Version;
+        var edited = await reporting.SaveAsync(access, new WeeklyProgressForm
+        {
+            Id = first.Id,
+            Version = reportVersion,
+            AssignmentVersion = assignmentVersion,
+            WorkerAssignmentId = assignment.Id,
+            WeekStart = clock.CurrentWeekStart,
+            WorkflowStatus = WorkflowStatus.QueriesSent,
+            WorkflowVersion = 1,
+            ProgressPercent = 50,
+            WorkDone = "Prepared and sent the first query",
+            NextAction = "Follow up outstanding documents"
+        });
+
+        Assert.Equal(WorkflowStatus.QueriesSent, edited.WorkflowStatusAtSubmission);
+        Assert.Equal(1, edited.WorkflowVersionAtSubmission);
+        Assert.Equal(50m, edited.ProgressPercent);
+        Assert.Equal(submittedAt, edited.SubmittedAt);
+        Assert.Equal(createdAt, edited.CreatedAt);
+        Assert.Equal(createdBy, edited.CreatedBy);
+        Assert.Equal(WorkflowStatus.QueriesSent, assignment.CurrentWorkflowStatus);
+        Assert.Equal(1, assignment.CurrentWorkflowVersion);
+        Assert.Equal(50m, assignment.CurrentProgressPercent);
+        Assert.Equal(2, await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id));
+
+        await Assert.ThrowsAsync<BusinessException>(() => reporting.SaveAsync(access, new WeeklyProgressForm
+        {
+            Id = edited.Id,
+            Version = edited.Version,
+            AssignmentVersion = assignment.Version - 1,
+            WorkerAssignmentId = assignment.Id,
+            WeekStart = clock.CurrentWeekStart,
+            WorkflowStatus = WorkflowStatus.QueriesSent,
+            WorkflowVersion = 1,
+            ProgressPercent = 55,
+            WorkDone = "Stale assignment edit",
+            NextAction = "Continue"
+        }));
+    }
+
+    [PostgresFact]
+    public async Task HistoricalResponsibilityWindowsPreservePastResultsAndResumeSafely()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var firstBill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var secondBill = await billing.Generate(engagement, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+        var thirdBill = await billing.Generate(engagement, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
+        var workers = new[] { new Worker { Name = "Window A" }, new Worker { Name = "Window B" }, new Worker { Name = "Window C" } };
+        db.AddRange(workers); await db.SaveChangesAsync();
+        await billing.Assign(firstBill.WorkItem.Id, workers[0].Id, 0);
+        await billing.Assign(secondBill.WorkItem.Id, workers[1].Id, 0);
+        await billing.Assign(thirdBill.WorkItem.Id, workers[2].Id, 0);
+        var assignments = await db.WorkerAssignments.OrderBy(x => x.Id).ToListAsync();
+        var createdBeforeCurrentWeek = new DateTime(2026, 8, 24, 4, 0, 0, DateTimeKind.Utc);
+        var createdThisWeek = new DateTime(2026, 9, 8, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignments[0].Id).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CreatedAt, createdBeforeCurrentWeek).SetProperty(x => x.UpdatedAt, createdBeforeCurrentWeek));
+        await db.WorkerAssignments.Where(x => x.Id == assignments[1].Id).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CreatedAt, createdThisWeek).SetProperty(x => x.UpdatedAt, createdThisWeek));
+        await db.WorkerAssignments.Where(x => x.Id == assignments[2].Id).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CreatedAt, createdBeforeCurrentWeek).SetProperty(x => x.UpdatedAt, createdBeforeCurrentWeek));
+        db.ChangeTracker.Clear();
+        var first = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignments[0].Id);
+        var second = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignments[1].Id);
+        var third = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignments[2].Id);
+        var reporting = new ProgressReportService(db, clock);
+
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(second, new(2026, 8, 31), clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(second, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, new(2026, 8, 31), clock));
+
+        var final = await reporting.SaveAsync(new AccessProfile("window-a", AppRoles.Worker, null, null, first.WorkerId), new WeeklyProgressForm
+        {
+            WorkerAssignmentId = first.Id, AssignmentVersion = first.Version, WeekStart = clock.CurrentWeekStart,
+            ProgressPercent = 100, WorkflowStatus = WorkflowStatus.Completed, WorkDone = "Completed this week's work"
+        });
+        Assert.Equal(WorkflowStatus.Completed, final.WorkflowStatusAtSubmission);
+        first = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == first.Id);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, clock.CurrentWeekStart, clock));
+        var completionWeek = new ProgressReportModel
+        {
+            Rows = [new ProgressReportRow
+            {
+                Assignment = first, Report = final, WeekStart = clock.CurrentWeekStart,
+                RequiresReport = AssignmentWorkflowService.RequiresWeeklyReport(first, clock.CurrentWeekStart, clock),
+                IsLate = clock.IsLate(final.SubmittedAt, final.WeekEnd)
+            }]
+        };
+        Assert.Equal(1, completionWeek.Required);
+        Assert.Equal(1, completionWeek.Submitted);
+
+        time.Now = new(2026, 9, 16, 4, 0, 0, TimeSpan.Zero);
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(first, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, new(2026, 9, 7), clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(third, new(2026, 9, 7), clock));
+        var workflow = new AssignmentWorkflowService(db, clock);
+        await workflow.BatchAsync(new AccessProfile("window-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [third.Id], Versions = new() { [third.Id] = third.Version }, Action = BatchWorkflowAction.Hide
+        });
+        third = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == third.Id);
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(third, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(third, new(2026, 9, 7), clock));
+        await workflow.BatchAsync(new AccessProfile("window-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [third.Id], Versions = new() { [third.Id] = third.Version }, Action = BatchWorkflowAction.Unhide
+        });
+        third = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == third.Id);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(third, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(third, new(2026, 9, 7), clock));
+
+        await workflow.BatchAsync(new AccessProfile("window-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [first.Id], Versions = new() { [first.Id] = first.Version }, Action = BatchWorkflowAction.UpdateWorkflow, WorkflowStatus = WorkflowStatus.PendingReview
+        });
+        first = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == first.Id);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(first, new(2026, 9, 7), clock));
+
+        var currentRows = new[] { first, second, third }
+            .Select(x => new ProgressReportRow { Assignment = x, WeekStart = clock.CurrentWeekStart, RequiresReport = AssignmentWorkflowService.RequiresWeeklyReport(x, clock.CurrentWeekStart, clock) })
+            .ToList();
+        var dashboardAndRegister = new ProgressReportModel { Rows = currentRows };
+        Assert.Equal(dashboardAndRegister.Required, currentRows.Count(x => x.RequiresReport));
+        Assert.Equal(3, dashboardAndRegister.Required);
+        Assert.Equal(3, dashboardAndRegister.Missing);
+    }
+
+    [PostgresFact]
     public async Task ProgressHttpAuthorizationDashboardAndDuplicateRace()
     {
         await using var reset = await Fresh();
@@ -106,14 +276,22 @@ public partial class IntegrationTests
             db.AddRange(wa,wb); await db.SaveChangesAsync(); managerId = ea.ManagerId;
             var ba = await billing.Generate(a,new(2026,1,1),new(2026,1,31),BillingGenerationMode.Scheduled);
             var bb = await billing.Generate(b,new(2026,1,1),new(2026,1,31),BillingGenerationMode.Scheduled);
-            var future = await billing.Generate(a,new(2026,2,1),new(2026,2,28),BillingGenerationMode.Scheduled);
-            await billing.Assign(ba.WorkItem.Id,wa.Id,0); await billing.Assign(bb.WorkItem.Id,wb.Id,0); await billing.Assign(future.WorkItem.Id,wa.Id,0);
-            workId=ba.WorkItem.Id; otherWork=bb.WorkItem.Id;
-            assignmentId=await db.WorkerAssignments.Where(x=>x.WorkItemId==workId).Select(x=>x.Id).SingleAsync();
-            otherAssignment=await db.WorkerAssignments.Where(x=>x.WorkItemId==otherWork).Select(x=>x.Id).SingleAsync();
-            await new ProgressReportService(db, new BusinessClock(time, new ConfigurationBuilder().Build())).SaveAsync(
-                new("other-worker",AppRoles.Worker,null,null,wb.Id),
-                new() { WorkerAssignmentId=otherAssignment, WeekStart=new(2026,1,19), WorkflowStatus=WorkflowStatus.AssignmentStarted, WorkDone="Other manager private report", NextAction="Continue" });
+             var future = await billing.Generate(a,new(2026,2,1),new(2026,2,28),BillingGenerationMode.Scheduled);
+             await billing.Assign(ba.WorkItem.Id,wa.Id,0); await billing.Assign(bb.WorkItem.Id,wb.Id,0); await billing.Assign(future.WorkItem.Id,wa.Id,0);
+               var assignmentCreatedAt = new DateTime(2026, 1, 12, 4, 0, 0, DateTimeKind.Utc);
+              await db.WorkerAssignments
+                  .Where(x => x.WorkItemId == ba.WorkItem.Id || x.WorkItemId == bb.WorkItem.Id || x.WorkItemId == future.WorkItem.Id)
+                  .ExecuteUpdateAsync(setters => setters
+                      .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+                      .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+              db.ChangeTracker.Clear();
+             workId=ba.WorkItem.Id; otherWork=bb.WorkItem.Id;
+             assignmentId=await db.WorkerAssignments.Where(x=>x.WorkItemId==workId).Select(x=>x.Id).SingleAsync();
+             otherAssignment=await db.WorkerAssignments.Where(x=>x.WorkItemId==otherWork).Select(x=>x.Id).SingleAsync();
+             var otherAssignmentVersion = await db.WorkerAssignments.Where(x=>x.Id == otherAssignment).Select(x => x.Version).SingleAsync();
+             await new ProgressReportService(db, new BusinessClock(time, new ConfigurationBuilder().Build())).SaveAsync(
+                 new("other-worker",AppRoles.Worker,null,null,wb.Id),
+                 new() { WorkerAssignmentId=otherAssignment, AssignmentVersion = otherAssignmentVersion, WeekStart=new(2026,1,19), WorkflowStatus=WorkflowStatus.AssignmentStarted, WorkDone="Other manager private report", NextAction="Continue" });
             var users=services.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
             async Task User(string email,string role,int? worker=null,int? manager=null,int? firm=null)
             {
@@ -181,7 +359,8 @@ public partial class IntegrationTests
         }
         Assert.Contains("Denied",(await firm.GetAsync("/Progress")).Headers.Location!.ToString());
         Assert.Equal(HttpStatusCode.NotFound,(await worker.GetAsync($"/Progress/Edit?assignmentId={otherAssignment}&weekStart=2026-01-19")).StatusCode);
-        Dictionary<string,string> Fields(int assignment,string week) => new() { ["WorkerAssignmentId"]=assignment.ToString(),["WeekStart"]=week,["ProgressPercent"]="20",["WorkflowStatus"]="AssignmentStarted",["WorkDone"]="Worker submitted report",["NextAction"]="Continue" };
+         long reportAssignmentVersion; using (var services = app.Services.CreateScope()) reportAssignmentVersion = await services.ServiceProvider.GetRequiredService<AppDbContext>().WorkerAssignments.Where(x => x.Id == assignmentId).Select(x => x.Version).SingleAsync();
+         Dictionary<string,string> Fields(int assignment,string week) => new() { ["WorkerAssignmentId"]=assignment.ToString(),["AssignmentVersion"]=reportAssignmentVersion.ToString(),["WeekStart"]=week,["ProgressPercent"]="20",["WorkflowStatus"]="AssignmentStarted",["WorkDone"]="Worker submitted report",["NextAction"]="Continue" };
         Assert.Equal(HttpStatusCode.NotFound,(await PostWithToken(worker,"/Progress","/Progress/Save",Fields(otherAssignment,"2026-01-19"))).StatusCode);
         Assert.Contains("Denied",(await PostWithToken(staff,"/Progress","/Progress/Save",Fields(assignmentId,"2026-01-19"))).Headers.Location!.ToString());
         var token=Token(await worker.GetStringAsync("/Progress"));
@@ -209,10 +388,11 @@ public partial class IntegrationTests
         using(var services=app.Services.CreateScope()) foreignReport=await services.ServiceProvider.GetRequiredService<AppDbContext>().WeeklyProgressReports.Where(x=>x.WorkerAssignmentId==otherAssignment).Select(x=>x.Id).SingleAsync();
         foreach(var client in new[]{worker,manager}) Assert.Equal(HttpStatusCode.NotFound,(await client.GetAsync($"/Progress/Details/{foreignReport}")).StatusCode);
         var forgedReport=Fields(assignmentId,"2026-01-19"); forgedReport["Id"]=foreignReport.ToString(); forgedReport["Version"]="1";
-        Assert.Equal(HttpStatusCode.NotFound,(await PostWithToken(worker,"/Progress","/Progress/Save",forgedReport)).StatusCode);
-        Assert.Contains("Denied",(await PostWithToken(manager,"/Progress","/Progress/Save",Fields(assignmentId,"2026-01-19"))).Headers.Location!.ToString());
-        Assert.Contains("Missing",await worker.GetStringAsync("/Progress?weekStart=2026-01-12"));
-        await PostWithToken(worker,"/Progress","/Progress/Save",Fields(assignmentId,"2026-01-12"));
+         Assert.Equal(HttpStatusCode.NotFound,(await PostWithToken(worker,"/Progress","/Progress/Save",forgedReport)).StatusCode);
+         Assert.Contains("Denied",(await PostWithToken(manager,"/Progress","/Progress/Save",Fields(assignmentId,"2026-01-19"))).Headers.Location!.ToString());
+         Assert.Contains("Missing",await worker.GetStringAsync("/Progress?weekStart=2026-01-12"));
+         using (var services = app.Services.CreateScope()) reportAssignmentVersion = await services.ServiceProvider.GetRequiredService<AppDbContext>().WorkerAssignments.Where(x => x.Id == assignmentId).Select(x => x.Version).SingleAsync();
+         await PostWithToken(worker,"/Progress","/Progress/Save",Fields(assignmentId,"2026-01-12"));
         var past=await worker.GetStringAsync("/Progress?weekStart=2026-01-12");
         Assert.Contains("<span>Late</span><strong>1</strong>",past); Assert.Contains("<span>Missing</span><strong>1</strong>",past);
         time.Now=new(2026,9,9,4,0,0,TimeSpan.Zero);
@@ -255,13 +435,13 @@ public partial class IntegrationTests
 
         Assert.Equal(WorkflowStatus.AssignedNotStarted, assignment.CurrentWorkflowStatus);
         Assert.Equal(0m, assignment.CurrentProgressPercent);
-        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart));
-        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(futureAssignment, clock.CurrentWeekStart));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(futureAssignment, clock.CurrentWeekStart, clock));
         Assert.Equal(0m, assignment.Entitlement);
 
         var first = await reports.SaveAsync(workerAccess, new WeeklyProgressForm
         {
-            WorkerAssignmentId = assignment.Id, WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.QueriesSent,
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.QueriesSent,
             WorkflowVersion = 1, ProgressPercent = 40, WorkDone = "Sent initial queries", NextAction = "Follow up documents"
         });
         Assert.Equal(WorkflowStatus.QueriesSent, first.WorkflowStatusAtSubmission);
@@ -274,7 +454,7 @@ public partial class IntegrationTests
         time.Now = new(2026, 9, 16, 4, 0, 0, TimeSpan.Zero);
         var second = await reports.SaveAsync(workerAccess, new WeeklyProgressForm
         {
-            WorkerAssignmentId = assignment.Id, WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.DraftManagementReportSent,
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.DraftManagementReportSent,
             WorkflowVersion = 1, ProgressPercent = 65, WorkDone = "Sent management report draft", NextAction = "Await review"
         });
         Assert.Equal(WorkflowStatus.QueriesSent, first.WorkflowStatusAtSubmission);
@@ -307,7 +487,7 @@ public partial class IntegrationTests
             AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version }, Action = BatchWorkflowAction.Hide
         });
         Assert.True(assignment.IsHidden);
-        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart));
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock));
         Assert.Equal(2, await db.WeeklyProgressReports.CountAsync(x => x.WorkerAssignmentId == assignment.Id));
         await Assert.ThrowsAsync<BusinessException>(() => workflow.BatchAsync(workerAccess, new BatchWorkflowForm
         {
@@ -328,15 +508,15 @@ public partial class IntegrationTests
         });
         Assert.False(assignment.IsHidden);
         Assert.Equal(clock.CurrentWeekStart, assignment.ReportingResumedFromWeek);
-        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, new(2026, 9, 7)));
-        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, new(2026, 9, 7), clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock));
 
         await workflow.BatchAsync(workerAccess, new BatchWorkflowForm
         {
             AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version }, Action = BatchWorkflowAction.UpdateWorkflow, WorkflowStatus = WorkflowStatus.Completed
         });
         Assert.Equal(WorkflowStatus.Completed, assignment.CurrentWorkflowStatus);
-        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock));
         var reportsBeforeReopen = await db.WeeklyProgressReports.CountAsync(x => x.WorkerAssignmentId == assignment.Id);
         await Assert.ThrowsAsync<BusinessException>(() => workflow.BatchAsync(workerAccess, new BatchWorkflowForm
         {

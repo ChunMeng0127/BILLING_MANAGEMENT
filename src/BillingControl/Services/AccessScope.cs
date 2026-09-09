@@ -134,11 +134,10 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
     };
 
     public IQueryable<WorkerAssignment> EligibleProgressAssignments(AccessProfile a, DateOnly week)
-    {
-        return ProgressAssignments(a).Where(x => !x.IsCancelled && x.WorkItem.BillingRecord.Status != BillingStatus.Cancelled
-            && !x.IsHidden && x.CurrentWorkflowStatus != WorkflowStatus.Completed
-            && (x.ReportingResumedFromWeek == null || x.ReportingResumedFromWeek <= week));
-    }
+        // Keep this method as the scoped candidate source for callers that need to
+        // apply historical responsibility. The week argument is intentionally not
+        // translated into BillingRecord date predicates.
+        => ProgressAssignments(a);
 
     public IQueryable<WeeklyProgressReport> ProgressReports(AccessProfile a) => a.Role switch
     {

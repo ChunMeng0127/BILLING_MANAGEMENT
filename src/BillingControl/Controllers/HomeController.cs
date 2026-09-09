@@ -42,9 +42,14 @@ public class HomeController(AppDbContext db, AccessScope access, BusinessClock c
         if (a.IsStaff || a.IsManager || a.IsWorker)
         {
             var currentWeek = clock.CurrentWeekStart;
-            var assignmentQuery = access.EligibleProgressAssignments(a, currentWeek);
-            var reports = await assignmentQuery.SelectMany(x => x.ProgressReports.Where(r => r.WeekStart == currentWeek)).AsNoTracking().ToListAsync();
-            model.ProgressRequired = await assignmentQuery.CountAsync();
+            var candidates = await access.EligibleProgressAssignments(a, currentWeek)
+                .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
+                .Include(x => x.WorkflowHistory)
+                .Include(x => x.ProgressReports.Where(r => r.WeekStart == currentWeek))
+                .AsSplitQuery().AsNoTracking().ToListAsync();
+            var responsible = candidates.Where(x => AssignmentWorkflowService.RequiresWeeklyReport(x, currentWeek, clock)).ToList();
+            var reports = responsible.SelectMany(x => x.ProgressReports).ToList();
+            model.ProgressRequired = responsible.Count;
             model.ProgressLate = reports.Count(x => clock.IsLate(x.SubmittedAt, x.WeekEnd));
             model.ProgressSubmitted = reports.Count - model.ProgressLate;
             model.ProgressMissing = model.ProgressRequired - reports.Count;

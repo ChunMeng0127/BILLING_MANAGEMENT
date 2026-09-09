@@ -14,9 +14,75 @@ public sealed class AssignmentWorkflowService(AppDbContext db, BusinessClock clo
         !assignment.IsCancelled && assignment.WorkItem.BillingRecord.Status != BillingStatus.Cancelled
         && !assignment.IsHidden && assignment.CurrentWorkflowStatus != WorkflowStatus.Completed;
 
-    public static bool RequiresWeeklyReport(WorkerAssignment assignment, DateOnly weekStart) =>
-        IsActive(assignment)
-        && (!assignment.ReportingResumedFromWeek.HasValue || weekStart >= assignment.ReportingResumedFromWeek.Value);
+    /// <summary>
+    /// Returns whether this assignment was responsible for a report in the selected
+    /// historical week. BillingRecord dates are deliberately not consulted here.
+    ///
+    /// Completion remains responsible for the week in which it happened; the next
+    /// week is the first week that is no longer required. Hiding takes effect in
+    /// its transition week, while an unhide/reopen transition resumes that week.
+    /// </summary>
+    public static bool RequiresWeeklyReport(WorkerAssignment assignment, DateOnly weekStart, BusinessClock clock)
+    {
+        if (weekStart > clock.CurrentWeekStart || assignment.CreatedAt == default)
+            return false;
+
+        var assignmentWeek = BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(assignment.CreatedAt)));
+        if (weekStart < assignmentWeek)
+            return false;
+
+        var responsible = true;
+        var hasWorkflowHistory = assignment.WorkflowHistory.Count > 0;
+        foreach (var change in assignment.WorkflowHistory.OrderBy(x => x.ChangedAt))
+        {
+            var changeWeek = BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(change.ChangedAt)));
+            if (changeWeek > weekStart)
+                break;
+
+            if (change.Action == WorkflowHistoryAction.Hidden)
+            {
+                responsible = false;
+                continue;
+            }
+
+            if (change.Action == WorkflowHistoryAction.Unhidden)
+            {
+                responsible = true;
+                continue;
+            }
+
+            if (change.NewWorkflowStatus == WorkflowStatus.Completed)
+            {
+                // The completion week still has a reporting obligation.
+                if (changeWeek < weekStart)
+                    responsible = false;
+            }
+            else if (change.PreviousWorkflowStatus == WorkflowStatus.Completed)
+            {
+                // Reopening resumes responsibility in the transition week.
+                responsible = true;
+            }
+        }
+
+        // Legacy rows may have current cancellation/completion/hidden state but
+        // no workflow history. Use their last audit timestamp as the transition.
+        if (!hasWorkflowHistory)
+        {
+            if (assignment.IsHidden)
+                responsible = weekStart < BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(assignment.HiddenAt ?? assignment.UpdatedAt)));
+            if (assignment.CurrentWorkflowStatus == WorkflowStatus.Completed)
+                responsible = weekStart <= BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(assignment.UpdatedAt)));
+        }
+
+        if (assignment.IsCancelled)
+            responsible &= weekStart < BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(assignment.UpdatedAt)));
+
+        var billing = assignment.WorkItem?.BillingRecord;
+        if (billing?.Status == BillingStatus.Cancelled)
+            responsible &= weekStart < BusinessClock.WeekStart(DateOnly.FromDateTime(clock.Local(billing.UpdatedAt)));
+
+        return responsible;
+    }
 
     public static void ValidateWorkflow(WorkflowStatus status, int? version)
     {

@@ -48,7 +48,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
                 Report = report,
                 LatestReport = latest,
                 WeekStart = week,
-                RequiresReport = week <= current && AssignmentWorkflowService.RequiresWeeklyReport(x, week),
+                RequiresReport = AssignmentWorkflowService.RequiresWeeklyReport(x, week, clock),
                 IsLate = report != null && clock.IsLate(report.SubmittedAt, report.WeekEnd)
             };
         }).ToList();
@@ -87,6 +87,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
                 Id = report.Id,
                 Version = report.Version,
                 WorkerAssignmentId = report.WorkerAssignmentId,
+                AssignmentVersion = report.WorkerAssignment.Version,
                 WeekStart = report.WeekStart,
                 ProgressPercent = report.ProgressPercent,
                 WorkflowStatus = report.WorkflowStatusAtSubmission ?? report.WorkerAssignment.CurrentWorkflowStatus,
@@ -111,6 +112,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         return View(new WeeklyProgressForm
         {
             WorkerAssignmentId = assignment.Id,
+            AssignmentVersion = assignment.Version,
             WeekStart = targetWeek,
             ProgressPercent = assignment.CurrentProgressPercent,
             WorkflowStatus = status,

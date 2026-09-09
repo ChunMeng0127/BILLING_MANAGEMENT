@@ -37,7 +37,7 @@ else {
 @foreach (var row in Model.Rows) {
     var a = row.Assignment;
     var canSelect = canBatch && !a.IsCancelled && a.WorkItem.BillingRecord.Status != BillingStatus.Cancelled && (Model.Access.IsStaff || (Model.Access.IsWorker && AssignmentWorkflowService.IsActive(a)));
-    var canEdit = Model.Access.IsStaff || (Model.Access.IsWorker && AssignmentWorkflowService.IsActive(a) && row.WeekStart >= Model.CurrentWeekStart);
+    var canEdit = Model.Access.IsStaff || (Model.Access.IsWorker && !a.IsCancelled && !a.IsHidden && row.WeekStart >= Model.CurrentWeekStart && (AssignmentWorkflowService.IsActive(a) || (row.Report?.WorkflowStatusAtSubmission == WorkflowStatus.Completed && row.WeekStart == Model.CurrentWeekStart)));
     var nextQueries = Math.Max(a.WorkflowHistory.Where(x => x.NewWorkflowStatus == WorkflowStatus.QueriesSent && x.NewWorkflowVersion != null).Select(x => x.NewWorkflowVersion!.Value).Concat(a.ProgressReports.Where(x => x.WorkflowStatusAtSubmission == WorkflowStatus.QueriesSent && x.WorkflowVersionAtSubmission != null).Select(x => x.WorkflowVersionAtSubmission!.Value)).DefaultIfEmpty(0).Max() + 1, 1);
     var nextDraft = Math.Max(a.WorkflowHistory.Where(x => x.NewWorkflowStatus == WorkflowStatus.DraftManagementReportSent && x.NewWorkflowVersion != null).Select(x => x.NewWorkflowVersion!.Value).Concat(a.ProgressReports.Where(x => x.WorkflowStatusAtSubmission == WorkflowStatus.DraftManagementReportSent && x.WorkflowVersionAtSubmission != null).Select(x => x.WorkflowVersionAtSubmission!.Value)).DefaultIfEmpty(0).Max() + 1, 1);
     <tr data-next-queries-version="@nextQueries" data-next-draft-version="@nextDraft">

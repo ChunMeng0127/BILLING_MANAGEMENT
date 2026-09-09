@@ -126,6 +126,7 @@ public class WeeklyProgressForm
     public int Id { get; set; }
     public long Version { get; set; }
     [Range(1, int.MaxValue)] public int WorkerAssignmentId { get; set; }
+    public long AssignmentVersion { get; set; }
     [DataType(DataType.Date)] public DateOnly WeekStart { get; set; }
     [Range(typeof(decimal), "0", "100")] public decimal ProgressPercent { get; set; }
     public WorkflowStatus WorkflowStatus { get; set; } = WorkflowStatus.AssignedNotStarted;

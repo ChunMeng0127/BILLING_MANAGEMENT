@@ -37,6 +37,8 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
                 .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
                 .SingleOrDefaultAsync(x => x.Id == form.WorkerAssignmentId);
             if (assignment == null) throw new BusinessException("The selected assignment was not found.");
+            Finance.Require(form.AssignmentVersion > 0 && form.AssignmentVersion == assignment.Version,
+                "The worker assignment changed. Refresh before saving the weekly update.");
             var inScope = access.IsStaff || (access.IsWorker && !assignment.IsCancelled && !assignment.IsHidden && assignment.WorkerId == access.WorkerId);
             Finance.Require(inScope, "You can submit progress only for your own active assignment.");
             Finance.Require(form.Id > 0 || access.IsWorker, "Workers submit new reports. Staff may correct existing submitted reports.");
@@ -46,8 +48,8 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             Finance.Require(form.Id > 0 || !assignment.ReportingResumedFromWeek.HasValue || weekStart >= assignment.ReportingResumedFromWeek.Value,
                 "Weekly reporting resumes from the current week after an assignment is reopened or unhidden.");
 
-            WeeklyProgressReport report;
             var isNew = form.Id == 0;
+            WeeklyProgressReport report;
             if (!isNew)
             {
                 report = await db.WeeklyProgressReports.SingleOrDefaultAsync(x => x.Id == form.Id && x.WorkerAssignmentId == assignment.Id)
@@ -56,6 +58,8 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
                 if (access.IsWorker && report.WeekStart < clock.CurrentWeekStart)
                     throw new BusinessException("Submitted reports for past weeks are read-only.");
                 Finance.Require(report.WeekStart == weekStart, "The reporting week cannot be changed after submission.");
+                if (access.IsWorker && report.WeekStart == clock.CurrentWeekStart && assignment.CurrentWorkflowStatus == WorkflowStatus.Completed)
+                    Finance.Require(form.WorkflowStatus == WorkflowStatus.Completed, "Workers cannot reopen completed work.");
             }
             else
             {
@@ -73,7 +77,8 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             report.NextAction = string.IsNullOrWhiteSpace(nextAction) ? null : nextAction;
             report.IssuesOrBlockers = string.IsNullOrWhiteSpace(form.IssuesOrBlockers) ? null : form.IssuesOrBlockers.Trim();
 
-            if (isNew)
+            var workerCurrentWeekEdit = access.IsWorker && !isNew && report.WeekStart == clock.CurrentWeekStart;
+            if (isNew || workerCurrentWeekEdit)
             {
                 await workflow.ApplyWorkflowAsync(assignment, form.WorkflowStatus, form.WorkflowVersion, WorkflowHistoryAction.WeeklyUpdate);
                 assignment.CurrentProgressPercent = form.ProgressPercent;
