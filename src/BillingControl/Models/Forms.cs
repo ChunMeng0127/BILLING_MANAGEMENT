@@ -51,6 +51,16 @@ public class BillingScheduleForm
     [DataType(DataType.Date)] public DateOnly? NextPeriodStart { get; set; }
     [Range(1, 31)] public int AnchorDay { get; set; } = 1;
 }
+public class BillingRecordEditForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
+    public long WorkItemVersion { get; set; }
+    [DataType(DataType.Date)] public DateOnly PeriodStart { get; set; }
+    [DataType(DataType.Date)] public DateOnly PeriodEnd { get; set; }
+    public BillingStatus Status { get; set; }
+    [StringLength(2000)] public string? Notes { get; set; }
+}
 public class UserForm
 {
     [Required, EmailAddress] public string Email { get; set; } = "";
@@ -62,6 +72,15 @@ public class UserForm
 }
 public class InvoiceForm
 {
+    [Required, StringLength(100)] public string InvoiceNumber { get; set; } = "";
+    [DataType(DataType.Date)] public DateOnly InvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+    public InvoiceFlow Flow { get; set; }
+    public Dictionary<int, decimal?> Allocations { get; set; } = [];
+}
+public class InvoiceEditForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
     [Required, StringLength(100)] public string InvoiceNumber { get; set; } = "";
     [DataType(DataType.Date)] public DateOnly InvoiceDate { get; set; } = DateOnly.FromDateTime(DateTime.Today);
     public InvoiceFlow Flow { get; set; }

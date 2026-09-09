@@ -1,0 +1,20 @@
+@model BillingRecordEditForm
+@{ var bill = ViewBag.Bill as BillingRecord; var hasActiveInvoices = ViewBag.HasActiveInvoices == true; var hasActiveAssignments = ViewBag.HasActiveAssignments == true; ViewData["Title"] = "Edit billing record"; }
+<a class="back-link" href="/Billing/Details/@Model.Id">← Billing details</a>
+<div class="page-heading"><div><p class="eyebrow">BILLING CORRECTION</p><h1>Edit billing record</h1><p>@bill?.CustomerName · @bill?.ServiceName</p></div></div>
+@if(hasActiveInvoices || hasActiveAssignments) { <div class="alert alert-warning">Period changes are locked while active invoices or worker assignments exist. Cancel those downstream records first. Operational notes remain available.</div> }
+<form method="post" asp-action="Edit" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger"></div>
+<input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" /><input asp-for="WorkItemVersion" type="hidden" />
+<div class="form-grid">
+<label asp-for="PeriodStart" class="form-label">Period start<input asp-for="PeriodStart" type="date" class="form-control" required /></label>
+<label asp-for="PeriodEnd" class="form-label">Period end<input asp-for="PeriodEnd" type="date" class="form-control" required /></label>
+<div>
+@if(Model.Status <= BillingStatus.ReadyToBill) { <label asp-for="Status" class="form-label">Operational status</label><select asp-for="Status" class="form-select">@foreach(var status in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.ReadyToBill)){<option value="@status" selected="@(status==Model.Status)">@Finance.Label(status)</option>}</select> }
+else { <span class="form-label">Financial status</span><p class="form-control-plaintext">@Finance.Label(Model.Status)</p><input asp-for="Status" type="hidden" /> }
+</div>
+</div>
+<label asp-for="Notes" class="form-label">Operational notes<textarea asp-for="Notes" rows="4" maxlength="2000" class="form-control"></textarea></label>
+<p class="hint">Customer, service, amount and revenue-share snapshots are immutable. Period corrections are checked against engagement dates, active overlaps and downstream financial records.</p>
+<div class="form-actions"><button class="btn btn-primary">Save billing correction</button><a class="btn btn-outline-secondary" href="/Billing/Details/@Model.Id">Cancel</a></div>
+</form>

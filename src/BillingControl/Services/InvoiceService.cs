@@ -26,6 +26,81 @@ public sealed class InvoiceService(AppDbContext db)
         }
     }
 
+    public async Task<Invoice> EditInvoice(int id, string number, DateOnly date, IDictionary<int, decimal> allocations, long version)
+    {
+        try
+        {
+            return await FinancialTransaction.Serializable(db, async () =>
+            {
+                var invoice = await db.Invoices
+                    .Include(x => x.Lines).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Engagement).ThenInclude(x => x.BusinessParty)
+                    .Include(x => x.Lines).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Engagement).ThenInclude(x => x.Customer)
+                    .Include(x => x.Lines).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Engagement).ThenInclude(x => x.Manager)
+                    .Include(x => x.Lines).ThenInclude(x => x.BillingRecord).ThenInclude(x => x.Shares)
+                    .Include(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+                    .SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Invoice was not found.");
+                Require(invoice.Status != InvoiceStatus.Cancelled, "Cancelled invoices cannot be edited.");
+                Require(invoice.Version == version, "This invoice changed. Refresh before saving.");
+                Require(!string.IsNullOrWhiteSpace(number) && number.Trim().Length <= 100, "Invoice number is required (maximum 100 characters).");
+                Require(date != default && date <= DateOnly.FromDateTime(DateTime.Today), "Invoice date must be today or earlier.");
+                Require(invoice.Lines.Count > 0 && allocations.Count == invoice.Lines.Count && invoice.Lines.All(x => allocations.ContainsKey(x.BillingRecordId)), "Provide an allocation for every existing invoice line.");
+                Require(allocations.Values.All(x => x > 0 && Money(x) == x), "Invoice allocations must be positive amounts with no more than two decimal places.");
+                var allocationChanged = invoice.Lines.Any(x => allocations[x.BillingRecordId] != x.AllocatedAmount);
+                var hasActiveReceipts = invoice.ReceiptAllocations.Any(x => !x.CustomerReceipt.IsCancelled);
+                Require(!allocationChanged || !hasActiveReceipts, "This invoice has active receipt allocations. Cancel the receipt before changing invoice allocations.");
+
+                var bills = invoice.Lines.Select(x => x.BillingRecord).ToList();
+                var ids = bills.Select(x => x.Id).ToArray();
+                if (allocationChanged)
+                {
+                    ValidateGrouping(invoice.Flow, bills);
+                    var existing = await db.InvoiceLines
+                        .Where(x => x.InvoiceId != id && ids.Contains(x.BillingRecordId) && x.Invoice.Flow == invoice.Flow && x.Invoice.Status != InvoiceStatus.Cancelled)
+                        .GroupBy(x => x.BillingRecordId)
+                        .Select(g => new { BillingRecordId = g.Key, Amount = g.Sum(x => x.AllocatedAmount) })
+                        .ToDictionaryAsync(x => x.BillingRecordId, x => x.Amount);
+                    foreach (var bill in bills)
+                    {
+                        var cap = invoice.Flow switch
+                        {
+                            InvoiceFlow.AccountingFirmToCustomer => bill.Amount,
+                            InvoiceFlow.ManagerToAccountingFirm => bill.Shares.Single(x => x.Kind == ShareKind.Manager).Amount,
+                            InvoiceFlow.LcmToManager => bill.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount,
+                            _ => 0m
+                        };
+                        Require(existing.GetValueOrDefault(bill.Id) + allocations[bill.Id] <= cap,
+                            $"Invoice allocation exceeds the {FlowLabel(invoice.Flow)} amount for billing record B-{bill.Id:D5}.");
+                    }
+                }
+                var trimmedNumber = number.Trim();
+                var duplicate = invoice.Flow switch
+                {
+                    InvoiceFlow.AccountingFirmToCustomer => await db.Invoices.AnyAsync(x => x.Id != id && x.Flow == invoice.Flow && x.BusinessPartyId == invoice.BusinessPartyId && x.InvoiceNumber == trimmedNumber),
+                    InvoiceFlow.ManagerToAccountingFirm => await db.Invoices.AnyAsync(x => x.Id != id && x.Flow == invoice.Flow && x.ManagerId == invoice.ManagerId && x.InvoiceNumber == trimmedNumber),
+                    InvoiceFlow.LcmToManager => await db.Invoices.AnyAsync(x => x.Id != id && x.Flow == invoice.Flow && x.InvoiceNumber == trimmedNumber),
+                    _ => true
+                };
+                Require(!duplicate, "That invoice number is already used by this issuer.");
+                invoice.InvoiceNumber = trimmedNumber;
+                invoice.InvoiceDate = date;
+                if (allocationChanged)
+                {
+                    invoice.Total = allocations.Values.Sum();
+                    PositiveMoney(invoice.Total);
+                    foreach (var line in invoice.Lines) line.AllocatedAmount = allocations[line.BillingRecordId];
+                    await RecalculateBillingStatuses(ids);
+                }
+                await db.SaveChangesAsync();
+                return invoice;
+            });
+        }
+        catch (DbUpdateException ex) when (FindPostgres(ex)?.SqlState == "23505")
+        {
+            db.ChangeTracker.Clear();
+            throw new BusinessException("That invoice number is already used by this issuer.", ex);
+        }
+    }
+
     private async Task<Invoice> CreateInvoiceCore(InvoiceFlow flow, string number, DateOnly date, IDictionary<int, decimal> allocations)
     {
         Require(Enum.IsDefined(flow), "Select a valid invoice flow.");
@@ -98,6 +173,16 @@ public sealed class InvoiceService(AppDbContext db)
                 if (existing.GetValueOrDefault(bill.Id) + allocations[bill.Id] >= bill.Amount && bill.Status < BillingStatus.Billed)
                     bill.Status = BillingStatus.Billed;
         return invoice;
+    }
+
+    private static void ValidateGrouping(InvoiceFlow flow, IReadOnlyCollection<BillingRecord> bills)
+    {
+        var firms = bills.Select(x => x.Engagement.BusinessPartyId).Distinct().ToArray();
+        var managers = bills.Select(x => x.Engagement.ManagerId).Distinct().ToArray();
+        var customers = bills.Select(x => x.Engagement.CustomerId).Distinct().ToArray();
+        Require(flow != InvoiceFlow.AccountingFirmToCustomer || (firms.Length == 1 && customers.Length == 1), "An accounting-firm customer invoice may contain records for only one firm and one end customer.");
+        Require(flow != InvoiceFlow.ManagerToAccountingFirm || (managers.Length == 1 && firms.Length == 1), "A manager invoice may contain records for only one manager and one accounting firm.");
+        Require(flow != InvoiceFlow.LcmToManager || managers.Length == 1, "An LCM invoice may contain records for only one manager.");
     }
 
     public Task<CustomerReceipt> CreateReceipt(DateOnly date, string reference, Guid requestId, IDictionary<int, decimal> allocations) =>

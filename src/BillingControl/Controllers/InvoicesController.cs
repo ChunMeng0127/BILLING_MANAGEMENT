@@ -37,6 +37,35 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
         return View(invoice);
     }
 
+    [Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> Edit(int id)
+    {
+        var a = await access.CurrentAsync();
+        var invoice = await access.Invoices(a)
+            .Include(x => x.Lines).ThenInclude(x => x.BillingRecord)
+            .Include(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+            .AsSplitQuery().SingleOrDefaultAsync(x => x.Id == id);
+        if (invoice == null) return NotFound();
+        ViewBag.Access = a; ViewBag.Invoice = invoice;
+        return View(new InvoiceEditForm
+        {
+            Id = invoice.Id, Version = invoice.Version, InvoiceNumber = invoice.InvoiceNumber, InvoiceDate = invoice.InvoiceDate, Flow = invoice.Flow,
+            Allocations = invoice.Lines.ToDictionary(x => x.BillingRecordId, x => (decimal?)x.AllocatedAmount)
+        });
+    }
+
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> Edit(InvoiceEditForm form)
+    {
+        ValidForm();
+        var a = await access.CurrentAsync();
+        if (!await access.Invoices(a).AnyAsync(x => x.Id == form.Id)) return NotFound();
+        var allocations = form.Allocations.ToDictionary(x => x.Key, x => x.Value ?? 0m);
+        await invoices.EditInvoice(form.Id, form.InvoiceNumber, form.InvoiceDate, allocations, form.Version);
+        TempData["Success"] = "Invoice correction saved; active allocations and totals were recalculated.";
+        return RedirectToAction(nameof(Details), new { id = form.Id });
+    }
+
     [Authorize(Roles = AppRoles.BillingReaders)]
     public async Task<IActionResult> Export()
     {

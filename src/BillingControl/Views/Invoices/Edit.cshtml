@@ -1,0 +1,20 @@
+@model InvoiceEditForm
+@{ var invoice = ViewBag.Invoice as Invoice; var activeReceipts = invoice?.ReceiptAllocations.Count(x => !x.CustomerReceipt.IsCancelled) ?? 0; var flowLabel = Model.Flow switch { InvoiceFlow.AccountingFirmToCustomer => "Accounting Firm → Customer", InvoiceFlow.ManagerToAccountingFirm => "Manager → Accounting Firm", InvoiceFlow.LcmToManager => "LCM MGT → Manager", _ => Model.Flow.ToString() }; ViewData["Title"] = "Edit invoice"; }
+<a class="back-link" href="/Invoices/Details/@Model.Id">← Invoice details</a>
+<div class="page-heading"><div><p class="eyebrow">INVOICE CORRECTION</p><h1>Edit invoice</h1><p>@flowLabel · @invoice?.IssuerName → @invoice?.RecipientName</p></div></div>
+@if(activeReceipts > 0) { <div class="alert alert-warning">This invoice has active receipt allocations. Cancel the receipt before changing invoice allocations.</div> }
+<form method="post" asp-action="Edit" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger"></div>
+<input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" /><input asp-for="Flow" type="hidden" />
+<div class="form-grid">
+<label asp-for="InvoiceNumber" class="form-label">Invoice number<input asp-for="InvoiceNumber" class="form-control" required maxlength="100" /></label>
+<label asp-for="InvoiceDate" class="form-label">Invoice date<input asp-for="InvoiceDate" type="date" class="form-control" required /></label>
+<div><span class="form-label">Invoice flow</span><p class="form-control-plaintext">@flowLabel</p><p class="hint">Invoice flow is immutable after creation.</p></div>
+</div>
+<h2 class="section-title">Billing allocations</h2>
+<p class="hint">Adjust existing line amounts only. Flow-specific caps, grouping and concurrency are checked on the server. Leave no line blank.</p>
+<table class="table data-grid"><thead><tr><th>Billing record</th><th>Customer</th><th>Period</th><th data-type="amount">Current (RM)</th><th>Allocation (RM)</th></tr></thead><tbody>
+@foreach(var line in invoice?.Lines ?? []) { var value = Model.Allocations.GetValueOrDefault(line.BillingRecordId); <tr><td><a href="/Billing/Details/@line.BillingRecordId">B-@line.BillingRecordId.ToString("D5")</a></td><td>@line.BillingRecord.CustomerName</td><td>@line.BillingRecord.PeriodStart.ToString("yyyy-MM-dd") — @line.BillingRecord.PeriodEnd.ToString("yyyy-MM-dd")</td><td class="money">@line.AllocatedAmount.ToString("N2")</td><td><input name="Allocations[@line.BillingRecordId]" value="@(value?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" type="number" min="0.01" step="0.01" class="form-control" required /></td></tr> }
+</tbody></table>
+<div class="form-actions"><button class="btn btn-primary">Save invoice correction</button><a class="btn btn-outline-secondary" href="/Invoices/Details/@Model.Id">Cancel</a></div>
+</form>

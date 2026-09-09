@@ -34,6 +34,7 @@
 <th>Status</th>
 <th data-type="amount">Amount (RM)</th>
 @if(showReceipts) { <th data-type="amount">Received (RM)</th><th data-type="amount">Outstanding (RM)</th> }
+<th data-nosort>Actions</th>
 </tr>
 </thead>
 <tbody>
@@ -52,6 +53,7 @@
 </td>
 <td class="money">@b.Amount.ToString("N2")</td>
 @if(showReceipts) { <td class="money">@b.CustomerReceivedAmount.ToString("N2")</td><td class="money">@b.CustomerOutstandingAmount.ToString("N2")</td> }
+<td><a href="/Billing/Details/@b.Id">View</a>@if(access.IsStaff && b.Status != BillingStatus.Cancelled){ <span> · </span><a href="/Billing/Edit/@b.Id">Edit</a> }</td>
 </tr> }
 </tbody>
 </table>

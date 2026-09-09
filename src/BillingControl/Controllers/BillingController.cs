@@ -135,6 +135,29 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
         return View(b);
     }
 
+    [Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> Edit(int id)
+    {
+        var a = await access.CurrentAsync();
+        var bill = await access.BillingRecords(a).Include(x => x.WorkItem).SingleOrDefaultAsync(x => x.Id == id);
+        if (bill == null) return NotFound();
+        ViewBag.Bill = bill;
+        ViewBag.HasActiveInvoices = await db.InvoiceLines.AnyAsync(x => x.BillingRecordId == id && x.Invoice.Status != InvoiceStatus.Cancelled);
+        ViewBag.HasActiveAssignments = await db.WorkerAssignments.AnyAsync(x => x.WorkItem.BillingRecordId == id && !x.IsCancelled);
+        return View(new BillingRecordEditForm { Id = bill.Id, Version = bill.Version, WorkItemVersion = bill.WorkItem.Version, PeriodStart = bill.PeriodStart, PeriodEnd = bill.PeriodEnd, Status = bill.Status, Notes = bill.WorkItem.Notes });
+    }
+
+    [HttpPost, Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> Edit(BillingRecordEditForm form)
+    {
+        ValidForm();
+        var a = await access.CurrentAsync();
+        if (!await access.BillingRecords(a).AnyAsync(x => x.Id == form.Id)) return NotFound();
+        await billing.Correct(form.Id, form.PeriodStart, form.PeriodEnd, form.Status, form.Notes, form.Version, form.WorkItemVersion);
+        TempData["Success"] = "Billing record correction saved. Historical amount and share snapshots are unchanged.";
+        return RedirectToAction(nameof(Details), new { id = form.Id });
+    }
+
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> Status(int id, BillingStatus status, long version)
     {

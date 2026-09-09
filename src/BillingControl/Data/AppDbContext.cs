@@ -99,9 +99,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             {
                 string[] allowed = e.Entity switch
                 {
-                    BillingRecord => ["Status", "CancellationReason"],
-                    Invoice => ["Status", "CancellationReason"],
-                    RevenueShareAllocation or WorkerPaymentAllocation or InvoiceLine or CustomerReceiptAllocation => [],
+                    BillingRecord => ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
+                    Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
+                    RevenueShareAllocation or WorkerPaymentAllocation or CustomerReceiptAllocation => [],
+                    InvoiceLine => ["AllocatedAmount"],
                     WorkerAssignment or WorkerPayment or CustomerReceipt => ["IsCancelled", "CancellationReason"],
                     _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
                 };

@@ -687,6 +687,75 @@ public class IntegrationTests
         }
     }
     [PostgresFact]
+    public async Task BillingAndInvoiceCorrectionsRespectLocksCapsConcurrencyAndScope()
+    {
+        await using var db = await Fresh();
+        var engagementId = await Engagement(db);
+        var billing = new BillingService(db);
+        var first = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var second = await billing.Generate(engagementId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+
+        async Task<(long Version, long WorkItemVersion)> BillingVersions(int id)
+        {
+            await using var context = Db();
+            var bill = await context.BillingRecords.Include(x => x.WorkItem).AsNoTracking().SingleAsync(x => x.Id == id);
+            return (bill.Version, bill.WorkItem.Version);
+        }
+        var secondVersions = await BillingVersions(second.Id);
+        await billing.Correct(second.Id, new(2026, 2, 2), new(2026, 2, 27), second.Status, "Corrected service period", secondVersions.Version, secondVersions.WorkItemVersion);
+        var corrected = await db.BillingRecords.Include(x => x.Shares).Include(x => x.WorkItem).AsNoTracking().SingleAsync(x => x.Id == second.Id);
+        Assert.Equal(new DateOnly(2026, 2, 2), corrected.PeriodStart); Assert.Equal(new DateOnly(2026, 2, 27), corrected.PeriodEnd); Assert.Equal("Corrected service period", corrected.WorkItem.Notes);
+        Assert.Equal(1000m, corrected.Amount); Assert.Equal(400m, corrected.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
+        var correctedVersions = await BillingVersions(second.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(second.Id, new(2026, 1, 15), new(2026, 1, 20), second.Status, "Overlap", correctedVersions.Version, correctedVersions.WorkItemVersion));
+        await billing.Correct(second.Id, new(2026, 2, 3), new(2026, 2, 26), second.Status, "Second correction", correctedVersions.Version, correctedVersions.WorkItemVersion);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(second.Id, new(2026, 2, 4), new(2026, 2, 25), second.Status, "Stale", correctedVersions.Version, correctedVersions.WorkItemVersion));
+
+        var invoiceService = new InvoiceService(db);
+        var invoice = await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CORRECT-001", new(2026, 1, 31), new Dictionary<int, decimal> { [first.Id] = 500m });
+        var invoiceVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        await invoiceService.EditInvoice(invoice.Id, "CORRECT-001-EDITED", new(2026, 2, 1), new Dictionary<int, decimal> { [first.Id] = 600m }, invoiceVersion);
+        var editedInvoice = await db.Invoices.Include(x => x.Lines).SingleAsync(x => x.Id == invoice.Id);
+        Assert.Equal("CORRECT-001-EDITED", editedInvoice.InvoiceNumber); Assert.Equal(new DateOnly(2026, 2, 1), editedInvoice.InvoiceDate); Assert.Equal(600m, editedInvoice.Total); Assert.Equal(600m, editedInvoice.Lines.Single().AllocatedAmount);
+        var firstState = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).SingleAsync(x => x.Id == first.Id);
+        Assert.Equal(BillingInvoiceState.PartiallyInvoiced, firstState.CustomerInvoiceState);
+
+        var duplicate = await invoiceService.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "DUPLICATE-ISSUER", new(2026, 2, 2), new Dictionary<int, decimal> { [second.Id] = 100m });
+        var editedVersion = editedInvoice.Version;
+        await Assert.ThrowsAsync<BusinessException>(() => invoiceService.EditInvoice(invoice.Id, duplicate.InvoiceNumber, editedInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 600m }, editedVersion));
+        await Assert.ThrowsAsync<BusinessException>(() => invoiceService.EditInvoice(invoice.Id, "CAP-OVER", editedInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 1000.01m }, editedVersion));
+
+        await invoiceService.CreateReceipt(new(2026, 2, 3), "CORRECT-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [invoice.Id] = 100m });
+        var receiptLockedVersion = (await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id)).Version;
+        await invoiceService.EditInvoice(invoice.Id, "RECEIPT-METADATA-EDIT", new(2026, 2, 4), new Dictionary<int, decimal> { [first.Id] = 600m }, receiptLockedVersion);
+        var metadataEdited = await db.Invoices.AsNoTracking().SingleAsync(x => x.Id == invoice.Id);
+        Assert.Equal("RECEIPT-METADATA-EDIT", metadataEdited.InvoiceNumber); Assert.Equal(new DateOnly(2026, 2, 4), metadataEdited.InvoiceDate); Assert.Equal(InvoiceStatus.PartiallyPaid, metadataEdited.Status);
+        receiptLockedVersion = metadataEdited.Version;
+        var receiptError = await Assert.ThrowsAsync<BusinessException>(() => invoiceService.EditInvoice(invoice.Id, "RECEIPT-LOCKED", editedInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 550m }, receiptLockedVersion));
+        Assert.Contains("active receipt allocations", receiptError.Message);
+        await Assert.ThrowsAsync<BusinessException>(() => invoiceService.EditInvoice(invoice.Id, "STALE", editedInvoice.InvoiceDate, new Dictionary<int, decimal> { [first.Id] = 550m }, editedVersion));
+
+        var worker = new Worker { Name = "Correction worker" }; db.Workers.Add(worker); await db.SaveChangesAsync();
+        var third = await billing.Generate(engagementId, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
+        await billing.Assign(third.WorkItem.Id, worker.Id, 50m);
+        var thirdVersions = await BillingVersions(third.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(third.Id, new(2026, 3, 2), new(2026, 3, 30), third.Status, "Assignment lock", thirdVersions.Version, thirdVersions.WorkItemVersion));
+
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "correction-scope-test-keys")));
+        const string password = "Correction-Scope-Password!123";
+        using (var scope = app.Services.CreateScope())
+        {
+            await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { { "BootstrapAdmin:Email", "correction-admin@example.com" }, { "BootstrapAdmin:Password", password } }).Build());
+            var users = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            var firmId = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Engagements.Where(x => x.Id == engagementId).Select(x => x.BusinessPartyId).SingleAsync();
+            var external = new AppUser { Email = "correction-firm@example.com", UserName = "correction-firm@example.com", EmailConfirmed = true, BusinessPartyId = firmId };
+            Seed.Check(await users.CreateAsync(external, password)); Seed.Check(await users.AddToRoleAsync(external, AppRoles.AccountingFirm));
+        }
+        using var externalClient = await SignedIn(app, "correction-firm@example.com", password);
+        Assert.Equal(HttpStatusCode.Redirect, (await externalClient.GetAsync($"/Billing/Edit/{first.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await externalClient.GetAsync($"/Invoices/Edit/{invoice.Id}")).StatusCode);
+    }
+    [PostgresFact]
     public async Task AuthenticationAndFullPageRender()
     {
         await using var db = await Fresh();

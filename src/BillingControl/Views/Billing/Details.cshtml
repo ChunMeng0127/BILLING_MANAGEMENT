@@ -1,7 +1,7 @@
 @model BillingRecord
 @{ ViewData["Title"] = "B-"+Model.Id.ToString("D5"); AccessProfile access=ViewBag.Access; var cost=access.IsStaff ? Model.WorkItem.Assignments.Where(x=>!x.IsCancelled).Sum(x=>x.Entitlement) : 0m; var gross=access.IsStaff ? Model.Shares.Single(x=>x.Kind==ShareKind.Lcm).Amount : 0m; var visibleInvoices=Model.InvoiceLines.Select(x=>x.Invoice).Where(x=>access.IsStaff || (access.IsAccountingFirm && x.BusinessPartyId==access.BusinessPartyId) || (access.IsManager && x.ManagerId==access.ManagerId)).DistinctBy(x=>x.Id).ToList(); }
 <a class="back-link" href="/Billing">← Billing records</a>
-<div class="page-heading"><div><p class="eyebrow">@ViewData["Title"] · @Finance.Label(Model.Status)</p><h1>@Model.CustomerName</h1><p>@Model.ServiceName · @Model.PeriodStart.ToString("dd MMM yyyy") — @Model.PeriodEnd.ToString("dd MMM yyyy")</p></div>
+<div class="page-heading"><div><p class="eyebrow">@ViewData["Title"] · @Finance.Label(Model.Status)</p><h1>@Model.CustomerName</h1><p>@Model.ServiceName · @Model.PeriodStart.ToString("dd MMM yyyy") — @Model.PeriodEnd.ToString("dd MMM yyyy")</p></div>@if(access.IsStaff && Model.Status!=BillingStatus.Cancelled){<a class="btn btn-outline-secondary" href="/Billing/Edit/@Model.Id">Edit billing record</a>}
 @if(access.IsStaff || access.IsManager) { <a href="/Work/Details/@Model.WorkItem.Id" class="btn btn-outline-secondary">Open work item →</a> }
 </div>
 <div class="metrics compact">

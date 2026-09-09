@@ -55,6 +55,35 @@ public class BillingService
         await db.SaveChangesAsync(); return bill;
         });
     }
+    public async Task Correct(int id, DateOnly periodStart, DateOnly periodEnd, BillingStatus status, string? notes, long version, long workItemVersion)
+    {
+        await FinancialTransaction.Serializable(db, async () =>
+        {
+            var bill = await db.BillingRecords
+                .Include(x => x.Engagement)
+                .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+                .Include(x => x.WorkItem).ThenInclude(x => x.Assignments).ThenInclude(x => x.Allocations).ThenInclude(x => x.WorkerPayment)
+                .SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Billing record was not found.");
+            Require(bill.Status != BillingStatus.Cancelled, "Cancelled billing records cannot be edited.");
+            Require(bill.Version == version, "This billing record changed. Refresh before saving.");
+            Require(bill.WorkItem.Version == workItemVersion, "The related work item changed. Refresh before saving.");
+            Require(Enum.IsDefined(status) && (status == bill.Status || status <= BillingStatus.ReadyToBill), "Invoice and payment states are calculated from active financial records.");
+            Require(periodStart >= bill.Engagement.StartDate && periodEnd >= periodStart && (bill.Engagement.EndDate == null || periodEnd <= bill.Engagement.EndDate), "The service period must stay within the engagement dates.");
+            var periodChanged = bill.PeriodStart != periodStart || bill.PeriodEnd != periodEnd;
+            if (periodChanged)
+            {
+                Require(!bill.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled), "Cancel active invoices before correcting this billing period.");
+                Require(!bill.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active worker assignments before correcting this billing period.");
+                Require(!bill.WorkItem.Assignments.SelectMany(x => x.Allocations).Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before correcting this billing period.");
+                Require(!await db.BillingRecords.AnyAsync(x => x.Id != id && x.EngagementId == bill.EngagementId && x.Status != BillingStatus.Cancelled && x.PeriodStart <= periodEnd && x.PeriodEnd >= periodStart), "The corrected service period overlaps another active billing record.");
+            }
+            bill.PeriodStart = periodStart;
+            bill.PeriodEnd = periodEnd;
+            bill.Status = status;
+            bill.WorkItem.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+            await db.SaveChangesAsync();
+        });
+    }
     public async Task Assign(int workItemId, int workerId, decimal percent)
     {
         await FinancialTransaction.Serializable(db, async () =>
