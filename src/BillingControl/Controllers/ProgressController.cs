@@ -103,10 +103,16 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         if (assignmentId is null) return NotFound();
         var assignment = await access.ProgressAssignments(a)
             .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
+            .Include(x => x.WorkflowHistory)
             .SingleOrDefaultAsync(x => x.Id == assignmentId);
-        if (assignment == null || !AssignmentWorkflowService.IsActive(assignment)
+        var hasCurrentReport = assignment != null && await access.ProgressReports(a)
+            .AnyAsync(x => x.WorkerAssignmentId == assignment.Id && x.WeekStart == targetWeek);
+        var finalCompletionWeek = assignment != null && a.IsWorker && targetWeek == clock.CurrentWeekStart
+            && !hasCurrentReport && AssignmentWorkflowService.AllowsFinalCurrentWeekReport(assignment, clock);
+        if (assignment == null || (!AssignmentWorkflowService.IsActive(assignment) && !finalCompletionWeek)
             || (assignment.ReportingResumedFromWeek.HasValue && targetWeek < assignment.ReportingResumedFromWeek.Value)) return NotFound();
         ViewBag.Assignment = assignment;
+        ViewBag.FinalCompletionWeek = finalCompletionWeek;
         await SetVersionChoices(assignment);
         var status = assignment.CurrentWorkflowStatus;
         return View(new WeeklyProgressForm

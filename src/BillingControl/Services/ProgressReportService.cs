@@ -35,20 +35,27 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
 
             var assignment = await db.WorkerAssignments
                 .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
+                .Include(x => x.WorkflowHistory)
                 .SingleOrDefaultAsync(x => x.Id == form.WorkerAssignmentId);
             if (assignment == null) throw new BusinessException("The selected assignment was not found.");
             Finance.Require(form.AssignmentVersion > 0 && form.AssignmentVersion == assignment.Version,
                 "The worker assignment changed. Refresh before saving the weekly update.");
+            var isNew = form.Id == 0;
+            var finalCompletionWeek = isNew
+                && access.IsWorker
+                && weekStart == clock.CurrentWeekStart
+                && AssignmentWorkflowService.AllowsFinalCurrentWeekReport(assignment, clock)
+                && !await db.WeeklyProgressReports.AnyAsync(x => x.WorkerAssignmentId == assignment.Id && x.WeekStart == weekStart);
             var inScope = access.IsStaff || (access.IsWorker && !assignment.IsCancelled && !assignment.IsHidden && assignment.WorkerId == access.WorkerId);
-            Finance.Require(inScope, "You can submit progress only for your own active assignment.");
+            Finance.Require(inScope, "You can submit progress only for your own eligible assignment.");
             Finance.Require(form.Id > 0 || access.IsWorker, "Workers submit new reports. Staff may correct existing submitted reports.");
             Finance.Require(!assignment.IsCancelled || (access.IsStaff && form.Id > 0), "Cancelled assignments cannot receive progress reports.");
             Finance.Require(form.Id > 0 || assignment.WorkItem.BillingRecord.Status != BillingStatus.Cancelled, "Cancelled billing cannot receive progress reports.");
-            Finance.Require(form.Id > 0 || AssignmentWorkflowService.IsActive(assignment), "Completed or hidden assignments cannot receive a new weekly update.");
+            Finance.Require(form.Id > 0 || AssignmentWorkflowService.IsActive(assignment) || finalCompletionWeek,
+                "Completed assignments may submit only their required final current-week update; hidden assignments cannot receive new reports.");
             Finance.Require(form.Id > 0 || !assignment.ReportingResumedFromWeek.HasValue || weekStart >= assignment.ReportingResumedFromWeek.Value,
                 "Weekly reporting resumes from the current week after an assignment is reopened or unhidden.");
 
-            var isNew = form.Id == 0;
             WeeklyProgressReport report;
             if (!isNew)
             {
@@ -78,6 +85,9 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             report.IssuesOrBlockers = string.IsNullOrWhiteSpace(form.IssuesOrBlockers) ? null : form.IssuesOrBlockers.Trim();
 
             var workerCurrentWeekEdit = access.IsWorker && !isNew && report.WeekStart == clock.CurrentWeekStart;
+            if (finalCompletionWeek)
+                Finance.Require(form.WorkflowStatus == WorkflowStatus.Completed && form.WorkflowVersion is null,
+                    "The final completion-week update must remain Completed.");
             if (isNew || workerCurrentWeekEdit)
             {
                 await workflow.ApplyWorkflowAsync(assignment, form.WorkflowStatus, form.WorkflowVersion, WorkflowHistoryAction.WeeklyUpdate);

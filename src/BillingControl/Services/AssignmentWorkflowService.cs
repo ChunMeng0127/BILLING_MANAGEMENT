@@ -15,6 +15,18 @@ public sealed class AssignmentWorkflowService(AppDbContext db, BusinessClock clo
         && !assignment.IsHidden && assignment.CurrentWorkflowStatus != WorkflowStatus.Completed;
 
     /// <summary>
+    /// A completion transition still leaves one final report obligation in the
+    /// current week. This exception never applies to hidden/cancelled work and
+    /// does not make a completed assignment active again.
+    /// </summary>
+    public static bool AllowsFinalCurrentWeekReport(WorkerAssignment assignment, BusinessClock clock) =>
+        assignment.CurrentWorkflowStatus == WorkflowStatus.Completed
+        && !assignment.IsCancelled
+        && !assignment.IsHidden
+        && assignment.WorkItem.BillingRecord.Status != BillingStatus.Cancelled
+        && RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock);
+
+    /// <summary>
     /// Returns whether this assignment was responsible for a report in the selected
     /// historical week. BillingRecord dates are deliberately not consulted here.
     ///
