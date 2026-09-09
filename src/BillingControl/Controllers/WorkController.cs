@@ -46,6 +46,7 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         var a = await access.CurrentAsync();
         var item = await access.WorkItems(a).Include(x => x.BillingRecord).SingleOrDefaultAsync(x => x.Id == id);
         if (item == null) return NotFound();
+        Finance.Require(a.IsStaff, "Only Admin and InternalUser can update shared work progress. Submit a weekly worker progress report instead.");
         Finance.Require(item.Version == version && item.BillingRecord.Status != BillingStatus.Cancelled, "Record changed or billing was cancelled. Refresh before saving.");
         item.Status = status;
         item.Notes = notes;

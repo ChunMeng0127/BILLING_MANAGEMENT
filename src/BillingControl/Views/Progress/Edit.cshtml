@@ -1,0 +1,14 @@
+@model WeeklyProgressForm
+@{ ViewData["Title"] = Model.Id > 0 ? "Edit weekly progress" : "Submit weekly progress"; WorkerAssignment assignment = ViewBag.Assignment; }
+<a class="back-link" href="/Progress?weekStart=@Model.WeekStart.ToString("yyyy-MM-dd")">← Weekly progress</a>
+<div class="page-heading"><div><p class="eyebrow">@ViewData["Title"]</p><h1>@assignment.WorkItem.BillingRecord.CustomerName</h1><p>@assignment.WorkItem.BillingRecord.ServiceName · @assignment.WorkItem.BillingRecord.PeriodStart.ToString("dd MMM yyyy") — @assignment.WorkItem.BillingRecord.PeriodEnd.ToString("dd MMM yyyy") · @assignment.Percent.ToString("0.##")% assigned · RM @assignment.Entitlement.ToString("N2") entitlement</p></div></div>
+<div class="panel form-panel wide"><p class="hint">Reporting week: @Model.WeekStart.ToString("dd MMM yyyy") — @Model.WeekStart.AddDays(6).ToString("dd MMM yyyy"). Work status is managed on the shared work item by staff.</p>
+<form method="post" asp-action="Save">
+<input type="hidden" asp-for="Id" /><input type="hidden" asp-for="Version" /><input type="hidden" asp-for="WorkerAssignmentId" /><input type="hidden" asp-for="WeekStart" />
+<label class="form-label">Progress percent<input asp-for="ProgressPercent" type="number" min="0" max="100" step="0.01" class="form-control" required /></label>
+<label class="form-label">Progress status<select asp-for="ProgressStatus" asp-items="Html.GetEnumSelectList<ProgressStatus>()" class="form-select"></select></label>
+<label class="form-label">Work done<textarea asp-for="WorkDone" class="form-control" rows="5" maxlength="4000" required></textarea></label>
+<label class="form-label">Next action<textarea asp-for="NextAction" class="form-control" rows="3" maxlength="2000"></textarea><span class="hint">Required unless status is Completed.</span></label>
+<label class="form-label">Issues or blockers<textarea asp-for="IssuesOrBlockers" class="form-control" rows="3" maxlength="2000"></textarea></label>
+<div class="form-actions"><button class="btn btn-primary">@(Model.Id > 0 ? "Save changes" : "Submit report")</button><a class="btn btn-outline-secondary" href="/Progress?weekStart=@Model.WeekStart.ToString("yyyy-MM-dd")">Cancel</a></div>
+</form></div>

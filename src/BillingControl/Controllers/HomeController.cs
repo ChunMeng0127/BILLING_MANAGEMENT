@@ -38,7 +38,19 @@ public class HomeController(AppDbContext db, AccessScope access) : AppController
         if (f.Status != null) q = q.Where(x => x.Status == f.Status);
         if (f.From != null) q = q.Where(x => x.PeriodEnd >= f.From);
         if (f.To != null) q = q.Where(x => x.PeriodStart <= f.To);
-        return new() { Access = a, Filter = f, Bills = await q.AsSplitQuery().OrderByDescending(x => x.PeriodStart).ToListAsync() };
+        var model = new ReportModel { Access = a, Filter = f, Bills = await q.AsSplitQuery().OrderByDescending(x => x.PeriodStart).ToListAsync() };
+        if (a.IsStaff || a.IsManager || a.IsWorker)
+        {
+            var currentWeek = ProgressReportService.CurrentWeekStart();
+            var assignmentQuery = access.ProgressAssignments(a).Where(x => !x.IsCancelled);
+            model.ProgressRequired = await assignmentQuery.CountAsync();
+            model.ProgressSubmitted = await access.ProgressReports(a).Where(x => !x.WorkerAssignment.IsCancelled).CountAsync(x => x.WeekStart == currentWeek);
+            model.ProgressMissing = Math.Max(0, model.ProgressRequired - model.ProgressSubmitted);
+            var previousWeek = currentWeek.AddDays(-7);
+            model.ProgressLate = await assignmentQuery.Where(x => x.WorkItem.BillingRecord.PeriodStart <= previousWeek.AddDays(6) && x.WorkItem.BillingRecord.PeriodEnd >= previousWeek)
+                .CountAsync(x => !access.ProgressReports(a).Where(r => !r.WorkerAssignment.IsCancelled).Any(r => r.WorkerAssignmentId == x.Id && r.WeekStart == previousWeek));
+        }
+        return model;
     }
 
     private async Task Choices(AccessProfile a)

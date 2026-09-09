@@ -17,6 +17,8 @@ public static class AppRoles
     public const string BillingReaders = Admin + "," + InternalUser + "," + AccountingFirm + "," + Manager;
     public const string WorkReaders = Admin + "," + InternalUser + "," + Manager + "," + Worker;
     public const string WorkEditors = WorkReaders;
+    public const string ProgressReaders = Staff + "," + Manager + "," + Worker;
+    public const string ProgressEditors = Staff + "," + Worker;
     public const string PaymentReaders = Admin + "," + InternalUser + "," + Worker;
     public static readonly string[] All = [Admin, InternalUser, AccountingFirm, Manager, Worker];
 }
@@ -120,6 +122,22 @@ public sealed class AccessScope(AppDbContext db, IHttpContextAccessor http)
         AppRoles.Admin or AppRoles.InternalUser => db.WorkerAssignments,
         AppRoles.Worker => db.WorkerAssignments.Where(x => !x.IsCancelled && x.WorkerId == a.WorkerId),
         _ => db.WorkerAssignments.Where(_ => false)
+    };
+
+    public IQueryable<WorkerAssignment> ProgressAssignments(AccessProfile a) => a.Role switch
+    {
+        AppRoles.Admin or AppRoles.InternalUser => db.WorkerAssignments,
+        AppRoles.Manager => db.WorkerAssignments.Where(x => x.WorkItem.BillingRecord.Engagement.ManagerId == a.ManagerId),
+        AppRoles.Worker => db.WorkerAssignments.Where(x => !x.IsCancelled && x.WorkerId == a.WorkerId),
+        _ => db.WorkerAssignments.Where(_ => false)
+    };
+
+    public IQueryable<WeeklyProgressReport> ProgressReports(AccessProfile a) => a.Role switch
+    {
+        AppRoles.Admin or AppRoles.InternalUser => db.WeeklyProgressReports,
+        AppRoles.Manager => db.WeeklyProgressReports.Where(x => x.WorkerAssignment.WorkItem.BillingRecord.Engagement.ManagerId == a.ManagerId),
+        AppRoles.Worker => db.WeeklyProgressReports.Where(x => !x.WorkerAssignment.IsCancelled && x.WorkerAssignment.WorkerId == a.WorkerId),
+        _ => db.WeeklyProgressReports.Where(_ => false)
     };
 
     public IQueryable<WorkerPayment> WorkerPayments(AccessProfile a) => a.Role switch

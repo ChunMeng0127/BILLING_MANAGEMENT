@@ -30,4 +30,30 @@ public class ReportModel
         AppRoles.Manager => Share(ShareKind.Manager),
         _ => 0m
     };
+    public int ProgressRequired { get; set; }
+    public int ProgressSubmitted { get; set; }
+    public int ProgressMissing { get; set; }
+    public int ProgressLate { get; set; }
+}
+
+public class ProgressReportRow
+{
+    public WorkerAssignment Assignment { get; set; } = null!;
+    public WeeklyProgressReport? Report { get; set; }
+    public DateOnly WeekStart { get; set; }
+    public DateOnly WeekEnd => WeekStart.AddDays(6);
+    public bool IsLate => Report == null && WeekStart < ProgressReportService.CurrentWeekStart();
+    public string ReportingStatus => Assignment.IsCancelled ? "Cancelled" : Report != null ? "Submitted" : IsLate ? "Late" : "Missing";
+}
+
+public class ProgressReportModel
+{
+    public AccessProfile Access { get; set; } = AccessProfile.None;
+    public DateOnly WeekStart { get; set; }
+    public DateOnly CurrentWeekStart { get; set; }
+    public List<ProgressReportRow> Rows { get; set; } = [];
+    public int Required => Rows.Count(x => !x.Assignment.IsCancelled);
+    public int Submitted => Rows.Count(x => !x.Assignment.IsCancelled && x.Report != null);
+    public int Missing => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null && x.WeekStart >= CurrentWeekStart);
+    public int Late => Rows.Count(x => !x.Assignment.IsCancelled && x.Report == null && x.WeekStart < CurrentWeekStart);
 }

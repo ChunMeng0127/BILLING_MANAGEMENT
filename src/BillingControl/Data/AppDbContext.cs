@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<WorkerAssignment> WorkerAssignments => Set<WorkerAssignment>();
+    public DbSet<WeeklyProgressReport> WeeklyProgressReports => Set<WeeklyProgressReport>();
     public DbSet<WorkerPayment> WorkerPayments => Set<WorkerPayment>();
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
@@ -84,6 +85,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<InvoiceLine>().ToTable(t => t.HasCheckConstraint("CK_InvoiceLine_Amount", "\"AllocatedAmount\" > 0"));
         b.Entity<BillingRecord>().HasOne(x => x.WorkItem).WithOne(x => x.BillingRecord).HasForeignKey<WorkItem>(x => x.BillingRecordId);
         b.Entity<WorkerAssignment>().ToTable(t => t.HasCheckConstraint("CK_Assignment", "\"Percent\" >= 0 AND \"Percent\" <= 100 AND \"LcmGrossSnapshot\" >= 0 AND \"Entitlement\" >= 0"));
+        b.Entity<WeeklyProgressReport>().HasIndex(x => new { x.WorkerAssignmentId, x.WeekStart }).IsUnique();
+        b.Entity<WeeklyProgressReport>().Property(x => x.WorkDone).HasMaxLength(4000);
+        b.Entity<WeeklyProgressReport>().Property(x => x.NextAction).HasMaxLength(2000);
+        b.Entity<WeeklyProgressReport>().Property(x => x.IssuesOrBlockers).HasMaxLength(2000);
+        b.Entity<WeeklyProgressReport>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WeeklyProgress_Dates", "\"WeekEnd\" >= \"WeekStart\"");
+            t.HasCheckConstraint("CK_WeeklyProgress_Percent", "\"ProgressPercent\" BETWEEN 0 AND 100");
+        });
         b.Entity<WorkerPayment>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<CustomerReceipt>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<WorkerPayment>().ToTable(t => t.HasCheckConstraint("CK_Payment", "\"Amount\" > 0"));
@@ -115,6 +125,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     WorkerPaymentAllocation => [],
                     CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
+                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkDone", "NextAction", "IssuesOrBlockers", "SubmittedAt"],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                     CustomerReceipt => allowReceiptAllocationCorrection

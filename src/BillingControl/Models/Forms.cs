@@ -120,3 +120,16 @@ public class WorkerPaymentEditForm
     [DataType(DataType.Date)] public DateOnly PaymentDate { get; set; }
     [Required, StringLength(160)] public string Reference { get; set; } = "";
 }
+
+public class WeeklyProgressForm
+{
+    public int Id { get; set; }
+    public long Version { get; set; }
+    [Range(1, int.MaxValue)] public int WorkerAssignmentId { get; set; }
+    [DataType(DataType.Date)] public DateOnly WeekStart { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal ProgressPercent { get; set; }
+    public ProgressStatus ProgressStatus { get; set; }
+    [Required, StringLength(4000)] public string WorkDone { get; set; } = "";
+    [StringLength(2000)] public string? NextAction { get; set; }
+    [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
+}

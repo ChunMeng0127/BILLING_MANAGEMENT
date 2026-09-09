@@ -1,0 +1,28 @@
+@model ProgressReportModel
+@{ ViewData["Title"] = "Weekly progress"; }
+<div class="page-heading">
+<div><p class="eyebrow">WORK DELIVERY</p><h1>Weekly worker progress</h1><p>Reports are recorded against an active worker assignment for Monday–Sunday.</p></div>
+<a class="btn btn-outline-secondary" href="/Work">View work items →</a>
+</div>
+<div class="panel form-panel wide">
+<form method="get" class="inline-form">
+<label>Reporting week <input type="date" name="weekStart" value="@Model.WeekStart.ToString("yyyy-MM-dd")" class="form-control" /></label>
+<button class="btn btn-outline-secondary">Load week</button>
+</form>
+<p class="hint">Current week starts @Model.CurrentWeekStart.ToString("dd MMM yyyy"). Past missing weeks remain available for late submission.</p>
+</div>
+<div class="metrics compact">
+<div class="metric"><span>Required</span><strong>@Model.Required</strong><p>Active assignments in scope</p></div>
+<div class="metric"><span>Submitted</span><strong>@Model.Submitted</strong><p>Reports for this week</p></div>
+<div class="metric"><span>Missing</span><strong>@Model.Missing</strong><p>Due or not yet submitted</p></div>
+<div class="metric"><span>Late</span><strong>@Model.Late</strong><p>Past week without a report</p></div>
+</div>
+<div class="panel">
+@if (Model.Rows.Count == 0) { <div class="empty-state"><h3>No active assignments in this scope</h3><p>Progress reports appear after a worker is assigned to a billing work item.</p></div> }
+else { <table class="table data-grid"><thead><tr><th>Week</th><th>Worker</th><th>Customer</th><th>Service</th><th>Billing period</th>@if (Model.Access.IsWorker) { <th data-type="amount">Assigned %</th><th data-type="amount">Entitlement (RM)</th> }<th>Work ref</th><th data-type="amount">Progress %</th><th>Status</th><th>Submitted</th><th>Reporting</th><th data-nosort>Action</th></tr></thead><tbody>
+@foreach (var row in Model.Rows) { var a = row.Assignment; var r = row.Report; var canEdit = !a.IsCancelled && (Model.Access.IsStaff || (Model.Access.IsWorker && (r == null || row.WeekStart >= Model.CurrentWeekStart))); <tr>
+<td>@row.WeekStart.ToString("dd MMM yyyy") – @row.WeekEnd.ToString("dd MMM yyyy")</td><td>@a.WorkerName</td><td>@a.WorkItem.BillingRecord.CustomerName</td><td>@a.WorkItem.BillingRecord.ServiceName</td><td>@a.WorkItem.BillingRecord.PeriodStart.ToString("dd MMM yyyy") – @a.WorkItem.BillingRecord.PeriodEnd.ToString("dd MMM yyyy")</td>@if (Model.Access.IsWorker) { <td>@a.Percent.ToString("0.##")%</td><td class="money">@a.Entitlement.ToString("N2")</td> }<td><a href="/Work/Details/@a.WorkItemId">W-@a.WorkItemId.ToString("D5")</a></td>
+<td>@(r == null ? "—" : r.ProgressPercent.ToString("0.##"))</td><td>@(r == null ? "—" : Finance.Label(r.ProgressStatus))</td><td>@(r == null ? "—" : r.SubmittedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm"))</td><td>@row.ReportingStatus</td><td>@if (r != null) { <a href="/Progress/Edit/@r.Id">@(canEdit ? "Edit" : "View")</a> } else if (canEdit) { <a href="/Progress/Edit?assignmentId=@a.Id&weekStart=@row.WeekStart.ToString("yyyy-MM-dd")">Submit</a> } else { <span class="hint">Read-only</span> }</td>
+</tr> }
+</tbody></table> }
+</div>

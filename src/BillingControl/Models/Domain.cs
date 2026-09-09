@@ -40,6 +40,7 @@ public enum BillingGenerationMode { Scheduled, Replacement, AdHocManual }
 public enum EngagementStatus { Active, Paused, Closed }
 public enum BillingStatus { Upcoming, WorkInProgress, Completed, ReadyToBill, Billed, PartiallyPaid, Paid, Cancelled }
 public enum WorkStatus { Upcoming, InProgress, Completed }
+public enum ProgressStatus { NotStarted, InProgress, Blocked, Completed }
 public class Engagement : Record
 {
     public int CustomerId { get; set; }
@@ -121,6 +122,20 @@ public class WorkerAssignment : Record
     public bool IsCancelled { get; set; }
     public string? CancellationReason { get; set; }
     public List<WorkerPaymentAllocation> Allocations { get; set; } = [];
+    public List<WeeklyProgressReport> ProgressReports { get; set; } = [];
+}
+public class WeeklyProgressReport : Record
+{
+    public int WorkerAssignmentId { get; set; }
+    public WorkerAssignment WorkerAssignment { get; set; } = null!;
+    public DateOnly WeekStart { get; set; }
+    public DateOnly WeekEnd { get; set; }
+    public decimal ProgressPercent { get; set; }
+    public ProgressStatus ProgressStatus { get; set; }
+    [Required, StringLength(4000)] public string WorkDone { get; set; } = "";
+    [StringLength(2000)] public string? NextAction { get; set; }
+    [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
+    public DateTime SubmittedAt { get; set; }
 }
 public class WorkerPayment : Record
 {
