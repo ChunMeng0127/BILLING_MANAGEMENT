@@ -1087,7 +1087,7 @@ public class IntegrationTests
         var billing = new BillingService(db);
         var bill = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
         await billing.Assign(bill.WorkItem.Id, workerOne.Id, 50m);
-        var assignment = await db.WorkerAssignments.SingleAsync();
+        var assignment = await db.WorkerAssignments.AsNoTracking().SingleAsync();
         var assignmentCreatedAt = assignment.CreatedAt; var assignmentCreatedBy = assignment.CreatedBy;
         await billing.EditAssignment(assignment.Id, workerOne.Id, 60m, assignment.Version);
         assignment = await db.WorkerAssignments.SingleAsync();
@@ -1115,7 +1115,7 @@ public class IntegrationTests
         Assert.Equal(InvoiceStatus.PartiallyPaid, (await db.Invoices.SingleAsync(x => x.Id == invoice.Id)).Status);
 
         await billing.Pay(workerOne.Id, new(2026, 2, 1), "PART3-PAYMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 50m });
-        var payment = await db.WorkerPayments.SingleAsync(x => x.Reference == "PART3-PAYMENT");
+        var payment = await db.WorkerPayments.AsNoTracking().SingleAsync(x => x.Reference == "PART3-PAYMENT");
         var paymentCreatedAt = payment.CreatedAt; var paymentCreatedBy = payment.CreatedBy;
         assignment = await db.WorkerAssignments.SingleAsync(x => x.Id == assignment.Id);
         await Assert.ThrowsAsync<BusinessException>(() => billing.EditAssignment(assignment.Id, workerOne.Id, 55m, assignment.Version));
