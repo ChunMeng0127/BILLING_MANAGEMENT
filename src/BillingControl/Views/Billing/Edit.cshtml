@@ -1,8 +1,8 @@
 @model BillingRecordEditForm
-@{ var bill = ViewBag.Bill as BillingRecord; var hasActiveInvoices = ViewBag.HasActiveInvoices == true; var hasActiveAssignments = ViewBag.HasActiveAssignments == true; var hasActiveReceipts = ViewBag.HasActiveReceipts == true; var hasActivePayments = ViewBag.HasActivePayments == true; var hasFinancialDependencies = hasActiveInvoices || hasActiveReceipts || hasActiveAssignments || hasActivePayments; ViewData["Title"] = "Edit billing record"; }
+@{ var bill = ViewBag.Bill as BillingRecord; var hasActiveInvoices = ViewBag.HasActiveInvoices == true; var hasActiveCustomerInvoices = ViewBag.HasActiveCustomerInvoices == true; var hasActiveShareInvoices = ViewBag.HasActiveShareInvoices == true; var hasActiveAssignments = ViewBag.HasActiveAssignments == true; var hasActiveReceipts = ViewBag.HasActiveReceipts == true; var hasActivePayments = ViewBag.HasActivePayments == true; var hasFinancialDependencies = hasActiveInvoices || hasActiveReceipts || hasActiveAssignments || hasActivePayments; ViewData["Title"] = "Edit billing record"; }
 <a class="back-link" href="/Billing/Details/@Model.Id">← Billing details</a>
 <div class="page-heading"><div><p class="eyebrow">BILLING CORRECTION</p><h1>Edit billing record</h1><p>@bill?.CustomerName · @bill?.ServiceName</p></div></div>
-@if(hasFinancialDependencies) { <div class="alert alert-warning">Period changes and amount corrections are locked while active invoices, receipts, worker assignments or worker payments exist. Cancel the downstream records first. Operational notes remain available.</div> }
+@if(hasFinancialDependencies) { <div class="alert alert-warning">Period changes remain locked while active downstream records exist. Customer billing amount may be corrected when active customer invoices have no receipts, but it cannot be lower than their allocated total. Revenue-share base changes remain locked by active manager/LCM invoices, worker assignments or worker payments. Operational notes remain available.</div> }
 <form method="post" asp-action="Edit" class="panel form-panel wide">
 <div asp-validation-summary="All" class="text-danger"></div>
 <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" /><input asp-for="WorkItemVersion" type="hidden" />
@@ -17,6 +17,6 @@ else { <span class="form-label">Financial status</span><p class="form-control-pl
 </div>
 </div>
 <label asp-for="Notes" class="form-label">Operational notes<textarea asp-for="Notes" rows="4" maxlength="2000" class="form-control"></textarea></label>
-<p class="hint">Customer and service are immutable historical relationships. Customer billing amount and revenue-share base are historical snapshots: they may be corrected before downstream invoices, receipts, assignments or payments exist. Revenue shares are recalculated from the corrected base using the stored percentages.</p>
+<p class="hint">Customer and service are immutable historical relationships. Customer billing amount is a historical snapshot and may be corrected when active customer invoices have no receipts and the corrected amount covers their allocations. Revenue-share base may be corrected only before manager/LCM invoices, worker assignments or worker payments exist; shares are recalculated from the stored percentages.</p>
 <div class="form-actions"><button class="btn btn-primary">Save billing correction</button><a class="btn btn-outline-secondary" href="/Billing/Details/@Model.Id">Cancel</a></div>
 </form>

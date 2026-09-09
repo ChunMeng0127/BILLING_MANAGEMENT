@@ -1,12 +1,42 @@
 @model ReceiptEditForm
-@{ ViewData["Title"] = "Edit customer receipt"; }
+@using System.Globalization
+@{ var receipt = ViewBag.Receipt as CustomerReceipt; ViewData["Title"] = "Edit customer receipt"; }
 <a class="back-link" href="/Invoices">← Invoice register</a>
-<div class="page-heading"><div><p class="eyebrow">RECEIPT CORRECTION</p><h1>Edit customer receipt</h1><p>Correct the date or reference while preserving the posted allocation audit trail.</p></div></div>
-<form asp-action="EditReceipt" method="post" class="panel form-panel narrow">
+<div class="page-heading"><div><p class="eyebrow">RECEIPT CORRECTION</p><h1>Edit customer receipt</h1><p>Correct metadata and the amounts allocated to the invoices already attached to this receipt.</p></div></div>
+<form asp-action="EditReceipt" method="post" class="panel form-panel wide receipt-edit-form">
     <div asp-validation-summary="All" class="text-danger"></div>
     <input asp-for="Id" type="hidden" /><input asp-for="Version" type="hidden" />
-    <label asp-for="ReceiptDate" class="form-label">Receipt date<input asp-for="ReceiptDate" type="date" class="form-control" required /></label>
-    <label asp-for="Reference" class="form-label">Reference<input asp-for="Reference" class="form-control" maxlength="160" required /></label>
-    <p class="hint">Receipt allocation amounts are immutable. To correct allocations, cancel this receipt and create a replacement receipt.</p>
-    <div class="form-actions"><button class="btn btn-primary">Save correction</button><a class="btn btn-outline-secondary" href="/Invoices">Cancel</a></div>
+    <div class="form-grid">
+        <label asp-for="ReceiptDate" class="form-label">Receipt date<input asp-for="ReceiptDate" type="date" class="form-control" required /></label>
+        <label asp-for="Reference" class="form-label">Reference<input asp-for="Reference" class="form-control" maxlength="160" required /></label>
+    </div>
+    <p class="hint">Amounts may be corrected here. To change which invoice this receipt is allocated to, cancel the receipt and create a replacement.</p>
+    @if (receipt?.IsCancelled == true) { <div class="alert alert-warning">This receipt is cancelled and cannot be edited.</div> }
+    @if (receipt is not null)
+    {
+        <table class="table data-grid receipt-allocation-edit-table">
+            <thead><tr><th>Invoice</th><th data-type="date">Invoice date</th><th data-type="amount">Invoice total (RM)</th><th data-type="amount">Received from other active receipts (RM)</th><th data-type="amount">Current allocation (RM)</th><th data-type="amount">Maximum permitted (RM)</th><th>Corrected allocation (RM)</th></tr></thead>
+            <tbody>
+            @foreach (var allocation in receipt.Allocations.OrderBy(x => x.Invoice.InvoiceDate).ThenBy(x => x.Invoice.InvoiceNumber))
+            {
+                var other = allocation.Invoice.ReceiptAllocations.Where(x => x.CustomerReceiptId != receipt.Id && !x.CustomerReceipt.IsCancelled).Sum(x => x.Amount);
+                var maximum = Math.Max(0m, allocation.Invoice.Total - other);
+                <tr>
+                    <td><a href="/Invoices/Details/@allocation.InvoiceId">@allocation.Invoice.InvoiceNumber</a></td>
+                    <td>@allocation.Invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                    <td class="money">@allocation.Invoice.Total.ToString("N2")</td>
+                    <td class="money">@other.ToString("N2")</td>
+                    <td class="money">@allocation.Amount.ToString("N2")</td>
+                    <td class="money">@maximum.ToString("N2")</td>
+                    <td><input name="Allocations[@allocation.InvoiceId]" type="number" min="0.01" max="@maximum.ToString("0.00", CultureInfo.InvariantCulture)" step="0.01" value="@allocation.Amount.ToString("0.00", CultureInfo.InvariantCulture)" class="form-control receipt-allocation-input" data-receipt-allocation /></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="summary-strip receipt-total-strip"><span>Receipt total</span><strong id="receipt-total" data-receipt-total>RM @receipt.Amount.ToString("N2")</strong></div>
+    }
+    <div class="form-actions"><button class="btn btn-primary" @(receipt?.IsCancelled == true ? "disabled" : null)>Save correction</button><a class="btn btn-outline-secondary" href="/Invoices">Cancel</a></div>
 </form>
+@section Scripts {
+<script src="~/js/receipt-edit.js" asp-append-version="true"></script>
+}

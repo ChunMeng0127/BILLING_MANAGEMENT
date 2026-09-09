@@ -262,31 +262,61 @@ public sealed class InvoiceService(AppDbContext db)
                 var paid = invoice.ReceiptAllocations.Where(x => !x.CustomerReceipt.IsCancelled).Sum(x => x.Amount);
                 Require(paid + allocations[invoice.Id] <= invoice.Total, $"Receipt exceeds the outstanding balance of invoice {invoice.InvoiceNumber}.");
             }
-            var paidBefore = invoices.ToDictionary(x => x.Id, x => x.ReceiptAllocations.Where(y => !y.CustomerReceipt.IsCancelled).Sum(y => y.Amount));
             var receipt = new CustomerReceipt { ReceiptDate = date, Amount = allocations.Values.Sum(), Reference = reference.Trim(), RequestId = requestId, Allocations = allocations.Select(x => new CustomerReceiptAllocation { InvoiceId = x.Key, Amount = x.Value }).ToList() };
             db.CustomerReceipts.Add(receipt);
-            foreach (var invoice in invoices)
-            {
-                var paid = paidBefore[invoice.Id] + allocations[invoice.Id];
-                invoice.Status = paid >= invoice.Total ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
-            }
             await db.SaveChangesAsync();
+            await RecalculateInvoiceStatuses(invoices.Select(x => x.Id));
             await RecalculateBillingStatuses(invoices.SelectMany(x => x.Lines).Select(x => x.BillingRecordId));
             await db.SaveChangesAsync();
             return receipt;
         });
 
-    public Task<CustomerReceipt> EditReceipt(int id, DateOnly date, string reference, long version) =>
+    public Task<CustomerReceipt> EditReceipt(int id, DateOnly date, string reference, long version, IDictionary<int, decimal>? correctedAllocations = null) =>
         FinancialTransaction.Serializable(db, async () =>
         {
-            var receipt = await db.CustomerReceipts.SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Receipt was not found.");
+            var receipt = await db.CustomerReceipts
+                .Include(x => x.Allocations).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+                .Include(x => x.Allocations).ThenInclude(x => x.Invoice).ThenInclude(x => x.Lines)
+                .SingleOrDefaultAsync(x => x.Id == id) ?? throw new BusinessException("Receipt was not found.");
             Require(!receipt.IsCancelled, "Cancelled receipts cannot be edited.");
             Require(receipt.Version == version, "This receipt changed. Refresh before saving.");
             Require(date != default && date <= DateOnly.FromDateTime(DateTime.Today), "Receipt date must be today or earlier.");
             Require(!string.IsNullOrWhiteSpace(reference) && reference.Trim().Length <= 160, "Receipt reference is required (maximum 160 characters).");
+            var affectedInvoiceIds = receipt.Allocations.Select(x => x.InvoiceId).ToArray();
+            var affectedBillingIds = receipt.Allocations.SelectMany(x => x.Invoice.Lines).Select(x => x.BillingRecordId).Distinct().ToArray();
+            if (correctedAllocations != null)
+            {
+                var existingIds = receipt.Allocations.Select(x => x.InvoiceId).ToHashSet();
+                Require(correctedAllocations.Count == existingIds.Count && correctedAllocations.Keys.ToHashSet().SetEquals(existingIds),
+                    "Receipt invoice allocations cannot be added, removed or changed here. Cancel the receipt and create a replacement.");
+                Require(correctedAllocations.Values.All(x => x > 0 && Money(x) == x), "Receipt allocations must be positive amounts with no more than two decimal places.");
+                PositiveMoney(correctedAllocations.Values.Sum());
+                foreach (var allocation in receipt.Allocations)
+                {
+                    var invoice = allocation.Invoice;
+                    Require(invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && invoice.Status != InvoiceStatus.Cancelled, "Receipts may only be allocated to active accounting-firm customer invoices.");
+                    var otherActiveReceipts = invoice.ReceiptAllocations
+                        .Where(x => x.CustomerReceiptId != id && !x.CustomerReceipt.IsCancelled)
+                        .Sum(x => x.Amount);
+                    Require(otherActiveReceipts + correctedAllocations[invoice.Id] <= invoice.Total,
+                        $"Receipt allocation exceeds the outstanding balance of invoice {invoice.InvoiceNumber}.");
+                }
+                receipt.Amount = correctedAllocations.Values.Sum();
+                foreach (var allocation in receipt.Allocations) allocation.Amount = correctedAllocations[allocation.InvoiceId];
+            }
             receipt.ReceiptDate = date;
             receipt.Reference = reference.Trim();
-            await db.SaveChangesAsync();
+            if (correctedAllocations == null)
+            {
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                using (db.PermitReceiptAllocationCorrection()) await db.SaveChangesAsync();
+                await RecalculateInvoiceStatuses(affectedInvoiceIds);
+                await RecalculateBillingStatuses(affectedBillingIds);
+                await db.SaveChangesAsync();
+            }
             return receipt;
         });
 
@@ -314,18 +344,13 @@ public sealed class InvoiceService(AppDbContext db)
             receipt.IsCancelled = true; receipt.CancellationReason = reason.Trim();
             await db.SaveChangesAsync();
             var invoiceIds = receipt.Allocations.Select(x => x.InvoiceId).ToArray();
-            var invoices = await db.Invoices.Include(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt).Where(x => invoiceIds.Contains(x.Id)).ToListAsync();
-            foreach (var invoice in invoices)
-            {
-                var paid = invoice.ReceiptAllocations.Where(x => !x.CustomerReceipt.IsCancelled).Sum(x => x.Amount);
-                invoice.Status = paid == 0 ? InvoiceStatus.Issued : paid >= invoice.Total ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
-            }
+            await RecalculateInvoiceStatuses(invoiceIds);
             await RecalculateBillingStatuses(receipt.Allocations.SelectMany(x => x.Invoice.Lines).Select(x => x.BillingRecordId));
             await db.SaveChangesAsync();
         });
     }
 
-    private async Task RecalculateBillingStatuses(IEnumerable<int> ids)
+    public async Task RecalculateBillingStatuses(IEnumerable<int> ids)
     {
         var billIds = ids.Distinct().ToArray();
         if (billIds.Length == 0) return;
@@ -344,6 +369,21 @@ public sealed class InvoiceService(AppDbContext db)
             }
             var received = lines.Sum(x => paid.GetValueOrDefault(x.InvoiceId) * x.AllocatedAmount / x.Invoice.Total);
             bill.Status = received <= 0 ? BillingStatus.Billed : received >= bill.Amount ? BillingStatus.Paid : BillingStatus.PartiallyPaid;
+        }
+    }
+
+    private async Task RecalculateInvoiceStatuses(IEnumerable<int> ids)
+    {
+        var invoiceIds = ids.Distinct().ToArray();
+        if (invoiceIds.Length == 0) return;
+        var invoices = await db.Invoices
+            .Include(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+            .Where(x => invoiceIds.Contains(x.Id) && x.Status != InvoiceStatus.Cancelled)
+            .ToListAsync();
+        foreach (var invoice in invoices)
+        {
+            var paid = invoice.ReceiptAllocations.Where(x => !x.CustomerReceipt.IsCancelled).Sum(x => x.Amount);
+            invoice.Status = paid <= 0 ? InvoiceStatus.Issued : paid >= invoice.Total ? InvoiceStatus.Paid : InvoiceStatus.PartiallyPaid;
         }
     }
 

@@ -102,6 +102,7 @@ public class ReceiptEditForm
     public long Version { get; set; }
     [DataType(DataType.Date)] public DateOnly ReceiptDate { get; set; }
     [Required, StringLength(160)] public string Reference { get; set; } = "";
+    public Dictionary<int, decimal?> Allocations { get; set; } = [];
 }
 
 public class WorkerAssignmentEditForm

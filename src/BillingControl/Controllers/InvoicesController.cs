@@ -124,17 +124,27 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
     [Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> EditReceipt(int id)
     {
-        var receipt = await db.CustomerReceipts.SingleOrDefaultAsync(x => x.Id == id);
+        var receipt = await db.CustomerReceipts
+            .Include(x => x.Allocations).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+            .SingleOrDefaultAsync(x => x.Id == id);
         if (receipt == null) return NotFound();
-        return View(new ReceiptEditForm { Id = receipt.Id, Version = receipt.Version, ReceiptDate = receipt.ReceiptDate, Reference = receipt.Reference });
+        ViewBag.Receipt = receipt;
+        return View(new ReceiptEditForm
+        {
+            Id = receipt.Id, Version = receipt.Version, ReceiptDate = receipt.ReceiptDate, Reference = receipt.Reference,
+            Allocations = receipt.Allocations.ToDictionary(x => x.InvoiceId, x => (decimal?)x.Amount)
+        });
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
     public async Task<IActionResult> EditReceipt(ReceiptEditForm form)
     {
         ValidForm();
-        await invoices.EditReceipt(form.Id, form.ReceiptDate, form.Reference, form.Version);
-        TempData["Success"] = "Receipt date and reference corrected. Allocation amounts remain immutable; cancel and create a replacement receipt to change allocations.";
+        var allocations = form.Allocations.Count == 0 ? null : form.Allocations.ToDictionary(x => x.Key, x => x.Value ?? 0m);
+        await invoices.EditReceipt(form.Id, form.ReceiptDate, form.Reference, form.Version, allocations);
+        TempData["Success"] = allocations == null
+            ? "Receipt date and reference corrected."
+            : "Receipt correction saved. Allocation amounts and receipt total were recalculated. To change which invoice is included, cancel the receipt and create a replacement.";
         return RedirectToAction(nameof(Details), new { id = await db.CustomerReceiptAllocations.Where(x => x.CustomerReceiptId == form.Id).Select(x => x.InvoiceId).FirstOrDefaultAsync() });
     }
 

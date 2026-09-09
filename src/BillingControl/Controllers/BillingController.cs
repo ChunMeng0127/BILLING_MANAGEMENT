@@ -143,8 +143,10 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
         if (bill == null) return NotFound();
         ViewBag.Bill = bill;
         ViewBag.HasActiveInvoices = await db.InvoiceLines.AnyAsync(x => x.BillingRecordId == id && x.Invoice.Status != InvoiceStatus.Cancelled);
+        ViewBag.HasActiveCustomerInvoices = await db.InvoiceLines.AnyAsync(x => x.BillingRecordId == id && x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer);
+        ViewBag.HasActiveShareInvoices = await db.InvoiceLines.AnyAsync(x => x.BillingRecordId == id && x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow != InvoiceFlow.AccountingFirmToCustomer);
         ViewBag.HasActiveAssignments = await db.WorkerAssignments.AnyAsync(x => x.WorkItem.BillingRecordId == id && !x.IsCancelled);
-        ViewBag.HasActiveReceipts = await db.CustomerReceiptAllocations.AnyAsync(x => x.Invoice.Lines.Any(l => l.BillingRecordId == id) && !x.CustomerReceipt.IsCancelled);
+        ViewBag.HasActiveReceipts = await db.CustomerReceiptAllocations.AnyAsync(x => x.Invoice.Lines.Any(l => l.BillingRecordId == id && l.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer) && !x.CustomerReceipt.IsCancelled);
         ViewBag.HasActivePayments = await db.WorkerPaymentAllocations.AnyAsync(x => x.WorkerAssignment.WorkItem.BillingRecordId == id && !x.WorkerPayment.IsCancelled);
         return View(new BillingRecordEditForm { Id = bill.Id, Version = bill.Version, WorkItemVersion = bill.WorkItem.Version, PeriodStart = bill.PeriodStart, PeriodEnd = bill.PeriodEnd, CustomerBillingAmount = bill.Amount, RevenueShareBaseAmount = bill.RevenueShareBaseAmount, Status = bill.Status, Notes = bill.WorkItem.Notes });
     }

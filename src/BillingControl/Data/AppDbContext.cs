@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
 {
     private bool allowInvoiceLineDeletion;
     private bool allowBillingSnapshotCorrection;
+    private bool allowReceiptAllocationCorrection;
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Service> Services => Set<Service>();
     public DbSet<BusinessParty> BusinessParties => Set<BusinessParty>();
@@ -111,11 +112,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         : ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
                     Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
                     RevenueShareAllocation => allowBillingSnapshotCorrection ? ["Amount"] : [],
-                    WorkerPaymentAllocation or CustomerReceiptAllocation => [],
+                    WorkerPaymentAllocation => [],
+                    CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
-                    CustomerReceipt => ["ReceiptDate", "Reference", "IsCancelled", "CancellationReason"],
+                    CustomerReceipt => allowReceiptAllocationCorrection
+                        ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
+                        : ["ReceiptDate", "Reference", "IsCancelled", "CancellationReason"],
                     _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
                 };
                 if (e.Properties.Any(p => p.IsModified && !allowed.Contains(p.Metadata.Name)))
@@ -142,6 +146,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         return new SnapshotScope(this, previous);
     }
 
+    internal IDisposable PermitReceiptAllocationCorrection()
+    {
+        var previous = allowReceiptAllocationCorrection;
+        allowReceiptAllocationCorrection = true;
+        return new ReceiptAllocationScope(this, previous);
+    }
+
     private sealed class DeletionScope(AppDbContext context, bool previous) : IDisposable
     {
         public void Dispose() => context.allowInvoiceLineDeletion = previous;
@@ -150,5 +161,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     private sealed class SnapshotScope(AppDbContext context, bool previous) : IDisposable
     {
         public void Dispose() => context.allowBillingSnapshotCorrection = previous;
+    }
+
+    private sealed class ReceiptAllocationScope(AppDbContext context, bool previous) : IDisposable
+    {
+        public void Dispose() => context.allowReceiptAllocationCorrection = previous;
     }
 }

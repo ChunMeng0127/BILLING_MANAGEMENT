@@ -818,8 +818,9 @@ public class IntegrationTests
 
         await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BASE-CORRECTION-LOCK", new(2026, 3, 31), new Dictionary<int, decimal> { [correctionBill.Id] = 1m });
         var lockedState = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == correctionBill.Id).Select(x => new { x.Version, WorkItemVersion = x.WorkItem.Version, x.Status }).SingleAsync();
-        var invoiceLock = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(correctionBill.Id, correctionBill.PeriodStart, correctionBill.PeriodEnd, lockedState.Status, "Invoice lock", lockedState.Version, lockedState.WorkItemVersion, 5001m, 2500m));
-        Assert.Contains("active invoices", invoiceLock.Message);
+        await billing.Correct(correctionBill.Id, correctionBill.PeriodStart, correctionBill.PeriodEnd, lockedState.Status, "Customer amount correction with invoice", lockedState.Version, lockedState.WorkItemVersion, 5001m, 2500m);
+        var customerAmountCorrected = await db.BillingRecords.AsNoTracking().SingleAsync(x => x.Id == correctionBill.Id);
+        Assert.Equal(5001m, customerAmountCorrected.Amount);
 
         var worker = new Worker { Name = "Base worker" }; db.Workers.Add(worker); await db.SaveChangesAsync();
         var assignmentBill = await billing.Generate(engagementId, new(2026, 4, 1), new(2026, 4, 30), BillingGenerationMode.Scheduled, 4500m, 3000m);
@@ -827,7 +828,8 @@ public class IntegrationTests
         var assignment = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == assignmentBill.WorkItem.Id);
         Assert.Equal(600m, assignment.Entitlement);
         var assignmentVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == assignmentBill.Id).Select(x => new { x.Version, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
-        await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, assignmentBill.Status, "Assignment lock", assignmentVersions.Version, assignmentVersions.WorkItemVersion, 4501m, 3000m));
+        var assignmentLock = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, assignmentBill.Status, "Assignment lock", assignmentVersions.Version, assignmentVersions.WorkItemVersion, 4500m, 3001m));
+        Assert.Contains("worker assignments", assignmentLock.Message);
 
         var replacement = await billing.Generate(engagementId, new(2026, 5, 1), new(2026, 5, 15), BillingGenerationMode.Replacement, 6000m, 3000m);
         Assert.Equal(6000m, replacement.Amount); Assert.Equal(3000m, replacement.RevenueShareBaseAmount); Assert.Equal(1200m, replacement.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
@@ -1119,6 +1121,11 @@ public class IntegrationTests
         var billingDenied = await workerClient.GetAsync($"/Billing/Details/{billAId}"); Assert.Equal(HttpStatusCode.Redirect, billingDenied.StatusCode); Assert.Contains("Denied", billingDenied.Headers.Location!.ToString());
         var invoiceDenied = await workerClient.GetAsync("/Invoices"); Assert.Equal(HttpStatusCode.Redirect, invoiceDenied.StatusCode); Assert.Contains("Denied", invoiceDenied.Headers.Location!.ToString());
         var invoiceExportDenied = await workerClient.GetAsync("/Invoices/Export"); Assert.Equal(HttpStatusCode.Redirect, invoiceExportDenied.StatusCode); Assert.Contains("Denied", invoiceExportDenied.Headers.Location!.ToString());
+        foreach (var externalClient in new[] { firmClient, managerClient, workerClient })
+        {
+            var receiptEditDenied = await PostWithToken(externalClient, "/", "/Invoices/EditReceipt", new() { ["Id"] = receiptAId.ToString(), ["Version"] = "1", ["ReceiptDate"] = "2026-02-01", ["Reference"] = "forged" });
+            Assert.Equal(HttpStatusCode.Redirect, receiptEditDenied.StatusCode); Assert.Contains("Denied", receiptEditDenied.Headers.Location!.ToString());
+        }
         var forgedWork = await PostWithToken(workerClient, $"/Work/Details/{workAId}", "/Work/Update", new() { ["id"] = workBId.ToString(), ["version"] = workBVersion.ToString(), ["status"] = WorkStatus.Completed.ToString(), ["notes"] = "forged" });
         Assert.Equal(HttpStatusCode.NotFound, forgedWork.StatusCode);
         var forgedAssignment = await PostWithToken(workerClient, "/Work/Assignments", "/Work/EditAssignment", new() { ["Id"] = assignmentBId.ToString(), ["Version"] = assignmentBVersion.ToString(), ["WorkerId"] = workerBId.ToString(), ["Percent"] = "50" });
@@ -1210,6 +1217,91 @@ public class IntegrationTests
         await Assert.ThrowsAsync<BusinessException>(() => billing.EditPayment(payment.Id, new(2026, 2, 3), "STALE", paymentVersion));
         await Assert.ThrowsAsync<BusinessException>(() => billing.Pay(workerOne.Id, new(2026, 2, 4), "OVERPAY", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 191m }));
         Assert.Equal(30m, assignmentTwo.Percent);
+    }
+
+    [PostgresFact]
+    public async Task Part46ReceiptAllocationAndHistoricalBillingAmountCorrectionsAreSafe()
+    {
+        await using var db = await Fresh();
+        var billing = new BillingService(db);
+        var engagementId = await Engagement(db);
+        var first = await billing.Generate(engagementId, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled, 1600m, 1600m);
+        var invoices = new InvoiceService(db);
+        var firstInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART46-HISTORICAL", new(2026, 1, 31), new Dictionary<int, decimal> { [first.Id] = 1500m });
+        var originalCreatedAt = first.CreatedAt;
+        var engagement = await db.Engagements.SingleAsync(x => x.Id == engagementId);
+        engagement.BillingAmount = 1500m;
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        Assert.Equal(1600m, (await db.BillingRecords.AsNoTracking().SingleAsync(x => x.Id == first.Id)).Amount);
+
+        var second = await billing.Generate(engagementId, new(2026, 2, 1), new(2026, 2, 28), BillingGenerationMode.Scheduled);
+        Assert.Equal(1500m, second.Amount);
+        var firstVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == first.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
+        await billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, firstVersions.Status, "Historical amount correction", firstVersions.Version, firstVersions.WorkItemVersion, 1500m, 1500m);
+        var correctedFirst = await db.BillingRecords.Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).AsNoTracking().SingleAsync(x => x.Id == first.Id);
+        Assert.Equal(1500m, correctedFirst.Amount);
+        Assert.Equal(BillingInvoiceState.FullyInvoiced, correctedFirst.CustomerInvoiceState);
+        Assert.Equal(BillingStatus.Billed, correctedFirst.Status);
+        Assert.Equal(originalCreatedAt.Ticks / 10, correctedFirst.CreatedAt.Ticks / 10);
+        Assert.Equal(1500m, await db.Invoices.Where(x => x.Id == firstInvoice.Id).Select(x => x.Total).SingleAsync());
+        var correctedVersion = correctedFirst.Version;
+        var workItemVersion = await db.WorkItems.Where(x => x.BillingRecordId == first.Id).Select(x => x.Version).SingleAsync();
+        var lowerError = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, correctedFirst.Status, "Too low", correctedVersion, workItemVersion, 1400m, 1500m));
+        Assert.Contains("cannot be lower", lowerError.Message);
+
+        await invoices.CreateReceipt(new(2026, 2, 1), "PART46-HISTORICAL-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [firstInvoice.Id] = 100m });
+        var receiptBlockedVersion = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == first.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
+        var receiptBlock = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, receiptBlockedVersion.Status, "Receipt dependency", receiptBlockedVersion.Version, receiptBlockedVersion.WorkItemVersion, 1600m, 1500m));
+        Assert.Contains("active customer receipt", receiptBlock.Message);
+
+        var third = await billing.Generate(engagementId, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
+        var invoiceA = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART46-A", new(2026, 3, 31), new Dictionary<int, decimal> { [second.Id] = 1500m });
+        var invoiceB = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART46-B", new(2026, 3, 31), new Dictionary<int, decimal> { [third.Id] = 1500m });
+        var multiReceipt = await invoices.CreateReceipt(new(2026, 3, 31), "PART46-MULTI", Guid.NewGuid(), new Dictionary<int, decimal> { [invoiceA.Id] = 1500m, [invoiceB.Id] = 1500m });
+        var multiCreatedAt = multiReceipt.CreatedAt;
+        var multiRequestId = multiReceipt.RequestId;
+        var allocationIds = await db.CustomerReceiptAllocations.Where(x => x.CustomerReceiptId == multiReceipt.Id).ToDictionaryAsync(x => x.InvoiceId, x => x.Id);
+        var multiVersion = multiReceipt.Version;
+        await invoices.EditReceipt(multiReceipt.Id, new(2026, 4, 1), "PART46-MULTI-CORRECTED", multiVersion, new Dictionary<int, decimal> { [invoiceA.Id] = 1200m, [invoiceB.Id] = 1300m });
+        var correctedReceipt = await db.CustomerReceipts.Include(x => x.Allocations).AsNoTracking().SingleAsync(x => x.Id == multiReceipt.Id);
+        Assert.Equal(2500m, correctedReceipt.Amount);
+        Assert.Equal(new DateOnly(2026, 4, 1), correctedReceipt.ReceiptDate);
+        Assert.Equal("PART46-MULTI-CORRECTED", correctedReceipt.Reference);
+        Assert.Equal(multiCreatedAt.Ticks / 10, correctedReceipt.CreatedAt.Ticks / 10);
+        Assert.Equal(multiRequestId, correctedReceipt.RequestId);
+        Assert.True(correctedReceipt.Version > multiVersion);
+        Assert.Equal(allocationIds[invoiceA.Id], correctedReceipt.Allocations.Single(x => x.InvoiceId == invoiceA.Id).Id);
+        Assert.Equal(1200m, correctedReceipt.Allocations.Single(x => x.InvoiceId == invoiceA.Id).Amount);
+        Assert.Equal(1300m, correctedReceipt.Allocations.Single(x => x.InvoiceId == invoiceB.Id).Amount);
+        Assert.Equal(InvoiceStatus.PartiallyPaid, await db.Invoices.Where(x => x.Id == invoiceA.Id).Select(x => x.Status).SingleAsync());
+        Assert.Equal(BillingStatus.PartiallyPaid, await db.BillingRecords.Where(x => x.Id == second.Id).Select(x => x.Status).SingleAsync());
+
+        var stale = correctedReceipt.Version;
+        await invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, stale, new Dictionary<int, decimal> { [invoiceA.Id] = 1500m, [invoiceB.Id] = 1500m });
+        Assert.Equal(3000m, await db.CustomerReceipts.Where(x => x.Id == multiReceipt.Id).Select(x => x.Amount).SingleAsync());
+        Assert.Equal(InvoiceStatus.Paid, await db.Invoices.Where(x => x.Id == invoiceA.Id).Select(x => x.Status).SingleAsync());
+        Assert.Equal(BillingStatus.Paid, await db.BillingRecords.Where(x => x.Id == second.Id).Select(x => x.Status).SingleAsync());
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, stale, new Dictionary<int, decimal> { [invoiceA.Id] = 1400m, [invoiceB.Id] = 1600m }));
+        var multiCurrentVersion = await db.CustomerReceipts.AsNoTracking().Where(x => x.Id == multiReceipt.Id).Select(x => x.Version).SingleAsync();
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, multiCurrentVersion, new Dictionary<int, decimal> { [invoiceA.Id] = 1400m }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, multiCurrentVersion, new Dictionary<int, decimal> { [invoiceA.Id] = 0m, [invoiceB.Id] = 1500m }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, multiCurrentVersion, new Dictionary<int, decimal> { [invoiceA.Id] = 1500.001m, [invoiceB.Id] = 1500m }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(multiReceipt.Id, correctedReceipt.ReceiptDate, correctedReceipt.Reference, multiCurrentVersion, new Dictionary<int, decimal> { [invoiceA.Id] = 1500m, [invoiceB.Id] = 1500m, [firstInvoice.Id] = 1m }));
+
+        var overpayBill = await billing.Generate(engagementId, new(2026, 4, 1), new(2026, 4, 30), BillingGenerationMode.Scheduled);
+        var overpayInvoice = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART46-OVERPAY", new(2026, 4, 30), new Dictionary<int, decimal> { [overpayBill.Id] = 1500m });
+        await invoices.CreateReceipt(new(2026, 4, 30), "PART46-OTHER", Guid.NewGuid(), new Dictionary<int, decimal> { [overpayInvoice.Id] = 500m });
+        var currentReceipt = await invoices.CreateReceipt(new(2026, 4, 30), "PART46-CURRENT", Guid.NewGuid(), new Dictionary<int, decimal> { [overpayInvoice.Id] = 400m });
+        var currentVersion = currentReceipt.Version;
+        await invoices.EditReceipt(currentReceipt.Id, currentReceipt.ReceiptDate, currentReceipt.Reference, currentVersion, new Dictionary<int, decimal> { [overpayInvoice.Id] = 1000m });
+        Assert.Equal(1000m, await db.CustomerReceiptAllocations.Where(x => x.CustomerReceiptId == currentReceipt.Id).Select(x => x.Amount).SingleAsync());
+        var currentReceiptVersion = await db.CustomerReceipts.AsNoTracking().Where(x => x.Id == currentReceipt.Id).Select(x => x.Version).SingleAsync();
+        var overpayError = await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(currentReceipt.Id, currentReceipt.ReceiptDate, currentReceipt.Reference, currentReceiptVersion, new Dictionary<int, decimal> { [overpayInvoice.Id] = 1000.01m }));
+        Assert.Contains("outstanding balance", overpayError.Message);
+        await invoices.CancelReceipt(currentReceipt.Id, "Part46 cancellation");
+        var cancelledVersion = await db.CustomerReceipts.AsNoTracking().Where(x => x.Id == currentReceipt.Id).Select(x => x.Version).SingleAsync();
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.EditReceipt(currentReceipt.Id, currentReceipt.ReceiptDate, currentReceipt.Reference, cancelledVersion, new Dictionary<int, decimal> { [overpayInvoice.Id] = 800m }));
     }
 
 }

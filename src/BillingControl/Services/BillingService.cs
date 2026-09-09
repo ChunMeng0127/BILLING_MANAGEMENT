@@ -82,20 +82,34 @@ public class BillingService
             var correctedShareBaseAmount = revenueShareBaseAmount ?? bill.RevenueShareBaseAmount;
             PositiveMoney(correctedCustomerAmount);
             PositiveMoney(correctedShareBaseAmount);
-            var amountsChanged = bill.Amount != correctedCustomerAmount || bill.RevenueShareBaseAmount != correctedShareBaseAmount;
-            if (amountsChanged)
+            var customerAmountChanged = bill.Amount != correctedCustomerAmount;
+            var shareBaseChanged = bill.RevenueShareBaseAmount != correctedShareBaseAmount;
+            var amountsChanged = customerAmountChanged || shareBaseChanged;
+            var activeCustomerLines = bill.InvoiceLines
+                .Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer)
+                .ToList();
+            if (customerAmountChanged)
             {
-                Require(!bill.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled), "Cancel active invoices before correcting billing amounts.");
-                Require(!bill.InvoiceLines.SelectMany(x => x.Invoice.ReceiptAllocations).Any(x => !x.CustomerReceipt.IsCancelled), "Cancel active receipts before correcting billing amounts.");
+                Require(!activeCustomerLines.SelectMany(x => x.Invoice.ReceiptAllocations).Any(x => !x.CustomerReceipt.IsCancelled), "This billing amount cannot be changed while an active customer receipt exists. Correct or cancel the receipt first.");
+                var activeCustomerAllocated = activeCustomerLines.Sum(x => x.AllocatedAmount);
+                Require(activeCustomerAllocated <= correctedCustomerAmount,
+                    $"The corrected customer billing amount cannot be lower than the RM {activeCustomerAllocated:N2} already allocated to active customer invoices.");
+            }
+            if (shareBaseChanged)
+            {
+                Require(!bill.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled && (x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm || x.Invoice.Flow == InvoiceFlow.LcmToManager)), "Cancel active manager and LCM invoices before correcting the revenue-share base.");
                 Require(!bill.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active worker assignments before correcting the revenue-share base.");
                 Require(!bill.WorkItem.Assignments.SelectMany(x => x.Allocations).Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before correcting the revenue-share base.");
+            }
+            if (shareBaseChanged)
+            {
                 var shares = bill.Shares.OrderBy(x => x.Kind).ToList();
                 Require(shares.Count == 3 && shares.Select(x => x.Kind).Distinct().Count() == 3, "Revenue-share snapshots are incomplete and cannot be corrected safely.");
                 var correctedShares = Split(correctedShareBaseAmount, shares[0].Percent, shares[1].Percent, shares[2].Percent);
                 for (var i = 0; i < shares.Count; i++) shares[i].Amount = correctedShares[i];
-                bill.Amount = correctedCustomerAmount;
-                bill.RevenueShareBaseAmount = correctedShareBaseAmount;
             }
+            if (customerAmountChanged) bill.Amount = correctedCustomerAmount;
+            if (shareBaseChanged) bill.RevenueShareBaseAmount = correctedShareBaseAmount;
             var periodChanged = bill.PeriodStart != periodStart || bill.PeriodEnd != periodEnd;
             if (periodChanged)
             {
@@ -115,6 +129,11 @@ public class BillingService
             }
             else
             {
+                await db.SaveChangesAsync();
+            }
+            if (customerAmountChanged)
+            {
+                await new InvoiceService(db).RecalculateBillingStatuses([id]);
                 await db.SaveChangesAsync();
             }
         });
