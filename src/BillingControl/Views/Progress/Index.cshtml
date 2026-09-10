@@ -6,7 +6,7 @@
 <a class="btn btn-outline-secondary" href="/Work">View work items →</a>
 </div>
 <div class="panel form-panel wide">
-<form method="get" class="inline-form">
+<form method="get" class="inline-form progress-filters">
 <label>Reporting week <input type="date" name="weekStart" value="@Model.WeekStart.ToString("yyyy-MM-dd")" class="form-control" /></label>
 <label>Show <select name="filter" class="form-select">@foreach (var f in Enum.GetValues<AssignmentListFilter>()) { if (f == AssignmentListFilter.Hidden && !Model.Access.IsStaff) { continue; } <option value="@f" selected="@(f == Model.Filter)">@f</option> }</select></label>
 <button class="btn btn-outline-secondary">Load</button>
