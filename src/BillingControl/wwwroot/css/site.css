@@ -397,6 +397,11 @@ footer {
   white-space: nowrap;
   min-width: 115px;
 }
+.progress-service-period {
+  min-width: 190px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .money {
   font-variant-numeric: tabular-nums;
   text-align: right;

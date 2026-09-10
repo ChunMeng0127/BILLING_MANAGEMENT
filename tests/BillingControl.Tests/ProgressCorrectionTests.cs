@@ -56,6 +56,8 @@ public partial class IntegrationTests
             .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
             .Include(x => x.WorkflowHistory)
             .SingleAsync();
+        Assert.Equal(new DateOnly(2026, 1, 1), candidate.WorkItem.BillingRecord.PeriodStart);
+        Assert.Equal(new DateOnly(2026, 1, 31), candidate.WorkItem.BillingRecord.PeriodEnd);
         foreach (var week in expected) Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(candidate, week, clock));
         Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(candidate, new(2025,12,22), clock));
         Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(candidate, new(2026,2,2), clock));
