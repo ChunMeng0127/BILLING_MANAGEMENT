@@ -715,7 +715,7 @@ footer {
 .workflow-batch-bar {
   align-items: flex-end;
   gap: 18px 20px;
-  padding: 16px 0 14px;
+  padding: 16px 20px 14px;
 }
 .workflow-batch-bar > label,
 .workflow-batch-bar [data-batch-workflow-fields] > label,
@@ -756,7 +756,7 @@ footer {
 }
 .workflow-batch-bar + .hint {
   margin-top: 0;
-  padding: 2px 0 2px;
+  padding: 2px 20px 2px;
 }
 .align-end {
   display: flex;
@@ -998,7 +998,7 @@ summary:focus-visible {
   .workflow-batch-bar {
     align-items: stretch;
     gap: 12px;
-    padding: 14px 0 12px;
+    padding: 14px;
   }
   .workflow-batch-bar > label,
   .workflow-batch-bar [data-batch-workflow-fields] {
@@ -1020,5 +1020,8 @@ summary:focus-visible {
   }
   .workflow-batch-bar > .btn {
     align-self: flex-start;
+  }
+  .workflow-batch-bar + .hint {
+    padding: 2px 14px 2px;
   }
 }
