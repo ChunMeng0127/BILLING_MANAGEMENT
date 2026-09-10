@@ -25,9 +25,9 @@
 <td>@u.Email</td>
 <td>@roles[u.Id]</td>
 <td>@(u.BusinessParty?.Name ?? u.Manager?.Name ?? u.Worker?.Name ?? "—")</td>
-<td>@(u.IsActive ? "Active" : "Disabled") @(u.LockoutEnd > DateTimeOffset.UtcNow ? "· Temporarily locked" : "")</td>
+<td><span class="badge @(u.IsActive ? "status-active" : "status-disabled")">@(u.IsActive ? "Active" : "Disabled") @(u.LockoutEnd > DateTimeOffset.UtcNow ? "· Temporarily locked" : "")</span></td>
 <td>
-<form asp-action="Update" method="post" class="inline-form">
+<form asp-action="Update" method="post" class="inline-form user-access-form">
 <input type="hidden" name="id" value="@u.Id" />
 <select name="role" aria-label="Role for @u.Email" class="form-select form-select-sm">
 @foreach(var role in AppRoles.All) { <option value="@role" selected="@(roles[u.Id]==role)">@role</option> }
@@ -43,7 +43,7 @@
 <td>
 <details>
 <summary>Reset password</summary>
-<form asp-action="ResetPassword" method="post">
+<form asp-action="ResetPassword" method="post" class="user-password-reset-form">
 <input type="hidden" name="id" value="@u.Id" />
 <input type="password" name="password" aria-label="New password for @u.Email" autocomplete="new-password" minlength="12" required class="form-control form-control-sm" />
 <button class="btn btn-outline-secondary btn-sm">Reset & unlock</button>

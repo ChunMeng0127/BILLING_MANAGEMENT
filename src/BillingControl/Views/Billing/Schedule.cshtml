@@ -9,7 +9,7 @@
 <a class="btn btn-outline-secondary" href="/Engagements">Manage engagements</a>
 </div>
 <div class="panel">
-<table class="table data-grid">
+<table class="table data-grid schedule-grid">
 <thead>
 <tr>
 <th>Customer</th>
@@ -31,7 +31,7 @@
 <td>
 @if(access.IsStaff) {
 <a class="btn btn-outline-secondary btn-sm" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
-@if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form">
+@if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form schedule-generate-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="mode" value="@(s.Frequency==Frequency.AdHoc ? "AdHocManual" : "Scheduled")" />
 <label>From <input name="start" type="date" value="@start.ToString("yyyy-MM-dd")" readonly="@(s.Frequency!=Frequency.AdHoc)" required class="form-control form-control-sm" />
@@ -46,7 +46,7 @@
 </form> } else { <span class="text-muted">No next period</span> }
 <details class="manual-period">
 <summary>Manual / replacement period</summary>
-<form asp-action="Generate" method="post" class="inline-form">
+<form asp-action="Generate" method="post" class="inline-form schedule-generate-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="mode" value="@(s.Frequency==Frequency.AdHoc ? "AdHocManual" : "Replacement")" />
 <label>From <input type="date" name="start" required class="form-control form-control-sm" />

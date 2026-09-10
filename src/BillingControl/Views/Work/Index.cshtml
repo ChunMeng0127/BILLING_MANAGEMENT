@@ -31,8 +31,8 @@
 <td>@w.BillingRecord.ServiceName</td>
 <td>@w.BillingRecord.PeriodStart.ToString("yyyy-MM-dd")</td>
 <td>@w.BillingRecord.PeriodEnd.ToString("yyyy-MM-dd")</td>
-<td>@Finance.Label(w.Status)</td>
-<td>@Finance.Label(w.BillingRecord.Status)</td>
+<td><span class="badge status-@w.Status.ToString().ToLowerInvariant()">@Finance.Label(w.Status)</span></td>
+<td><span class="badge status-@w.BillingRecord.Status.ToString().ToLowerInvariant()">@Finance.Label(w.BillingRecord.Status)</span></td>
 @if(access.IsStaff) { <td>@string.Join(", ",w.Assignments.Where(x=>!x.IsCancelled).Select(x=>x.WorkerName))</td> }
 </tr> }
 </tbody>

@@ -31,7 +31,7 @@
 <td class="money">@p.Amount.ToString("N2")</td>
 <td>@foreach(var a in p.Allocations) { <div>
 <a href="/Work/Details/@a.WorkerAssignment.WorkItemId">A-@a.WorkerAssignmentId · @a.WorkerAssignment.WorkItem.BillingRecord.CustomerName</a> : RM @a.Amount.ToString("N2")</div> }</td>
-<td>@(p.IsCancelled ? "Cancelled: "+p.CancellationReason : "Recorded")</td>
+<td><span class="badge @(p.IsCancelled ? "status-cancelled" : "status-recorded")">@(p.IsCancelled ? "Cancelled: "+p.CancellationReason : "Recorded")</span></td>
 @if(access.IsStaff) { <td>@if(!p.IsCancelled) { <a href="/Payments/Edit/@p.Id">Edit date/reference</a> @if(access.IsAdmin) { <details>
 <summary>Cancel payment</summary>
 <form asp-controller="Billing" asp-action="Cancel" method="post">

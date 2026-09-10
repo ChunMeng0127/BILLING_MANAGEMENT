@@ -1,4 +1,9 @@
 (() => {
+  const sidebarStorageKey = "billing-control.sidebar-collapsed";
+  const sidebarBreakpoint = 900;
+  const sidebarMode = (viewportWidth) =>
+    viewportWidth < sidebarBreakpoint ? "mobile" : "desktop";
+  const savedSidebarPreference = (value) => value === "true";
   const isGridEligible = (row) => row.dataset.gridEligible !== "false";
   const eligibleGridRows = (items) => items.filter((item) =>
     isGridEligible(item.row ?? item),
@@ -28,8 +33,96 @@
       gridEmptyMessage,
       workflowVersionRequired,
       workflowSuggestedVersion,
+      sidebarStorageKey,
+      sidebarBreakpoint,
+      sidebarMode,
+      savedSidebarPreference,
     };
   if (typeof document === "undefined") return;
+
+  const root = document.documentElement;
+  const sidebar = document.getElementById("app-sidebar");
+  const sidebarToggles = [...document.querySelectorAll("[data-sidebar-toggle]")];
+  const sidebarScrim = document.querySelector("[data-sidebar-scrim]");
+  const isMobileSidebar = () => sidebarMode(window.innerWidth) === "mobile";
+  const readSidebarPreference = () => {
+    try {
+      return savedSidebarPreference(window.localStorage.getItem(sidebarStorageKey));
+    } catch {
+      return false;
+    }
+  };
+  const writeSidebarPreference = (collapsed) => {
+    try {
+      window.localStorage.setItem(sidebarStorageKey, String(collapsed));
+    } catch {
+      // A blocked storage area should not prevent navigation from working.
+    }
+  };
+  const syncSidebarToggle = () => {
+    const mobile = isMobileSidebar();
+    const open = mobile
+      ? root.classList.contains("sidebar-mobile-open")
+      : !root.classList.contains("sidebar-collapsed");
+    sidebarToggles.forEach((toggle) => {
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute(
+        "aria-label",
+        mobile
+          ? open
+            ? "Close navigation"
+            : "Open navigation"
+          : open
+            ? "Collapse navigation"
+            : "Expand navigation",
+      );
+    });
+  };
+  const closeMobileSidebar = () => {
+    root.classList.remove("sidebar-mobile-open");
+    syncSidebarToggle();
+  };
+  const resetSidebarForViewport = () => {
+    if (isMobileSidebar()) {
+      root.classList.remove("sidebar-collapsed", "sidebar-mobile-open");
+    } else {
+      root.classList.remove("sidebar-mobile-open");
+      root.classList.toggle("sidebar-collapsed", readSidebarPreference());
+    }
+    syncSidebarToggle();
+  };
+  if (sidebar && sidebarToggles.length) {
+    resetSidebarForViewport();
+    sidebarToggles.forEach((toggle) =>
+      toggle.addEventListener("click", () => {
+        if (isMobileSidebar()) {
+          root.classList.toggle("sidebar-mobile-open");
+        } else {
+          const collapsed = !root.classList.contains("sidebar-collapsed");
+          root.classList.toggle("sidebar-collapsed", collapsed);
+          writeSidebarPreference(collapsed);
+        }
+        syncSidebarToggle();
+      }),
+    );
+    sidebarScrim?.addEventListener("click", closeMobileSidebar);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && root.classList.contains("sidebar-mobile-open"))
+        closeMobileSidebar();
+    });
+    sidebar.querySelectorAll("a").forEach((link) =>
+      link.addEventListener("click", () => {
+        if (isMobileSidebar()) closeMobileSidebar();
+      }),
+    );
+    window.addEventListener("resize", () => {
+      const wasMobile = root.dataset.sidebarMode;
+      const nextMode = sidebarMode(window.innerWidth);
+      if (wasMobile !== nextMode) resetSidebarForViewport();
+      root.dataset.sidebarMode = nextMode;
+    });
+    root.dataset.sidebarMode = sidebarMode(window.innerWidth);
+  }
 
   const element = (tag, cls, text) => {
     const e = document.createElement(tag);

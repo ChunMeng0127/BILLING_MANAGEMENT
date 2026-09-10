@@ -7,56 +7,55 @@
 <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
-@{ var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser); var firm = User.IsInRole(AppRoles.AccountingFirm); var manager = User.IsInRole(AppRoles.Manager); var worker = User.IsInRole(AppRoles.Worker); }
+<body class="app-body">
+@{ var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser); var firm = User.IsInRole(AppRoles.AccountingFirm); var manager = User.IsInRole(AppRoles.Manager); var worker = User.IsInRole(AppRoles.Worker); var masterKind = Context.Request.Query["kind"].ToString(); var accountName = User.Identity?.Name; var accountInitial = string.IsNullOrWhiteSpace(accountName) ? "U" : accountName[..1].ToUpperInvariant(); }
 @if (User.Identity?.IsAuthenticated == true) {
-<aside class="sidebar">
-<a class="brand" href="/">
-<span class="brand-mark">bc</span>
-<span>Billing Control<small>LCM MGT · Workspace</small>
-</span>
+<div class="app-frame">
+<aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
+<a class="brand" href="/" aria-label="Billing Control overview">
+<span class="brand-mark" aria-hidden="true">B</span>
+<span class="brand-copy"><strong>Billing Control</strong><small>Accounting operations, simplified.</small></span>
 </a>
 <div class="nav-label">WORKSPACE</div>
-<nav>
-<a class="@(Context.Request.Path.Value == "/" ? "active" : "")" href="/">Overview</a>
-@if (staff || firm || manager) { <a class="@(Context.Request.Path.Value == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule">Upcoming billing</a><a class="@(Context.Request.Path.Value == "/Billing" ? "active" : "")" href="/Billing">Billing records</a> }
-@if (staff || firm || manager) { <a class="@(Context.Request.Path.Value?.StartsWith("/Invoices") == true ? "active" : "")" href="/Invoices">Invoices</a> }
-@if (staff || manager || worker) { <a class="@(Context.Request.Path.Value == "/Work" ? "active" : "")" href="/Work">Work items</a> }
-@if (staff || manager || worker) { <a class="@(Context.Request.Path.Value?.StartsWith("/Progress") == true ? "active" : "")" href="/Progress">Weekly progress</a> }
-@if (staff || worker) { <a class="@(Context.Request.Path.Value == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments">Worker assignments</a><a class="@(Context.Request.Path.Value == "/Payments" ? "active" : "")" href="/Payments">Worker payments</a> }
-<a class="@(Context.Request.Path.Value == "/Home/Reports" ? "active" : "")" href="/Home/Reports">Reports</a>
+<nav class="sidebar-nav" aria-label="Workspace">
+<a class="nav-link @(Context.Request.Path.Value == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
+@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a><a class="nav-link @(Context.Request.Path.Value == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a> }
+@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Invoices") == true ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a> }
+@if (staff || manager || worker) { <a class="nav-link @(Context.Request.Path.Value == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a> }
+@if (staff || manager || worker) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Progress") == true ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a> }
+@if (staff || worker) { <a class="nav-link @(Context.Request.Path.Value == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker assignments</span></a><a class="nav-link @(Context.Request.Path.Value == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker payments</span></a> }
+<a class="nav-link @(Context.Request.Path.Value == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
 </nav>
 <div class="nav-label">DIRECTORY</div>
-<nav>
-@if (staff) { @foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { <a href="/Masters?kind=@kind">@(kind == "Firms" ? "Accounting firms" : kind)</a> } }
-@if (firm || manager) { <a href="/Masters?kind=Customers">Customers</a><a href="/Masters?kind=Services">Services</a> }
-@if (staff || firm || manager) { <a href="/Engagements">Engagements</a> }
-@if (User.IsInRole(AppRoles.Admin)) { <a href="/Users">User management</a> }
+<nav class="sidebar-nav" aria-label="Directory">
+@if (staff) { @foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { var label = kind == "Firms" ? "Accounting firms" : kind; var icon = kind switch { "Customers" => "◎", "Services" => "◇", "Firms" => "▣", "Managers" => "◉", _ => "♙" }; <a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == kind ? "active" : "")" href="/Masters?kind=@kind" title="@label"><span class="nav-icon" aria-hidden="true">@icon</span><span class="nav-text">@label</span></a> } }
+@if (firm || manager) { <a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == "Customers" ? "active" : "")" href="/Masters?kind=Customers" title="Customers"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Customers</span></a><a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == "Services" ? "active" : "")" href="/Masters?kind=Services" title="Services"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Services</span></a> }
+@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Engagements") == true ? "active" : "")" href="/Engagements" title="Engagements"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">Engagements</span></a> }
+@if (User.IsInRole(AppRoles.Admin)) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Users") == true ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a> }
 </nav>
-<div class="sidebar-foot">
-<span class="live-dot">
-</span> Internal accounting workspace</div>
+<div class="sidebar-foot"><span class="live-dot"></span><span class="nav-text">Internal accounting workspace</span></div>
 </aside>
+<button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>
 <div class="app-shell">
 <header class="topbar">
-<span>Accounting operations <span class="text-muted">/ @ViewData["Title"]</span>
-</span>
+<div class="topbar-leading">
+<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" aria-label="Collapse navigation"><span aria-hidden="true">☰</span></button>
+<div class="topbar-context"><span class="topbar-kicker">Accounting operations</span><span class="topbar-page">@ViewData["Title"]</span></div>
+</div>
 <div class="account">
-<a href="/Account/Password">@User.Identity.Name</a>
-<form asp-controller="Account" asp-action="Logout" method="post">
-<button class="btn btn-sm btn-outline-secondary">Sign out</button>
-</form>
+<a class="account-identity" href="/Account/Password"><span class="account-avatar" aria-hidden="true">@accountInitial</span><span class="account-copy"><strong>@accountName</strong><small>Account settings</small></span></a>
+<form asp-controller="Account" asp-action="Logout" method="post"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>
 </div>
 </header>
-<main>
+<main class="app-main">
 @if (TempData["Success"] is string success) { <div class="alert alert-success" role="status">@success</div> }
 @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
 @RenderBody()</main>
-<footer>Billing Control <span>MYR · Financial records retain their original snapshots</span>
-</footer>
+<footer class="app-footer"><span>Billing Control</span><span>MYR · Financial records retain their original snapshots</span></footer>
+</div>
 </div>
 } else { <main class="login-shell">@RenderBody()</main> }
-<script src="~/js/site.js" asp-append-version="true">
-</script>@await RenderSectionAsync("Scripts", required: false)
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
