@@ -108,10 +108,13 @@ public class ProgressController(AccessScope access, ProgressReportService progre
             .SingleOrDefaultAsync(x => x.Id == assignmentId);
         var hasCurrentReport = assignment != null && await access.ProgressReports(a)
             .AnyAsync(x => x.WorkerAssignmentId == assignment.Id && x.WeekStart == targetWeek);
+        var historicallyRequired = assignment != null
+            && !hasCurrentReport
+            && AssignmentWorkflowService.RequiresWeeklyReport(assignment, targetWeek, clock)
+            && assignment.WorkItem.BillingRecord.Status != BillingStatus.Cancelled;
         var finalCompletionWeek = assignment != null && a.IsWorker && targetWeek == clock.CurrentWeekStart
             && !hasCurrentReport && AssignmentWorkflowService.AllowsFinalCurrentWeekReport(assignment, clock);
-        if (assignment == null || (!AssignmentWorkflowService.IsActive(assignment) && !finalCompletionWeek)
-            || (assignment.ReportingResumedFromWeek.HasValue && targetWeek < assignment.ReportingResumedFromWeek.Value)) return NotFound();
+        if (assignment == null || !historicallyRequired) return NotFound();
         ViewBag.Assignment = assignment;
         ViewBag.FinalCompletionWeek = finalCompletionWeek;
         await SetVersionChoices(assignment);

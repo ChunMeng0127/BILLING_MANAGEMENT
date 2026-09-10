@@ -1427,6 +1427,11 @@ public partial class IntegrationTests
             workId = bill.WorkItem.Id; workerAId = workerA.Id; workerBId = workerB.Id; managerId = manager.Id; firmId = firm.Id;
             assignmentAId = await db.WorkerAssignments.Where(x => x.WorkItemId == workId && x.WorkerId == workerA.Id).Select(x => x.Id).SingleAsync();
             assignmentBId = await db.WorkerAssignments.Where(x => x.WorkItemId == workId && x.WorkerId == workerB.Id).Select(x => x.Id).SingleAsync();
+            var assignmentCreatedAt = new DateTime(2026, 1, 5, 4, 0, 0, DateTimeKind.Utc);
+            await db.WorkerAssignments.Where(x => x.Id == assignmentAId || x.Id == assignmentBId).ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+                .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+            db.ChangeTracker.Clear();
             var reporting = new ProgressReportService(db, clock); var week = clock.CurrentWeekStart;
             var assignmentAVersion = await db.WorkerAssignments.Where(x => x.Id == assignmentAId).Select(x => x.Version).SingleAsync();
             var assignmentBVersion = await db.WorkerAssignments.Where(x => x.Id == assignmentBId).Select(x => x.Version).SingleAsync();

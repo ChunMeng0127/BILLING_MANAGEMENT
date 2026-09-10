@@ -291,6 +291,137 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task CompletedAssignmentCanSubmitEarlierMissingWeekWithoutReopening()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 16, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Historical completion worker" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        var assignmentCreatedAt = new DateTime(2026, 8, 24, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignmentId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+            .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+        db.ChangeTracker.Clear();
+        var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        var workflow = new AssignmentWorkflowService(db, clock);
+        await workflow.BatchAsync(new AccessProfile("completion-history-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version },
+            Action = BatchWorkflowAction.UpdateWorkflow, WorkflowStatus = WorkflowStatus.Completed
+        });
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        var beforeStatus = assignment.CurrentWorkflowStatus;
+        var beforeVersion = assignment.CurrentWorkflowVersion;
+        var beforeProgress = assignment.CurrentProgressPercent;
+        var beforeHistory = assignment.WorkflowHistory.Count;
+        var missingWeek = new DateOnly(2026, 9, 7);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, missingWeek, clock));
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, new(2026, 8, 17), clock));
+
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection)
+            .UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "historical-completion-keys"))
+            .ConfigureServices(s => s.AddSingleton<TimeProvider>(time)));
+        const string password = "Historical-Completion!123";
+        using (var services = app.Services.CreateScope())
+        {
+            await Seed.Initialize(services.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BootstrapAdmin:Email"] = "historical-completion-admin@example.com", ["BootstrapAdmin:Password"] = password
+            }).Build());
+            var users = services.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            var user = new AppUser { Email = "historical-completion-worker@example.com", UserName = "historical-completion-worker@example.com", WorkerId = worker.Id, EmailConfirmed = true };
+            Seed.Check(await users.CreateAsync(user, password));
+            Seed.Check(await users.AddToRoleAsync(user, AppRoles.Worker));
+        }
+
+        using var client = await SignedIn(app, "historical-completion-worker@example.com", password);
+        var editPage = await client.GetAsync($"/Progress/Edit?assignmentId={assignmentId}&weekStart={missingWeek:yyyy-MM-dd}");
+        Assert.Equal(HttpStatusCode.OK, editPage.StatusCode);
+        Assert.Contains("Submit weekly update", await editPage.Content.ReadAsStringAsync());
+        var fields = new Dictionary<string, string>
+        {
+            ["WorkerAssignmentId"] = assignmentId.ToString(), ["AssignmentVersion"] = assignment.Version.ToString(),
+            ["WeekStart"] = missingWeek.ToString("yyyy-MM-dd"), ["ProgressPercent"] = "35", ["WorkflowStatus"] = "StartPreparing",
+            ["WorkDone"] = "Submitted the missing historical update", ["NextAction"] = "Continue the work"
+        };
+        var response = await PostWithToken(client, $"/Progress/Edit?assignmentId={assignmentId}&weekStart={missingWeek:yyyy-MM-dd}", "/Progress/Save", fields);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        db.ChangeTracker.Clear();
+        var savedAssignment = await db.WorkerAssignments.Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        var report = await db.WeeklyProgressReports.SingleAsync(x => x.WorkerAssignmentId == assignmentId && x.WeekStart == missingWeek);
+        Assert.Equal(WorkflowStatus.StartPreparing, report.WorkflowStatusAtSubmission);
+        Assert.Equal(35m, report.ProgressPercent);
+        Assert.True(clock.IsLate(report.SubmittedAt, report.WeekEnd));
+        Assert.Equal(beforeStatus, savedAssignment.CurrentWorkflowStatus);
+        Assert.Equal(beforeVersion, savedAssignment.CurrentWorkflowVersion);
+        Assert.Equal(beforeProgress, savedAssignment.CurrentProgressPercent);
+        Assert.Equal(beforeHistory, savedAssignment.WorkflowHistory.Count);
+    }
+
+    [PostgresFact]
+    public async Task HistoricalMissingWeekSurvivesHideAndUnhideWithoutRetroactiveResumption()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Hide history worker" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        var assignmentCreatedAt = new DateTime(2026, 8, 24, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignmentId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+            .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+        db.ChangeTracker.Clear();
+        var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        var workflow = new AssignmentWorkflowService(db, clock);
+        var week1 = new DateOnly(2026, 8, 31);
+        var hiddenWeek = new DateOnly(2026, 9, 7);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, week1, clock));
+        await workflow.BatchAsync(new AccessProfile("hide-history-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version }, Action = BatchWorkflowAction.Hide
+        });
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, hiddenWeek, clock));
+        var beforeUnhide = assignment.WorkflowHistory.Count;
+        time.Now = new(2026, 9, 16, 4, 0, 0, TimeSpan.Zero);
+        await workflow.BatchAsync(new AccessProfile("hide-history-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version }, Action = BatchWorkflowAction.Unhide
+        });
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, week1, clock));
+        Assert.False(AssignmentWorkflowService.RequiresWeeklyReport(assignment, hiddenWeek, clock));
+        Assert.True(AssignmentWorkflowService.RequiresWeeklyReport(assignment, clock.CurrentWeekStart, clock));
+        var reporting = new ProgressReportService(db, clock);
+        var report = await reporting.SaveAsync(new AccessProfile("hide-history-worker", AppRoles.Worker, null, null, worker.Id), new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = week1,
+            ProgressPercent = 20, WorkflowStatus = WorkflowStatus.StartPreparing,
+            WorkDone = "Submitted the pre-hide missing update", NextAction = "Continue the work"
+        });
+        Assert.Equal(WorkflowStatus.StartPreparing, report.WorkflowStatusAtSubmission);
+        Assert.True(clock.IsLate(report.SubmittedAt, report.WeekEnd));
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        Assert.Equal(beforeUnhide + 1, assignment.WorkflowHistory.Count);
+        Assert.Equal(WorkflowStatus.AssignedNotStarted, assignment.CurrentWorkflowStatus);
+    }
+
+    [PostgresFact]
     public async Task BatchCompletionAllowsSingleFinalCurrentWeekReport()
     {
         await using var db = await Fresh();
