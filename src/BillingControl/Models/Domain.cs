@@ -150,6 +150,7 @@ public class WorkerAssignment : Record
     public DateOnly? ReportingResumedFromWeek { get; set; }
     public List<WorkerPaymentAllocation> Allocations { get; set; } = [];
     public List<WeeklyProgressReport> ProgressReports { get; set; } = [];
+    public List<WeeklyProgressUpdateHistory> ProgressUpdateHistory { get; set; } = [];
     public List<WorkerAssignmentWorkflowHistory> WorkflowHistory { get; set; } = [];
 }
 public class WeeklyProgressReport : Record
@@ -167,6 +168,23 @@ public class WeeklyProgressReport : Record
     [StringLength(2000)] public string? NextAction { get; set; }
     [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
     public DateTime SubmittedAt { get; set; }
+    public List<WeeklyProgressUpdateHistory> UpdateHistory { get; set; } = [];
+}
+public class WeeklyProgressUpdateHistory : Record
+{
+    public int WeeklyProgressReportId { get; set; }
+    public WeeklyProgressReport WeeklyProgressReport { get; set; } = null!;
+    public int WorkerAssignmentId { get; set; }
+    public WorkerAssignment WorkerAssignment { get; set; } = null!;
+    public WorkflowStatus WorkflowStatus { get; set; }
+    public int? WorkflowVersion { get; set; }
+    public decimal ProgressPercent { get; set; }
+    [Required, StringLength(4000)] public string WorkDone { get; set; } = "";
+    [StringLength(2000)] public string? NextAction { get; set; }
+    [StringLength(2000)] public string? IssuesOrBlockers { get; set; }
+    public DateTime OccurredAt { get; set; }
+    [Required, StringLength(254)] public string Actor { get; set; } = "";
+    [Required, StringLength(40)] public string Source { get; set; } = "Worker";
 }
 public class WorkerAssignmentWorkflowHistory : Record
 {

@@ -40,6 +40,7 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             if (assignment == null) throw new BusinessException("The selected assignment was not found.");
             Finance.Require(form.AssignmentVersion > 0 && form.AssignmentVersion == assignment.Version,
                 "The worker assignment changed. Refresh before saving the weekly update.");
+            var now = clock.UtcNow;
             var isNew = form.Id == 0;
             var finalCompletionWeek = isNew
                 && access.IsWorker
@@ -70,7 +71,7 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             else
             {
                 Finance.Require(!await db.WeeklyProgressReports.AnyAsync(x => x.WorkerAssignmentId == assignment.Id && x.WeekStart == weekStart), "A progress report already exists for this assignment and week.");
-                report = new WeeklyProgressReport { WorkerAssignmentId = assignment.Id, WeekStart = weekStart, WeekEnd = weekStart.AddDays(6), SubmittedAt = clock.UtcNow };
+                report = new WeeklyProgressReport { WorkerAssignmentId = assignment.Id, WeekStart = weekStart, WeekEnd = weekStart.AddDays(6), SubmittedAt = now };
                 db.WeeklyProgressReports.Add(report);
             }
 
@@ -92,6 +93,23 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             {
                 await workflow.ApplyWorkflowAsync(assignment, form.WorkflowStatus, form.WorkflowVersion, WorkflowHistoryAction.WeeklyUpdate);
                 assignment.CurrentProgressPercent = form.ProgressPercent;
+            }
+            if (access.IsWorker)
+            {
+                db.WeeklyProgressUpdateHistories.Add(new WeeklyProgressUpdateHistory
+                {
+                    WeeklyProgressReport = report,
+                    WorkerAssignmentId = assignment.Id,
+                    WorkflowStatus = form.WorkflowStatus,
+                    WorkflowVersion = form.WorkflowVersion,
+                    ProgressPercent = form.ProgressPercent,
+                    WorkDone = workDone,
+                    NextAction = string.IsNullOrWhiteSpace(nextAction) ? null : nextAction,
+                    IssuesOrBlockers = string.IsNullOrWhiteSpace(form.IssuesOrBlockers) ? null : form.IssuesOrBlockers.Trim(),
+                    OccurredAt = now,
+                    Actor = access.UserId,
+                    Source = "Worker"
+                });
             }
             await db.SaveChangesAsync();
             return report;

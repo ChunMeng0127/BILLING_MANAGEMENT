@@ -45,6 +45,7 @@ public class ProgressReportRow
     public DateOnly WeekEnd => WeekStart.AddDays(6);
     public bool RequiresReport { get; set; }
     public bool IsLate { get; set; }
+    public int UpdatesThisWeek { get; set; }
     public string ReportingStatus => Report != null ? IsLate ? "Late" : "Submitted" : RequiresReport ? "Missing" : "Not required";
 }
 

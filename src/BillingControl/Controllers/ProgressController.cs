@@ -33,7 +33,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         if (a.IsWorker && filter == AssignmentListFilter.Hidden) filter = AssignmentListFilter.Active;
         var assignments = await access.ProgressAssignments(a)
             .Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
-            .Include(x => x.ProgressReports)
+            .Include(x => x.ProgressReports).ThenInclude(x => x.UpdateHistory)
             .Include(x => x.WorkflowHistory)
             .AsSplitQuery()
             .OrderBy(x => x.WorkerName).ThenBy(x => x.Id)
@@ -49,7 +49,8 @@ public class ProgressController(AccessScope access, ProgressReportService progre
                 LatestReport = latest,
                 WeekStart = week,
                 RequiresReport = AssignmentWorkflowService.RequiresWeeklyReport(x, week, clock),
-                IsLate = report != null && clock.IsLate(report.SubmittedAt, report.WeekEnd)
+                IsLate = report != null && clock.IsLate(report.SubmittedAt, report.WeekEnd),
+                UpdatesThisWeek = report == null ? 0 : Math.Max(1, report.UpdateHistory.Count)
             };
         }).ToList();
         return new ProgressReportModel { Access = a, WeekStart = week, CurrentWeekStart = current, Filter = filter, Rows = rows };
@@ -63,6 +64,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         var report = await access.ProgressReports(a)
             .Include(x => x.WorkerAssignment).ThenInclude(x => x.WorkItem).ThenInclude(x => x.BillingRecord)
             .Include(x => x.WorkerAssignment).ThenInclude(x => x.WorkflowHistory)
+            .Include(x => x.UpdateHistory)
             .SingleOrDefaultAsync(x => x.Id == id);
         if (report == null) return NotFound();
         return View(report);
@@ -81,6 +83,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
             if (a.IsWorker && report.WeekStart < clock.CurrentWeekStart)
                 throw new BusinessException("Submitted reports for past weeks are read-only.");
             ViewBag.Assignment = report.WorkerAssignment;
+            ViewBag.IsWorker = a.IsWorker;
             var workerCurrentWeekEdit = a.IsWorker && report.WeekStart == clock.CurrentWeekStart;
             await SetVersionChoices(report.WorkerAssignment);
             return View(new WeeklyProgressForm
@@ -116,6 +119,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
             && !hasCurrentReport && AssignmentWorkflowService.AllowsFinalCurrentWeekReport(assignment, clock);
         if (assignment == null || !historicallyRequired) return NotFound();
         ViewBag.Assignment = assignment;
+        ViewBag.IsWorker = true;
         ViewBag.FinalCompletionWeek = finalCompletionWeek;
         await SetVersionChoices(assignment);
         var status = assignment.CurrentWorkflowStatus;
@@ -140,7 +144,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         if (form.Id == 0 && !a.IsWorker) return Forbid();
         await progress.SaveAsync(a, form);
         TempData["Success"] = form.Id > 0
-            ? "Weekly progress report updated."
+            ? "Weekly progress updated."
             : form.WeekStart == clock.CurrentWeekStart ? "Weekly update submitted and current workflow state updated." : "Historical weekly report submitted.";
         return RedirectToAction(nameof(Index), new { weekStart = form.WeekStart });
     }

@@ -887,4 +887,87 @@ public partial class IntegrationTests
         Assert.Equal(clock.CurrentWeekStart, assignment.ReportingResumedFromWeek);
         Assert.True((await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id)) >= 5);
     }
+
+    [PostgresFact]
+    public async Task CurrentWeekProgressUpdatesKeepOneReportAndAppendImmutableHistory()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Progress history worker" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignment = await db.WorkerAssignments.SingleAsync();
+        var access = new AccessProfile("history-worker", AppRoles.Worker, null, null, worker.Id);
+        var reporting = new ProgressReportService(db, clock);
+        var first = await reporting.SaveAsync(access, new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = clock.CurrentWeekStart,
+            WorkflowStatus = WorkflowStatus.DocumentRequested, ProgressPercent = 10, WorkDone = "Requested documents", NextAction = "Await documents"
+        });
+        var firstSubmitted = first.SubmittedAt;
+        var firstUpdated = first.UpdatedAt;
+        var report = first;
+        var updates = new (WorkflowStatus Status, int? Version, decimal Progress, string Work, string Next)[]
+        {
+            (WorkflowStatus.DocumentReceived, null, 20, "Received bank statements", "Start review"),
+            (WorkflowStatus.StartPreparing, null, 35, "Started bookkeeping review", "Send queries"),
+            (WorkflowStatus.QueriesSent, 1, 50, "Sent first query list", "Await answers"),
+            (WorkflowStatus.QueriesSent, 2, 60, "Sent revised query list", "Await remaining answers"),
+            (WorkflowStatus.DraftManagementReportSent, 1, 70, "Sent draft management report", "Await review")
+        };
+
+        foreach (var update in updates)
+        {
+            time.Now = time.Now.AddMinutes(10);
+            report = await reporting.SaveAsync(access, new WeeklyProgressForm
+            {
+                Id = report.Id, Version = report.Version, WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version,
+                WeekStart = clock.CurrentWeekStart, WorkflowStatus = update.Status, WorkflowVersion = update.Version,
+                ProgressPercent = update.Progress, WorkDone = update.Work, NextAction = update.Next
+            });
+        }
+
+        Assert.Equal(1, await db.WeeklyProgressReports.CountAsync(x => x.WorkerAssignmentId == assignment.Id));
+        var history = await db.WeeklyProgressUpdateHistories.Where(x => x.WeeklyProgressReportId == report.Id).OrderBy(x => x.OccurredAt).ToListAsync();
+        Assert.Equal(6, history.Count);
+        Assert.Equal(10m, history[0].ProgressPercent);
+        Assert.Equal(WorkflowStatus.DocumentRequested, history[0].WorkflowStatus);
+        Assert.Equal(WorkflowStatus.QueriesSent, history[3].WorkflowStatus);
+        Assert.Equal(1, history[3].WorkflowVersion);
+        Assert.Equal(2, history[4].WorkflowVersion);
+        Assert.Equal(WorkflowStatus.DraftManagementReportSent, report.WorkflowStatusAtSubmission);
+        Assert.Equal(1, report.WorkflowVersionAtSubmission);
+        Assert.Equal(70m, report.ProgressPercent);
+        Assert.Equal(firstSubmitted, report.SubmittedAt);
+        Assert.True(report.UpdatedAt >= firstUpdated);
+        Assert.Equal(WorkflowStatus.DraftManagementReportSent, assignment.CurrentWorkflowStatus);
+        Assert.Equal(1, assignment.CurrentWorkflowVersion);
+        Assert.Equal(70m, assignment.CurrentProgressPercent);
+        Assert.Equal("Submitted", new ProgressReportRow { Assignment = assignment, Report = report, WeekStart = clock.CurrentWeekStart, RequiresReport = true, IsLate = clock.IsLate(report.SubmittedAt, report.WeekEnd) }.ReportingStatus);
+
+        var workflowTransitions = await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id);
+        time.Now = time.Now.AddMinutes(10);
+        report = await reporting.SaveAsync(access, new WeeklyProgressForm
+        {
+            Id = report.Id, Version = report.Version, WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version,
+            WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.DraftManagementReportSent, WorkflowVersion = 1,
+            ProgressPercent = 75, WorkDone = "Incorporated review comments", NextAction = "Await approval"
+        });
+        Assert.Equal(7, await db.WeeklyProgressUpdateHistories.CountAsync(x => x.WeeklyProgressReportId == report.Id));
+        Assert.Equal(workflowTransitions, await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id));
+        Assert.Equal(75m, report.ProgressPercent);
+        Assert.Equal(10m, (await db.WeeklyProgressUpdateHistories.OrderBy(x => x.Id).FirstAsync()).ProgressPercent);
+
+        var stale = new WeeklyProgressForm
+        {
+            Id = report.Id, Version = report.Version - 1, WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version - 1,
+            WeekStart = clock.CurrentWeekStart, WorkflowStatus = WorkflowStatus.DraftManagementReportSent, WorkflowVersion = 1,
+            ProgressPercent = 80, WorkDone = "Stale update", NextAction = "Continue"
+        };
+        await Assert.ThrowsAsync<BusinessException>(() => reporting.SaveAsync(access, stale));
+    }
 }

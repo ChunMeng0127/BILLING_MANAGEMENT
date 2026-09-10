@@ -24,6 +24,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<WorkItem> WorkItems => Set<WorkItem>();
     public DbSet<WorkerAssignment> WorkerAssignments => Set<WorkerAssignment>();
     public DbSet<WeeklyProgressReport> WeeklyProgressReports => Set<WeeklyProgressReport>();
+    public DbSet<WeeklyProgressUpdateHistory> WeeklyProgressUpdateHistories => Set<WeeklyProgressUpdateHistory>();
     public DbSet<WorkerAssignmentWorkflowHistory> WorkerAssignmentWorkflowHistories => Set<WorkerAssignmentWorkflowHistory>();
     public DbSet<WorkerPayment> WorkerPayments => Set<WorkerPayment>();
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
@@ -103,6 +104,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             t.HasCheckConstraint("CK_WeeklyProgress_Percent", "\"ProgressPercent\" BETWEEN 0 AND 100");
             t.HasCheckConstraint("CK_WeeklyProgress_WorkflowVersion", "\"WorkflowVersionAtSubmission\" IS NULL OR \"WorkflowVersionAtSubmission\" > 0");
         });
+        b.Entity<WeeklyProgressUpdateHistory>().HasIndex(x => new { x.WeeklyProgressReportId, x.OccurredAt });
+        b.Entity<WeeklyProgressUpdateHistory>().HasIndex(x => new { x.WorkerAssignmentId, x.OccurredAt });
+        b.Entity<WeeklyProgressUpdateHistory>().HasOne(x => x.WeeklyProgressReport).WithMany(x => x.UpdateHistory).HasForeignKey(x => x.WeeklyProgressReportId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WeeklyProgressUpdateHistory>().HasOne(x => x.WorkerAssignment).WithMany(x => x.ProgressUpdateHistory).HasForeignKey(x => x.WorkerAssignmentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WeeklyProgressUpdateHistory>().Property(x => x.WorkDone).HasMaxLength(4000);
+        b.Entity<WeeklyProgressUpdateHistory>().Property(x => x.NextAction).HasMaxLength(2000);
+        b.Entity<WeeklyProgressUpdateHistory>().Property(x => x.IssuesOrBlockers).HasMaxLength(2000);
+        b.Entity<WeeklyProgressUpdateHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<WeeklyProgressUpdateHistory>().Property(x => x.Source).HasMaxLength(40);
+        b.Entity<WeeklyProgressUpdateHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WeeklyProgressHistory_Percent", "\"ProgressPercent\" BETWEEN 0 AND 100");
+            t.HasCheckConstraint("CK_WeeklyProgressHistory_WorkflowVersion", "\"WorkflowVersion\" IS NULL OR \"WorkflowVersion\" > 0");
+        });
         b.Entity<WorkerPayment>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<CustomerReceipt>().HasIndex(x => x.RequestId).IsUnique();
         b.Entity<WorkerPayment>().ToTable(t => t.HasCheckConstraint("CK_Payment", "\"Amount\" > 0"));
@@ -135,6 +150,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
                     WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkflowStatusAtSubmission", "WorkflowVersionAtSubmission", "WorkDone", "NextAction", "IssuesOrBlockers"],
+                    WeeklyProgressUpdateHistory => [],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                     CustomerReceipt => allowReceiptAllocationCorrection

@@ -659,6 +659,32 @@ footer {
   font-size: 11px;
   margin: 10px 0 18px;
 }
+.progress-update-timeline {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.progress-update-timeline li {
+  border-left: 3px solid #dce9df;
+  padding: 10px 14px;
+  background: #f8faf8;
+}
+.progress-update-timeline p {
+  margin: 6px 0 0;
+}
+.progress-update-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: baseline;
+}
+.progress-update-meta span {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .check-line {
   display: flex;
   gap: 9px;
@@ -1023,5 +1049,13 @@ summary:focus-visible {
   }
   .workflow-batch-bar + .hint {
     padding: 2px 14px 2px;
+  }
+  .progress-update-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .progress-update-meta span {
+    white-space: normal;
   }
 }

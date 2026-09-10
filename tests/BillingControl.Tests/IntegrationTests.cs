@@ -1412,7 +1412,7 @@ public partial class IntegrationTests
         await using var reset = await Fresh();
         using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection).UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "weekly-progress-keys")).ConfigureServices(services => services.AddSingleton<TimeProvider>(time)));
         const string password = "Weekly-Progress-Password!123";
-        int workId, assignmentAId, assignmentBId, reportBId, workerAId, workerBId, managerId, firmId;
+        int workId, assignmentAId, assignmentBId, reportAId, reportBId, workerAId, workerBId, managerId, firmId;
         long reportVersion;
         using (var scope = app.Services.CreateScope())
         {
@@ -1437,7 +1437,7 @@ public partial class IntegrationTests
             var assignmentBVersion = await db.WorkerAssignments.Where(x => x.Id == assignmentBId).Select(x => x.Version).SingleAsync();
             var reportA = await reporting.SaveAsync(new AccessProfile("worker-a", AppRoles.Worker, null, null, workerA.Id), new WeeklyProgressForm { WorkerAssignmentId = assignmentAId, AssignmentVersion = assignmentAVersion, WeekStart = week, ProgressPercent = 40, WorkflowStatus = WorkflowStatus.AssignmentStarted, WorkDone = "Reconciled the assigned source documents", NextAction = "Complete the review", IssuesOrBlockers = "Waiting for one bank statement" });
             var reportB = await reporting.SaveAsync(new AccessProfile("worker-b", AppRoles.Worker, null, null, workerB.Id), new WeeklyProgressForm { WorkerAssignmentId = assignmentBId, AssignmentVersion = assignmentBVersion, WeekStart = week, ProgressPercent = 100, WorkflowStatus = WorkflowStatus.Completed, WorkDone = "Completed the assigned work" });
-            reportBId = reportB.Id; reportVersion = reportA.Version;
+            reportAId = reportA.Id; reportBId = reportB.Id; reportVersion = reportA.Version;
             Assert.Equal(week.AddDays(6), reportA.WeekEnd); Assert.NotEqual(default, reportA.CreatedAt); Assert.Equal("system", reportA.CreatedBy);
             assignmentAVersion = await db.WorkerAssignments.Where(x => x.Id == assignmentAId).Select(x => x.Version).SingleAsync();
             await Assert.ThrowsAsync<BusinessException>(() => reporting.SaveAsync(new AccessProfile("worker-a", AppRoles.Worker, null, null, workerA.Id), new WeeklyProgressForm { WorkerAssignmentId = assignmentAId, AssignmentVersion = assignmentAVersion, WeekStart = week, ProgressPercent = 20, WorkflowStatus = WorkflowStatus.AssignmentStarted, WorkDone = "Duplicate", NextAction = "Continue" }));
@@ -1454,7 +1454,8 @@ public partial class IntegrationTests
             await AddUser("progress-manager@example.com", AppRoles.Manager, linkedManager: managerId); await AddUser("progress-firm@example.com", AppRoles.AccountingFirm, linkedFirm: firmId);
         }
         using var workerClient = await SignedIn(app, "progress-worker-a@example.com", password);
-        var workerPage = await workerClient.GetStringAsync("/Progress"); Assert.Contains("Progress Customer", workerPage); Assert.Contains("Submitted", workerPage); Assert.DoesNotContain("Progress Worker B", workerPage); Assert.DoesNotContain("LCM gross", workerPage);
+        var workerPage = await workerClient.GetStringAsync("/Progress"); Assert.Contains("Progress Customer", workerPage); Assert.Contains("Submitted", workerPage); Assert.Contains("Update progress", workerPage); Assert.Contains("First submitted", workerPage); Assert.Contains("Updates this week", workerPage); Assert.DoesNotContain("Progress Worker B", workerPage); Assert.DoesNotContain("LCM gross", workerPage);
+        var workerDetails = await workerClient.GetStringAsync($"/Progress/Details/{reportAId}"); Assert.Contains("Progress update history", workerDetails); Assert.Contains("Reconciled the assigned source documents", workerDetails);
         Assert.Equal(HttpStatusCode.NotFound, (await workerClient.GetAsync($"/Progress/Edit/{reportBId}")).StatusCode);
         var forged = await PostWithToken(workerClient, "/Progress", "/Progress/Save", new() { ["WorkerAssignmentId"] = assignmentBId.ToString(), ["WeekStart"] = clock.CurrentWeekStart.ToString("yyyy-MM-dd"), ["ProgressPercent"] = "20", ["WorkflowStatus"] = WorkflowStatus.AssignmentStarted.ToString(), ["WorkDone"] = "Forged", ["NextAction"] = "Continue" });
         Assert.Equal(HttpStatusCode.NotFound, forged.StatusCode);
