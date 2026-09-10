@@ -84,11 +84,12 @@ public sealed class ProgressReportService(AppDbContext db, BusinessClock clock, 
             report.NextAction = string.IsNullOrWhiteSpace(nextAction) ? null : nextAction;
             report.IssuesOrBlockers = string.IsNullOrWhiteSpace(form.IssuesOrBlockers) ? null : form.IssuesOrBlockers.Trim();
 
+            var workerCurrentWeekSubmission = access.IsWorker && isNew && report.WeekStart == clock.CurrentWeekStart;
             var workerCurrentWeekEdit = access.IsWorker && !isNew && report.WeekStart == clock.CurrentWeekStart;
             if (finalCompletionWeek)
                 Finance.Require(form.WorkflowStatus == WorkflowStatus.Completed && form.WorkflowVersion is null,
                     "The final completion-week update must remain Completed.");
-            if (isNew || workerCurrentWeekEdit)
+            if (workerCurrentWeekSubmission || workerCurrentWeekEdit)
             {
                 await workflow.ApplyWorkflowAsync(assignment, form.WorkflowStatus, form.WorkflowVersion, WorkflowHistoryAction.WeeklyUpdate);
                 assignment.CurrentProgressPercent = form.ProgressPercent;

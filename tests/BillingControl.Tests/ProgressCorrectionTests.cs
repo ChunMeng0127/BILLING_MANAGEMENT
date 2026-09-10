@@ -164,6 +164,133 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task HistoricalLateReportDoesNotRewriteCurrentAssignmentWorkflow()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Historical report worker" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        var assignmentCreatedAt = new DateTime(2026, 8, 24, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignmentId).ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.CreatedAt, assignmentCreatedAt)
+            .SetProperty(x => x.UpdatedAt, assignmentCreatedAt));
+        db.ChangeTracker.Clear();
+        var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        var reports = new ProgressReportService(db, clock);
+        var current = await reports.SaveAsync(new AccessProfile("historical-worker", AppRoles.Worker, null, null, worker.Id), new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = clock.CurrentWeekStart,
+            ProgressPercent = 80, WorkflowStatus = WorkflowStatus.DraftManagementReportSent, WorkflowVersion = 2,
+            WorkDone = "Current workflow is at draft management report", NextAction = "Await review"
+        });
+        Assert.Equal(WorkflowStatus.DraftManagementReportSent, assignment.CurrentWorkflowStatus);
+        Assert.Equal(2, assignment.CurrentWorkflowVersion);
+        Assert.Equal(80m, assignment.CurrentProgressPercent);
+        var historyCount = await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id);
+        var late = await reports.SaveAsync(new AccessProfile("historical-worker", AppRoles.Worker, null, null, worker.Id), new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = new(2026, 8, 31),
+            ProgressPercent = 30, WorkflowStatus = WorkflowStatus.StartPreparing,
+            WorkDone = "Late historical weekly update", NextAction = "Continue the review"
+        });
+
+        Assert.Equal(WorkflowStatus.StartPreparing, late.WorkflowStatusAtSubmission);
+        Assert.Equal(30m, late.ProgressPercent);
+        Assert.True(clock.IsLate(late.SubmittedAt, late.WeekEnd));
+        Assert.Equal(WorkflowStatus.DraftManagementReportSent, assignment.CurrentWorkflowStatus);
+        Assert.Equal(2, assignment.CurrentWorkflowVersion);
+        Assert.Equal(80m, assignment.CurrentProgressPercent);
+        Assert.Equal(historyCount, await db.WorkerAssignmentWorkflowHistories.CountAsync(x => x.WorkerAssignmentId == assignment.Id));
+        Assert.Equal(WorkflowStatus.DraftManagementReportSent, current.WorkflowStatusAtSubmission);
+    }
+
+    [PostgresFact]
+    public async Task CurrentWeekEditUsesLatestAssignmentStateAndRejectsStaleAssignmentVersion()
+    {
+        await using var db = await Fresh();
+        var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
+        var engagement = await Engagement(db);
+        var billing = new BillingService(db);
+        var bill = await billing.Generate(engagement, new(2026, 1, 1), new(2026, 1, 31), BillingGenerationMode.Scheduled);
+        var worker = new Worker { Name = "Current edit worker" };
+        db.Add(worker); await db.SaveChangesAsync();
+        await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        var createdAt = new DateTime(2026, 8, 24, 4, 0, 0, DateTimeKind.Utc);
+        await db.WorkerAssignments.Where(x => x.Id == assignmentId).ExecuteUpdateAsync(setters => setters.SetProperty(x => x.CreatedAt, createdAt).SetProperty(x => x.UpdatedAt, createdAt));
+        db.ChangeTracker.Clear();
+        var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).SingleAsync(x => x.Id == assignmentId);
+        var reports = new ProgressReportService(db, clock);
+        var report = await reports.SaveAsync(new AccessProfile("current-edit-worker", AppRoles.Worker, null, null, worker.Id), new WeeklyProgressForm
+        {
+            WorkerAssignmentId = assignment.Id, AssignmentVersion = assignment.Version, WeekStart = clock.CurrentWeekStart,
+            ProgressPercent = 30, WorkflowStatus = WorkflowStatus.StartPreparing, WorkDone = "Started preparing", NextAction = "Send queries"
+        });
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        await new AssignmentWorkflowService(db, clock).BatchAsync(new AccessProfile("current-edit-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [assignment.Id], Versions = new() { [assignment.Id] = assignment.Version },
+            Action = BatchWorkflowAction.UpdateWorkflow, WorkflowStatus = WorkflowStatus.QueriesSent, WorkflowVersion = 1
+        });
+        db.ChangeTracker.Clear();
+        assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).Include(x => x.WorkflowHistory).SingleAsync(x => x.Id == assignmentId);
+        report = await db.WeeklyProgressReports.SingleAsync(x => x.Id == report.Id);
+        var pageAssignmentVersion = assignment.Version;
+        var pageReportVersion = report.Version;
+
+        using var app = new WebApplicationFactory<Program>().WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting("ConnectionStrings:Default", Connection)
+            .UseSetting("DataProtection:Path", Path.Combine(AppContext.BaseDirectory, "current-edit-keys"))
+            .ConfigureServices(s => s.AddSingleton<TimeProvider>(time)));
+        const string password = "Current-Edit!123";
+        using (var services = app.Services.CreateScope())
+        {
+            await Seed.Initialize(services.ServiceProvider, new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["BootstrapAdmin:Email"] = "current-edit-admin@example.com", ["BootstrapAdmin:Password"] = password
+            }).Build());
+            var users = services.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<AppUser>>();
+            var user = new AppUser { Email = "current-edit-worker@example.com", UserName = "current-edit-worker@example.com", WorkerId = worker.Id, EmailConfirmed = true };
+            Seed.Check(await users.CreateAsync(user, password));
+            Seed.Check(await users.AddToRoleAsync(user, AppRoles.Worker));
+        }
+        using var client = await SignedIn(app, "current-edit-worker@example.com", password);
+        var edit = await client.GetAsync($"/Progress/Edit/{report.Id}");
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        var html = await edit.Content.ReadAsStringAsync();
+        Assert.Matches("(?s)<option(?=[^>]*value=\"QueriesSent\")(?=[^>]*selected)[^>]*>", html);
+        Assert.Matches("name=\"ProgressPercent\"[^>]*value=\"30", html);
+        Assert.Contains("Work done", html);
+
+        await new AssignmentWorkflowService(db, clock).BatchAsync(new AccessProfile("current-edit-staff", AppRoles.InternalUser, null, null, null), new BatchWorkflowForm
+        {
+            AssignmentIds = [assignmentId], Versions = new() { [assignmentId] = pageAssignmentVersion },
+            Action = BatchWorkflowAction.UpdateWorkflow, WorkflowStatus = WorkflowStatus.PendingReview
+        });
+        var stale = new Dictionary<string, string>
+        {
+            ["Id"] = report.Id.ToString(), ["Version"] = pageReportVersion.ToString(), ["WorkerAssignmentId"] = assignmentId.ToString(),
+            ["AssignmentVersion"] = pageAssignmentVersion.ToString(), ["WeekStart"] = clock.CurrentWeekStart.ToString("yyyy-MM-dd"),
+            ["ProgressPercent"] = "35", ["WorkflowStatus"] = "QueriesSent", ["WorkflowVersion"] = "1",
+            ["WorkDone"] = "Edited after a later batch change", ["NextAction"] = "Continue"
+        };
+        var staleResponse = await PostWithToken(client, "/Progress", "/Progress/Save", stale);
+        Assert.Equal(HttpStatusCode.Redirect, staleResponse.StatusCode);
+        db.ChangeTracker.Clear();
+        var unchanged = await db.WeeklyProgressReports.SingleAsync(x => x.Id == report.Id);
+        var current = await db.WorkerAssignments.SingleAsync(x => x.Id == assignmentId);
+        Assert.Equal(WorkflowStatus.StartPreparing, unchanged.WorkflowStatusAtSubmission);
+        Assert.Equal(WorkflowStatus.PendingReview, current.CurrentWorkflowStatus);
+    }
+
+    [PostgresFact]
     public async Task BatchCompletionAllowsSingleFinalCurrentWeekReport()
     {
         await using var db = await Fresh();

@@ -81,6 +81,7 @@ public class ProgressController(AccessScope access, ProgressReportService progre
             if (a.IsWorker && report.WeekStart < clock.CurrentWeekStart)
                 throw new BusinessException("Submitted reports for past weeks are read-only.");
             ViewBag.Assignment = report.WorkerAssignment;
+            var workerCurrentWeekEdit = a.IsWorker && report.WeekStart == clock.CurrentWeekStart;
             await SetVersionChoices(report.WorkerAssignment);
             return View(new WeeklyProgressForm
             {
@@ -89,9 +90,9 @@ public class ProgressController(AccessScope access, ProgressReportService progre
                 WorkerAssignmentId = report.WorkerAssignmentId,
                 AssignmentVersion = report.WorkerAssignment.Version,
                 WeekStart = report.WeekStart,
-                ProgressPercent = report.ProgressPercent,
-                WorkflowStatus = report.WorkflowStatusAtSubmission ?? report.WorkerAssignment.CurrentWorkflowStatus,
-                WorkflowVersion = report.WorkflowVersionAtSubmission,
+                ProgressPercent = workerCurrentWeekEdit ? report.WorkerAssignment.CurrentProgressPercent : report.ProgressPercent,
+                WorkflowStatus = workerCurrentWeekEdit ? report.WorkerAssignment.CurrentWorkflowStatus : report.WorkflowStatusAtSubmission ?? report.WorkerAssignment.CurrentWorkflowStatus,
+                WorkflowVersion = workerCurrentWeekEdit ? report.WorkerAssignment.CurrentWorkflowVersion : report.WorkflowVersionAtSubmission,
                 WorkDone = report.WorkDone,
                 NextAction = report.NextAction,
                 IssuesOrBlockers = report.IssuesOrBlockers
@@ -135,7 +136,9 @@ public class ProgressController(AccessScope access, ProgressReportService progre
         if (form.Id > 0 && !await access.ProgressReports(a).AnyAsync(x => x.Id == form.Id && x.WorkerAssignmentId == form.WorkerAssignmentId)) return NotFound();
         if (form.Id == 0 && !a.IsWorker) return Forbid();
         await progress.SaveAsync(a, form);
-        TempData["Success"] = form.Id > 0 ? "Weekly progress report updated." : "Weekly update submitted and current workflow state updated.";
+        TempData["Success"] = form.Id > 0
+            ? "Weekly progress report updated."
+            : form.WeekStart == clock.CurrentWeekStart ? "Weekly update submitted and current workflow state updated." : "Historical weekly report submitted.";
         return RedirectToAction(nameof(Index), new { weekStart = form.WeekStart });
     }
 
