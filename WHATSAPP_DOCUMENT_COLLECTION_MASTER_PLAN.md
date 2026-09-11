@@ -11,7 +11,7 @@
 ## Current Project Status
 
 **Current Phase:** Phase 1B — EF Core Persistence, Constraints and Migration
-**Status:** Phase 1A is approved/closed. Phase 1B is complete and awaiting ChatGPT review. Phase 1C has not started.
+**Status:** Phase 1A is approved/closed. The Phase 1B correction pass is complete and awaiting ChatGPT review. Phase 1C has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -28,7 +28,7 @@
 - No production code, migration, provider integration, SharePoint integration, background worker, or Phase 1 implementation was started during Phase 0.
 - Phase 1 execution split recorded: 1A core domain types, 1B EF Core persistence/relationships/constraints/indexes/migration, and 1C PostgreSQL integration/invariant/migration tests.
 - Phase 1A core document domain types are approved/closed in `src/BillingControl/Models/DocumentCollectionDomain.cs`.
-- Phase 1B EF Core persistence is complete and awaiting review: document DbSets, explicit restrictive relationships, validation checks, unique/partial indexes, the template/service consistency trigger, concurrency mapping, history protection, and one additive migration were added. No document-collection data was backfilled.
+- Phase 1B EF Core persistence and correction pass is complete and awaiting review: document DbSets, explicit restrictive relationships, immutable-field allowlists, used-template protection, enum/value checks, lineage constraints, referenced-row template/service consistency triggers, concurrency mapping, history protection, and one additive migration are present. No document-collection data was backfilled.
 
 ### Current Work
 
@@ -37,7 +37,7 @@
 - Phase 0C is closed and approved.
 - Phase 0D is closed and approved.
 - Phase 1A is approved and closed.
-- Phase 1B is complete and awaiting ChatGPT review.
+- Phase 1B correction pass is complete and awaiting ChatGPT review.
 - Phase 1C has not started.
 
 ### Outstanding
@@ -47,7 +47,7 @@
 
 ### Next Step
 
-Review and approve **Phase 1B — EF Core Persistence, Constraints and Migration**. After explicit approval/instruction, begin **Phase 1C — PostgreSQL Tests** only. Do not start Phase 1C automatically.
+Review and approve **Phase 1B — EF Core Persistence, Constraints and Migration correction pass**. After explicit approval/instruction, begin **Phase 1C — PostgreSQL Tests** only. Do not start Phase 1C automatically.
 
 ---
 
@@ -1252,7 +1252,7 @@ No Contact/PIC implementation yet. No WhatsApp API. No SharePoint API. No backgr
 Phase 1 is deliberately split into the following bounded execution units:
 
 - **1A — Core Document Domain Types:** add the approved CLR enums and `Record`-derived document-collection entities, snapshots, self-references, evidence lifecycle, batch scaffold, and append-only history types. **Approved and closed.**
-- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, and the EF migration. **Complete and awaiting ChatGPT review.**
+- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, immutable-field/template guards, lineage checks, and the EF migration. **Correction pass complete and awaiting ChatGPT review.**
 - **1C — PostgreSQL Tests:** add integration coverage for invariants, transitions, concurrency, cancellation, evidence correction/reuse, template consistency, default-template uniqueness, and migration application. **Not started.**
 
 1A and 1B are complete only within their stated boundaries. Do not start 1C automatically; it requires explicit review/approval of 1B.
@@ -1450,11 +1450,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is complete and ready for review. Do not start Phase 1C automatically.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. The Phase 1B correction pass is complete and ready for review. Do not start Phase 1C automatically.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Review 1B before explicitly instructing the next unit.
 
-Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B added only their EF Core persistence mapping, PostgreSQL constraints/indexes, the service/template consistency trigger, concurrency/history persistence conventions, and one additive migration. Phase 1C has not started. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
+Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B added only their EF Core persistence mapping, PostgreSQL constraints/indexes, immutable-field/template guards, request/artifact lineage checks, referenced-row service/template consistency triggers, concurrency/history persistence conventions, and one additive migration. Phase 1C has not started. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
 
 ---
 
@@ -1584,10 +1584,11 @@ Accepted-document correction remains atomic:
 ### Phase 1B persistence implementation record
 
 - The Phase 1A entities are mapped through `AppDbContext` with PostgreSQL integer enum columns, the existing `Record.Version` optimistic-concurrency token, audit-field handling, and restrictive delete behavior for every document-collection foreign key.
-- The selected template/service invariant is enforced by a PostgreSQL `DEFERRABLE INITIALLY DEFERRED` constraint trigger on `DocumentRequests`. At transaction completion it joins `WorkItems → BillingRecords → Engagements` and compares the authoritative `Engagement.ServiceId` with the selected template's `ServiceId`; it covers request creation and replacement/update without trusting a caller-supplied service value.
+- The selected template/service invariant is enforced by PostgreSQL `DEFERRABLE INITIALLY DEFERRED` constraint triggers on `DocumentRequests` and on updates to `DocumentRequirementTemplates.ServiceId`, `Engagement.ServiceId`, `BillingRecord.EngagementId`, and `WorkItem.BillingRecordId`. At transaction completion the triggers compare the authoritative `Engagement.ServiceId` with the selected template's `ServiceId`; request creation/replacement and relevant referenced-row changes are covered without trusting a caller-supplied service value.
 - `DocumentRequirementTemplate.TemplateVersion` is the physical business-version property. This intentionally avoids conflating it with the inherited `Record.Version` concurrency token; the approved `(ServiceId, TemplateKey, Version)` rule means `TemplateVersion` in the CLR/SQL model.
-- The database migration adds the approved composite uniques, positive/non-negative/value-format checks, partial unique indexes for one active/default template per service and one current request per WorkItem, non-self replacement/duplicate checks, SHA-256 detection indexing (not uniqueness), and explicit restrictive self/reference foreign keys. Replacement/duplicate acyclicity beyond direct self-reference remains an application/service responsibility.
+- `SaveChangesAsync` now explicitly protects request identity/revision/supersession fields, request-item identity and frozen snapshots, raw received-document intake metadata and replacement/duplicate links, evidence identity pairs, and batch membership identity pairs. It leaves only approved status/lifecycle fields mutable. A used template allows only `IsActive`/`IsDefault` lifecycle changes; its existing checklist definition cannot be rewritten or extended, and a used template item allows only its `IsActive` lifecycle flag.
+- The database migration adds the approved composite uniques, enum/value checks, positive byte-length and non-blank text checks, partial unique indexes for one active/default template per service, one current request per WorkItem, one direct request successor, and one direct received-document replacement successor, plus non-self replacement/duplicate checks, SHA-256 detection indexing (not uniqueness), and explicit restrictive self/reference foreign keys. A deferred request-lineage trigger enforces same-WorkItem, next-revision replacement links. Both request-supersession and received-document replacement enforce direct non-self/single-child rules; arbitrary multi-hop cycle detection remains an application/service responsibility. Duplicate links remain many-to-one.
 - The exact Phase 0B status values are persisted as integer enum columns; transition legality remains an explicit domain-service rule and is not broadened by this persistence-only phase. No request/item/artifact transition changes financial, WorkItem, or assignment state automatically.
 - Raw `ReceivedDocument` rows remain valid without evidence and have no WorkItem, BillingRecord, DocumentRequest, or DocumentRequestItem foreign key. Evidence is the only classification link and is retained through its active/inactive lifecycle.
-- The four new history entities are append-only through the existing `SaveChangesAsync` protection: ordinary modification is rejected and the existing record-deletion guard rejects deletion. Current request, item, evidence, artifact, template, and batch records remain generally mutable for their later approved domain transitions; transition-specific immutable-field enforcement belongs to the relevant domain services.
+- The four new history entities are append-only through the existing `SaveChangesAsync` protection: ordinary modification is rejected and the existing record-deletion guard rejects deletion. PostgreSQL template/item guards provide the same used-template immutability boundary for direct database writes. Received-document duplicate status now requires a canonical link, and inactive evidence requires a non-blank reason.
 - The migration is additive and deliberately does not backfill legacy `DocumentRequested`/`DocumentReceived` workflow rows or create synthetic requests/artifacts. Phase 1C PostgreSQL invariant/migration tests have not started.

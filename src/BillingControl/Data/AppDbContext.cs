@@ -1,6 +1,7 @@
 using BillingControl.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using System.Security.Claims;
 
 namespace BillingControl.Data;
@@ -158,11 +159,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<DocumentRequirementTemplateItem>().HasOne(x => x.DocumentRequirementTemplate)
             .WithMany(x => x.Items).HasForeignKey(x => x.DocumentRequirementTemplateId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DocumentRequirementTemplateItem>().ToTable(t =>
-            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0"));
+        {
+            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
+        });
 
         b.Entity<DocumentRequest>().HasIndex(x => new { x.WorkItemId, x.Revision }).IsUnique();
         b.Entity<DocumentRequest>().HasIndex(x => x.WorkItemId).IsUnique()
             .HasFilter("\"Status\" IN (0, 1, 2, 3, 4, 5)");
+        b.Entity<DocumentRequest>().HasIndex(x => x.SupersedesRequestId).IsUnique()
+            .HasFilter("\"SupersedesRequestId\" IS NOT NULL");
         b.Entity<DocumentRequest>().HasOne(x => x.WorkItem).WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DocumentRequest>().HasOne(x => x.DocumentRequirementTemplate).WithMany(x => x.Requests)
             .HasForeignKey(x => x.DocumentRequirementTemplateId).OnDelete(DeleteBehavior.Restrict);
@@ -172,6 +178,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_DocumentRequest_Revision", "\"Revision\" > 0");
             t.HasCheckConstraint("CK_DocumentRequest_NoSelfSupersession", "\"SupersedesRequestId\" IS NULL OR \"SupersedesRequestId\" <> \"Id\"");
+            t.HasCheckConstraint("CK_DocumentRequest_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
         });
 
         b.Entity<DocumentRequestItem>().Property(x => x.RequirementKey).HasMaxLength(100);
@@ -183,7 +190,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<DocumentRequestItem>().HasOne(x => x.DocumentRequirementTemplateItem).WithMany(x => x.RequestItems)
             .HasForeignKey(x => x.DocumentRequirementTemplateItemId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DocumentRequestItem>().ToTable(t =>
-            t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0"));
+        {
+            t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+            t.HasCheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
+            t.HasCheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
+        });
 
         b.Entity<ReceivedDocument>().Property(x => x.SenderSnapshot).HasMaxLength(254);
         b.Entity<ReceivedDocument>().Property(x => x.SourceSnapshot).HasMaxLength(254);
@@ -191,16 +202,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<ReceivedDocument>().Property(x => x.MimeType).HasMaxLength(254);
         b.Entity<ReceivedDocument>().Property(x => x.Sha256Hash).HasMaxLength(64);
         b.Entity<ReceivedDocument>().HasIndex(x => x.Sha256Hash);
+        b.Entity<ReceivedDocument>().HasIndex(x => x.SupersedesReceivedDocumentId).IsUnique()
+            .HasFilter("\"SupersedesReceivedDocumentId\" IS NOT NULL");
         b.Entity<ReceivedDocument>().HasOne(x => x.SupersedesReceivedDocument).WithMany(x => x.SupersedingDocuments)
             .HasForeignKey(x => x.SupersedesReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ReceivedDocument>().HasOne(x => x.DuplicateOfReceivedDocument).WithMany(x => x.DuplicateDocuments)
             .HasForeignKey(x => x.DuplicateOfReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ReceivedDocument>().ToTable(t =>
         {
-            t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" >= 0");
+            t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" > 0");
             t.HasCheckConstraint("CK_ReceivedDocument_Sha256Hash", "\"Sha256Hash\" IS NULL OR \"Sha256Hash\" ~ '^[0-9A-Fa-f]{64}$'");
             t.HasCheckConstraint("CK_ReceivedDocument_NoSelfSupersession", "\"SupersedesReceivedDocumentId\" IS NULL OR \"SupersedesReceivedDocumentId\" <> \"Id\"");
             t.HasCheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
+            t.HasCheckConstraint("CK_ReceivedDocument_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
         });
 
         b.Entity<DocumentRequestItemEvidence>().Property(x => x.InactivationReason).HasMaxLength(2000);
@@ -210,7 +225,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<DocumentRequestItemEvidence>().HasOne(x => x.ReceivedDocument).WithMany(x => x.EvidenceLinks)
             .HasForeignKey(x => x.ReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DocumentRequestItemEvidence>().ToTable(t =>
-            t.HasCheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL)"));
+            t.HasCheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL AND length(btrim(\"InactivationReason\")) > 0)"));
 
         b.Entity<DocumentRequestBatchMember>().HasIndex(x => new { x.DocumentRequestBatchId, x.DocumentRequestId }).IsUnique();
         b.Entity<DocumentRequestBatchMember>().HasOne(x => x.DocumentRequestBatch).WithMany(x => x.Members)
@@ -254,14 +269,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<DocumentRequestItemEvidenceHistory>().HasOne(x => x.DocumentRequestItemEvidence).WithMany(x => x.History)
             .HasForeignKey(x => x.DocumentRequestItemEvidenceId).OnDelete(DeleteBehavior.Restrict);
 
-        b.Entity<DocumentRequestStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
-        b.Entity<DocumentRequestItemStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
-        b.Entity<ReceivedDocumentStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
-        b.Entity<DocumentRequestItemEvidenceHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Actor", "length(btrim(\"Actor\")) > 0"));
+        b.Entity<DocumentRequestStatusHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
+            t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+        b.Entity<DocumentRequestItemStatusHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+        b.Entity<ReceivedDocumentStatusHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+        b.Entity<DocumentRequestItemEvidenceHistory>().ToTable(t =>
+            t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0"));
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
     }
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ChangeTracker.DetectChanges();
+        var usedTemplateIds = await LoadUsedTemplateIdsAsync(cancellationToken);
         foreach (var e in ChangeTracker.Entries<Record>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (e.State == EntityState.Deleted)
@@ -269,31 +299,47 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                 if (e.Entity is InvoiceLine && allowInvoiceLineDeletion) continue;
                 throw new InvalidOperationException("Use cancellation or deactivate records instead of deleting them.");
             }
+            if (e.State == EntityState.Added && e.Entity is DocumentRequirementTemplateItem addedTemplateItem &&
+                usedTemplateIds.Contains(TemplateIdFor(addedTemplateItem)))
+                throw new InvalidOperationException("A used document requirement template cannot receive new checklist items; create a new template version.");
             if (e.State == EntityState.Modified)
             {
-                string[] allowed = e.Entity switch
+                string[] allowed;
+                if (e.Entity is DocumentRequirementTemplate template && usedTemplateIds.Contains(template.Id))
+                    allowed = ["IsActive", "IsDefault"];
+                else if (e.Entity is DocumentRequirementTemplateItem && IsUsedTemplateItem(e, usedTemplateIds))
+                    allowed = ["IsActive"];
+                else
                 {
-                    BillingRecord => allowBillingSnapshotCorrection
-                        ? ["PeriodStart", "PeriodEnd", "Status", "CancellationReason", "Amount", "RevenueShareBaseAmount"]
-                        : ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
-                    Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
-                    RevenueShareAllocation => allowBillingSnapshotCorrection ? ["Amount"] : [],
-                    WorkerPaymentAllocation => [],
-                    CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
-                    InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
-                    WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkflowStatusAtSubmission", "WorkflowVersionAtSubmission", "WorkDone", "NextAction", "IssuesOrBlockers"],
-                    WeeklyProgressUpdateHistory => [],
-                    DocumentRequestStatusHistory => [],
-                    DocumentRequestItemStatusHistory => [],
-                    ReceivedDocumentStatusHistory => [],
-                    DocumentRequestItemEvidenceHistory => [],
-                    WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
-                    WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
-                    CustomerReceipt => allowReceiptAllocationCorrection
-                        ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
-                        : ["ReceiptDate", "Reference", "IsCancelled", "CancellationReason"],
-                    _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
-                };
+                    allowed = e.Entity switch
+                    {
+                        BillingRecord => allowBillingSnapshotCorrection
+                            ? ["PeriodStart", "PeriodEnd", "Status", "CancellationReason", "Amount", "RevenueShareBaseAmount"]
+                            : ["PeriodStart", "PeriodEnd", "Status", "CancellationReason"],
+                        Invoice => ["InvoiceNumber", "InvoiceDate", "Total", "Status", "CancellationReason"],
+                        RevenueShareAllocation => allowBillingSnapshotCorrection ? ["Amount"] : [],
+                        WorkerPaymentAllocation => [],
+                        CustomerReceiptAllocation => allowReceiptAllocationCorrection ? ["Amount"] : [],
+                        InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
+                        WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkflowStatusAtSubmission", "WorkflowVersionAtSubmission", "WorkDone", "NextAction", "IssuesOrBlockers"],
+                        WeeklyProgressUpdateHistory => [],
+                        DocumentRequest => ["Status"],
+                        DocumentRequestItem => ["Status"],
+                        ReceivedDocument => ["Status"],
+                        DocumentRequestItemEvidence => ["IsActive", "InactivatedAt", "InactivationReason"],
+                        DocumentRequestBatchMember => ["IsActive"],
+                        DocumentRequestStatusHistory => [],
+                        DocumentRequestItemStatusHistory => [],
+                        ReceivedDocumentStatusHistory => [],
+                        DocumentRequestItemEvidenceHistory => [],
+                        WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
+                        WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
+                        CustomerReceipt => allowReceiptAllocationCorrection
+                            ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
+                            : ["ReceiptDate", "Reference", "IsCancelled", "CancellationReason"],
+                        _ => e.Properties.Select(p => p.Metadata.Name).Except(["CreatedAt", "CreatedBy", "Id"]).ToArray()
+                    };
+                }
                 if (e.Properties.Any(p => p.IsModified && !allowed.Contains(p.Metadata.Name)))
                     throw new InvalidOperationException("Historical snapshots and audit origins cannot be edited.");
             }
@@ -301,7 +347,59 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             if (e.State == EntityState.Added) { e.Entity.CreatedAt = DateTime.UtcNow; e.Entity.CreatedBy = actor; }
             e.Entity.UpdatedAt = DateTime.UtcNow; e.Entity.UpdatedBy = actor; e.Entity.Version++;
         }
-        return base.SaveChangesAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<HashSet<int>> LoadUsedTemplateIdsAsync(CancellationToken cancellationToken)
+    {
+        var candidateTemplateIds = new HashSet<int>(
+            ChangeTracker.Entries<DocumentRequirementTemplate>()
+                .Where(e => e.State == EntityState.Modified)
+                .Select(e => e.Entity.Id)
+                .Where(id => id > 0));
+
+        foreach (var entry in ChangeTracker.Entries<DocumentRequirementTemplateItem>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified))
+        {
+            var currentTemplateId = TemplateIdFor(entry.Entity);
+            if (currentTemplateId > 0) candidateTemplateIds.Add(currentTemplateId);
+            if (entry.State == EntityState.Modified &&
+                entry.Property(nameof(DocumentRequirementTemplateItem.DocumentRequirementTemplateId)).OriginalValue is int originalTemplateId &&
+                originalTemplateId > 0)
+                candidateTemplateIds.Add(originalTemplateId);
+        }
+
+        if (candidateTemplateIds.Count == 0) return [];
+
+        var usedTemplateIds = (await DocumentRequests.AsNoTracking()
+            .Where(x => candidateTemplateIds.Contains(x.DocumentRequirementTemplateId))
+            .Select(x => x.DocumentRequirementTemplateId)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        foreach (var request in ChangeTracker.Entries<DocumentRequest>()
+                     .Where(e => e.State is EntityState.Added or EntityState.Modified)
+                     .Select(e => e.Entity))
+        {
+            var templateId = request.DocumentRequirementTemplateId != 0
+                ? request.DocumentRequirementTemplateId
+                : request.DocumentRequirementTemplate?.Id ?? 0;
+            if (candidateTemplateIds.Contains(templateId)) usedTemplateIds.Add(templateId);
+        }
+
+        return usedTemplateIds;
+    }
+
+    private static int TemplateIdFor(DocumentRequirementTemplateItem item) =>
+        item.DocumentRequirementTemplateId != 0 ? item.DocumentRequirementTemplateId : item.DocumentRequirementTemplate?.Id ?? 0;
+
+    private static bool IsUsedTemplateItem(EntityEntry<Record> entry, HashSet<int> usedTemplateIds)
+    {
+        if (entry.Entity is not DocumentRequirementTemplateItem item) return false;
+        if (usedTemplateIds.Contains(TemplateIdFor(item))) return true;
+        return entry.State == EntityState.Modified &&
+               entry.Property(nameof(DocumentRequirementTemplateItem.DocumentRequirementTemplateId)).OriginalValue is int originalTemplateId &&
+               usedTemplateIds.Contains(originalTemplateId);
     }
 
     internal IDisposable PermitInvoiceLineDeletion()

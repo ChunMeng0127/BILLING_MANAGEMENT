@@ -86,10 +86,12 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ReceivedDocuments", x => x.Id);
-                    table.CheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" >= 0");
+                    table.CheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" > 0");
+                    table.CheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
                     table.CheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
                     table.CheckConstraint("CK_ReceivedDocument_NoSelfSupersession", "\"SupersedesReceivedDocumentId\" IS NULL OR \"SupersedesReceivedDocumentId\" <> \"Id\"");
                     table.CheckConstraint("CK_ReceivedDocument_Sha256Hash", "\"Sha256Hash\" IS NULL OR \"Sha256Hash\" ~ '^[0-9A-Fa-f]{64}$'");
+                    table.CheckConstraint("CK_ReceivedDocument_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
                     table.ForeignKey(
                         name: "FK_ReceivedDocuments_ReceivedDocuments_DuplicateOfReceivedDocu~",
                         column: x => x.DuplicateOfReceivedDocumentId,
@@ -126,6 +128,7 @@ namespace BillingControl.Data.Migrations
                     table.PrimaryKey("PK_DocumentRequests", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequest_NoSelfSupersession", "\"SupersedesRequestId\" IS NULL OR \"SupersedesRequestId\" <> \"Id\"");
                     table.CheckConstraint("CK_DocumentRequest_Revision", "\"Revision\" > 0");
+                    table.CheckConstraint("CK_DocumentRequest_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
                     table.ForeignKey(
                         name: "FK_DocumentRequests_DocumentRequests_SupersedesRequestId",
                         column: x => x.SupersedesRequestId,
@@ -170,6 +173,7 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_DocumentRequirementTemplateItems", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+                    table.CheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                     table.ForeignKey(
                         name: "FK_DocumentRequirementTemplateItems_DocumentRequirementTemplat~",
                         column: x => x.DocumentRequirementTemplateId,
@@ -202,7 +206,8 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ReceivedDocumentStatusHistories", x => x.Id);
-                    table.CheckConstraint("CK_ReceivedDocumentStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                    table.CheckConstraint("CK_ReceivedDocumentStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+                    table.CheckConstraint("CK_ReceivedDocumentStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
                     table.ForeignKey(
                         name: "FK_ReceivedDocumentStatusHistories_ReceivedDocuments_ReceivedD~",
                         column: x => x.ReceivedDocumentId,
@@ -267,7 +272,8 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DocumentRequestStatusHistories", x => x.Id);
-                    table.CheckConstraint("CK_DocumentRequestStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                    table.CheckConstraint("CK_DocumentRequestStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+                    table.CheckConstraint("CK_DocumentRequestStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
                     table.ForeignKey(
                         name: "FK_DocumentRequestStatusHistories_DocumentRequests_DocumentReq~",
                         column: x => x.DocumentRequestId,
@@ -301,6 +307,8 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_DocumentRequestItems", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+                    table.CheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
+                    table.CheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                     table.ForeignKey(
                         name: "FK_DocumentRequestItems_DocumentRequests_DocumentRequestId",
                         column: x => x.DocumentRequestId,
@@ -335,7 +343,7 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DocumentRequestItemEvidences", x => x.Id);
-                    table.CheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL)");
+                    table.CheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL AND length(btrim(\"InactivationReason\")) > 0)");
                     table.ForeignKey(
                         name: "FK_DocumentRequestItemEvidences_DocumentRequestItems_DocumentR~",
                         column: x => x.DocumentRequestItemId,
@@ -374,7 +382,8 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DocumentRequestItemStatusHistories", x => x.Id);
-                    table.CheckConstraint("CK_DocumentRequestItemStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                    table.CheckConstraint("CK_DocumentRequestItemStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+                    table.CheckConstraint("CK_DocumentRequestItemStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
                     table.ForeignKey(
                         name: "FK_DocumentRequestItemStatusHistories_DocumentRequestItems_Doc~",
                         column: x => x.DocumentRequestItemId,
@@ -407,7 +416,7 @@ namespace BillingControl.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DocumentRequestItemEvidenceHistories", x => x.Id);
-                    table.CheckConstraint("CK_DocumentRequestItemEvidenceHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                    table.CheckConstraint("CK_DocumentRequestItemEvidenceHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
                     table.ForeignKey(
                         name: "FK_DocumentRequestItemEvidenceHistories_DocumentRequestItemEvi~",
                         column: x => x.DocumentRequestItemEvidenceId,
@@ -467,7 +476,9 @@ namespace BillingControl.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentRequests_SupersedesRequestId",
                 table: "DocumentRequests",
-                column: "SupersedesRequestId");
+                column: "SupersedesRequestId",
+                unique: true,
+                filter: "\"SupersedesRequestId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DocumentRequests_WorkItemId",
@@ -519,7 +530,9 @@ namespace BillingControl.Data.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_ReceivedDocuments_SupersedesReceivedDocumentId",
                 table: "ReceivedDocuments",
-                column: "SupersedesReceivedDocumentId");
+                column: "SupersedesReceivedDocumentId",
+                unique: true,
+                filter: "\"SupersedesReceivedDocumentId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ReceivedDocumentStatusHistories_ReceivedDocumentId_Occurred~",
@@ -532,18 +545,88 @@ namespace BillingControl.Data.Migrations
                 LANGUAGE plpgsql
                 AS $$
                 BEGIN
-                    IF NOT EXISTS
-                    (
-                        SELECT 1
-                        FROM "WorkItems" wi
-                        JOIN "BillingRecords" br ON br."Id" = wi."BillingRecordId"
-                        JOIN "Engagements" e ON e."Id" = br."EngagementId"
-                        JOIN "DocumentRequirementTemplates" t ON t."Id" = NEW."DocumentRequirementTemplateId"
-                        WHERE wi."Id" = NEW."WorkItemId"
-                          AND t."ServiceId" = e."ServiceId"
-                    ) THEN
-                        RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
-                            USING ERRCODE = '23514';
+                    IF TG_TABLE_NAME = 'DocumentRequests' THEN
+                        IF NOT EXISTS
+                        (
+                            SELECT 1
+                            FROM "WorkItems" wi
+                            JOIN "BillingRecords" br ON br."Id" = wi."BillingRecordId"
+                            JOIN "Engagements" e ON e."Id" = br."EngagementId"
+                            JOIN "DocumentRequirementTemplates" t ON t."Id" = NEW."DocumentRequirementTemplateId"
+                            WHERE wi."Id" = NEW."WorkItemId"
+                              AND t."ServiceId" = e."ServiceId"
+                        ) THEN
+                            RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    ELSIF TG_TABLE_NAME = 'DocumentRequirementTemplates' THEN
+                        IF TG_OP = 'UPDATE' AND NEW."ServiceId" IS NOT DISTINCT FROM OLD."ServiceId" THEN
+                            RETURN NEW;
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests" r
+                            JOIN "WorkItems" wi ON wi."Id" = r."WorkItemId"
+                            JOIN "BillingRecords" br ON br."Id" = wi."BillingRecordId"
+                            JOIN "Engagements" e ON e."Id" = br."EngagementId"
+                            WHERE r."DocumentRequirementTemplateId" = NEW."Id"
+                              AND NEW."ServiceId" IS DISTINCT FROM e."ServiceId"
+                        ) THEN
+                            RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    ELSIF TG_TABLE_NAME = 'Engagements' THEN
+                        IF TG_OP = 'UPDATE' AND NEW."ServiceId" IS NOT DISTINCT FROM OLD."ServiceId" THEN
+                            RETURN NEW;
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests" r
+                            JOIN "WorkItems" wi ON wi."Id" = r."WorkItemId"
+                            JOIN "BillingRecords" br ON br."Id" = wi."BillingRecordId"
+                            JOIN "DocumentRequirementTemplates" t ON t."Id" = r."DocumentRequirementTemplateId"
+                            WHERE br."EngagementId" = NEW."Id"
+                              AND t."ServiceId" IS DISTINCT FROM NEW."ServiceId"
+                        ) THEN
+                            RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    ELSIF TG_TABLE_NAME = 'BillingRecords' THEN
+                        IF TG_OP = 'UPDATE' AND NEW."EngagementId" IS NOT DISTINCT FROM OLD."EngagementId" THEN
+                            RETURN NEW;
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests" r
+                            JOIN "WorkItems" wi ON wi."Id" = r."WorkItemId"
+                            JOIN "DocumentRequirementTemplates" t ON t."Id" = r."DocumentRequirementTemplateId"
+                            JOIN "Engagements" e ON e."Id" = NEW."EngagementId"
+                            WHERE wi."BillingRecordId" = NEW."Id"
+                              AND t."ServiceId" IS DISTINCT FROM e."ServiceId"
+                        ) THEN
+                            RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    ELSIF TG_TABLE_NAME = 'WorkItems' THEN
+                        IF TG_OP = 'UPDATE' AND NEW."BillingRecordId" IS NOT DISTINCT FROM OLD."BillingRecordId" THEN
+                            RETURN NEW;
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests" r
+                            JOIN "DocumentRequirementTemplates" t ON t."Id" = r."DocumentRequirementTemplateId"
+                            JOIN "BillingRecords" br ON br."Id" = NEW."BillingRecordId"
+                            JOIN "Engagements" e ON e."Id" = br."EngagementId"
+                            WHERE r."WorkItemId" = NEW."Id"
+                              AND t."ServiceId" IS DISTINCT FROM e."ServiceId"
+                        ) THEN
+                            RAISE EXCEPTION 'Document request template service must match its work item billing engagement service'
+                                USING ERRCODE = '23514';
+                        END IF;
                     END IF;
                     RETURN NEW;
                 END;
@@ -554,6 +637,158 @@ namespace BillingControl.Data.Migrations
                 DEFERRABLE INITIALLY DEFERRED
                 FOR EACH ROW
                 EXECUTE FUNCTION "billing_validate_document_request_template_service"();
+
+                CREATE CONSTRAINT TRIGGER "TR_DocumentRequirementTemplates_TemplateServiceConsistency"
+                AFTER UPDATE ON "DocumentRequirementTemplates"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_document_request_template_service"();
+
+                CREATE CONSTRAINT TRIGGER "TR_Engagements_TemplateServiceConsistency"
+                AFTER UPDATE ON "Engagements"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_document_request_template_service"();
+
+                CREATE CONSTRAINT TRIGGER "TR_BillingRecords_TemplateServiceConsistency"
+                AFTER UPDATE ON "BillingRecords"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_document_request_template_service"();
+
+                CREATE CONSTRAINT TRIGGER "TR_WorkItems_TemplateServiceConsistency"
+                AFTER UPDATE ON "WorkItems"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_document_request_template_service"();
+
+                CREATE FUNCTION "billing_prevent_used_document_requirement_template_change"()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                BEGIN
+                    IF EXISTS
+                    (
+                        SELECT 1
+                        FROM "DocumentRequests"
+                        WHERE "DocumentRequirementTemplateId" = OLD."Id"
+                    )
+                    AND
+                    (
+                        NEW."ServiceId" IS DISTINCT FROM OLD."ServiceId"
+                        OR NEW."TemplateKey" IS DISTINCT FROM OLD."TemplateKey"
+                        OR NEW."TemplateVersion" IS DISTINCT FROM OLD."TemplateVersion"
+                        OR NEW."Name" IS DISTINCT FROM OLD."Name"
+                        OR NEW."Description" IS DISTINCT FROM OLD."Description"
+                    ) THEN
+                        RAISE EXCEPTION 'A document requirement template used by a request is immutable; create a new template version'
+                            USING ERRCODE = '55000';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE TRIGGER "TR_DocumentRequirementTemplates_UsedDefinitionImmutable"
+                BEFORE UPDATE ON "DocumentRequirementTemplates"
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_prevent_used_document_requirement_template_change"();
+
+                CREATE FUNCTION "billing_prevent_used_document_requirement_template_item_change"()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                BEGIN
+                    IF TG_OP = 'INSERT' THEN
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests"
+                            WHERE "DocumentRequirementTemplateId" = NEW."DocumentRequirementTemplateId"
+                        ) THEN
+                            RAISE EXCEPTION 'A document requirement template used by a request cannot receive new checklist items; create a new template version'
+                                USING ERRCODE = '55000';
+                        END IF;
+                        RETURN NEW;
+                    ELSIF TG_OP = 'DELETE' THEN
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "DocumentRequests"
+                            WHERE "DocumentRequirementTemplateId" = OLD."DocumentRequirementTemplateId"
+                        ) THEN
+                            RAISE EXCEPTION 'A checklist item of a template used by a request is immutable; create a new template version'
+                                USING ERRCODE = '55000';
+                        END IF;
+                        RETURN OLD;
+                    END IF;
+
+                    IF EXISTS
+                    (
+                        SELECT 1
+                        FROM "DocumentRequests"
+                        WHERE "DocumentRequirementTemplateId" IN (OLD."DocumentRequirementTemplateId", NEW."DocumentRequirementTemplateId")
+                    )
+                    AND
+                    (
+                        NEW."DocumentRequirementTemplateId" IS DISTINCT FROM OLD."DocumentRequirementTemplateId"
+                        OR NEW."RequirementKey" IS DISTINCT FROM OLD."RequirementKey"
+                        OR NEW."Name" IS DISTINCT FROM OLD."Name"
+                        OR NEW."Description" IS DISTINCT FROM OLD."Description"
+                        OR NEW."IsRequired" IS DISTINCT FROM OLD."IsRequired"
+                        OR NEW."Wave" IS DISTINCT FROM OLD."Wave"
+                        OR NEW."DisplayOrder" IS DISTINCT FROM OLD."DisplayOrder"
+                    ) THEN
+                        RAISE EXCEPTION 'A checklist item of a template used by a request is immutable; create a new template version'
+                            USING ERRCODE = '55000';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE TRIGGER "TR_DocumentRequirementTemplateItems_UsedDefinitionImmutable"
+                BEFORE INSERT OR UPDATE OR DELETE ON "DocumentRequirementTemplateItems"
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_prevent_used_document_requirement_template_item_change"();
+
+                CREATE FUNCTION "billing_validate_document_request_lineage"()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                DECLARE
+                    parent_work_item_id integer;
+                    parent_revision integer;
+                BEGIN
+                    IF NEW."SupersedesRequestId" IS NOT NULL THEN
+                        SELECT "WorkItemId", "Revision"
+                        INTO parent_work_item_id, parent_revision
+                        FROM "DocumentRequests"
+                        WHERE "Id" = NEW."SupersedesRequestId";
+
+                        IF NOT FOUND OR NEW."WorkItemId" <> parent_work_item_id OR NEW."Revision" <> parent_revision + 1 THEN
+                            RAISE EXCEPTION 'A replacement document request must use the same WorkItem and the next revision'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    END IF;
+
+                    IF EXISTS
+                    (
+                        SELECT 1
+                        FROM "DocumentRequests" child
+                        WHERE child."SupersedesRequestId" = NEW."Id"
+                          AND (child."WorkItemId" <> NEW."WorkItemId" OR child."Revision" <> NEW."Revision" + 1)
+                    ) THEN
+                        RAISE EXCEPTION 'A document request replacement lineage cannot branch or become inconsistent'
+                            USING ERRCODE = '23514';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE CONSTRAINT TRIGGER "TR_DocumentRequests_SupersessionLineage"
+                AFTER INSERT OR UPDATE ON "DocumentRequests"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_document_request_lineage"();
                 """);
         }
 
@@ -561,7 +796,17 @@ namespace BillingControl.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
+                DROP TRIGGER IF EXISTS "TR_DocumentRequests_SupersessionLineage" ON "DocumentRequests";
+                DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplateItems_UsedDefinitionImmutable" ON "DocumentRequirementTemplateItems";
+                DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplates_UsedDefinitionImmutable" ON "DocumentRequirementTemplates";
+                DROP TRIGGER IF EXISTS "TR_WorkItems_TemplateServiceConsistency" ON "WorkItems";
+                DROP TRIGGER IF EXISTS "TR_BillingRecords_TemplateServiceConsistency" ON "BillingRecords";
+                DROP TRIGGER IF EXISTS "TR_Engagements_TemplateServiceConsistency" ON "Engagements";
+                DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplates_TemplateServiceConsistency" ON "DocumentRequirementTemplates";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequests_TemplateServiceConsistency" ON "DocumentRequests";
+                DROP FUNCTION IF EXISTS "billing_validate_document_request_lineage"();
+                DROP FUNCTION IF EXISTS "billing_prevent_used_document_requirement_template_item_change"();
+                DROP FUNCTION IF EXISTS "billing_prevent_used_document_requirement_template_change"();
                 DROP FUNCTION IF EXISTS "billing_validate_document_request_template_service"();
                 """);
 

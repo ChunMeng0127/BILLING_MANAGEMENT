@@ -497,7 +497,9 @@ namespace BillingControl.Data.Migrations
 
                     b.HasIndex("DocumentRequirementTemplateId");
 
-                    b.HasIndex("SupersedesRequestId");
+                    b.HasIndex("SupersedesRequestId")
+                        .IsUnique()
+                        .HasFilter("\"SupersedesRequestId\" IS NOT NULL");
 
                     b.HasIndex("WorkItemId")
                         .IsUnique()
@@ -511,6 +513,8 @@ namespace BillingControl.Data.Migrations
                             t.HasCheckConstraint("CK_DocumentRequest_NoSelfSupersession", "\"SupersedesRequestId\" IS NULL OR \"SupersedesRequestId\" <> \"Id\"");
 
                             t.HasCheckConstraint("CK_DocumentRequest_Revision", "\"Revision\" > 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequest_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
                         });
                 });
 
@@ -664,6 +668,10 @@ namespace BillingControl.Data.Migrations
                     b.ToTable("DocumentRequestItems", t =>
                         {
                             t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
+
+                            t.HasCheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                         });
                 });
 
@@ -720,7 +728,7 @@ namespace BillingControl.Data.Migrations
 
                     b.ToTable("DocumentRequestItemEvidences", t =>
                         {
-                            t.HasCheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL AND length(btrim(\"InactivationReason\")) > 0)");
                         });
                 });
 
@@ -793,7 +801,7 @@ namespace BillingControl.Data.Migrations
 
                     b.ToTable("DocumentRequestItemEvidenceHistories", t =>
                         {
-                            t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                            t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
                         });
                 });
 
@@ -866,7 +874,9 @@ namespace BillingControl.Data.Migrations
 
                     b.ToTable("DocumentRequestItemStatusHistories", t =>
                         {
-                            t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                            t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
                         });
                 });
 
@@ -939,7 +949,9 @@ namespace BillingControl.Data.Migrations
 
                     b.ToTable("DocumentRequestStatusHistories", t =>
                         {
-                            t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                            t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5, 6, 7)");
                         });
                 });
 
@@ -1079,6 +1091,8 @@ namespace BillingControl.Data.Migrations
                     b.ToTable("DocumentRequirementTemplateItems", t =>
                         {
                             t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                         });
                 });
 
@@ -1429,17 +1443,23 @@ namespace BillingControl.Data.Migrations
 
                     b.HasIndex("Sha256Hash");
 
-                    b.HasIndex("SupersedesReceivedDocumentId");
+                    b.HasIndex("SupersedesReceivedDocumentId")
+                        .IsUnique()
+                        .HasFilter("\"SupersedesReceivedDocumentId\" IS NOT NULL");
 
                     b.ToTable("ReceivedDocuments", t =>
                         {
-                            t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" >= 0");
+                            t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" > 0");
+
+                            t.HasCheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
 
                             t.HasCheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
 
                             t.HasCheckConstraint("CK_ReceivedDocument_NoSelfSupersession", "\"SupersedesReceivedDocumentId\" IS NULL OR \"SupersedesReceivedDocumentId\" <> \"Id\"");
 
                             t.HasCheckConstraint("CK_ReceivedDocument_Sha256Hash", "\"Sha256Hash\" IS NULL OR \"Sha256Hash\" ~ '^[0-9A-Fa-f]{64}$'");
+
+                            t.HasCheckConstraint("CK_ReceivedDocument_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
                         });
                 });
 
@@ -1512,7 +1532,9 @@ namespace BillingControl.Data.Migrations
 
                     b.ToTable("ReceivedDocumentStatusHistories", t =>
                         {
-                            t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Actor", "length(btrim(\"Actor\")) > 0");
+                            t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+
+                            t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5)");
                         });
                 });
 
