@@ -8,6 +8,36 @@
 
 ---
 
+## Current Project Status
+
+**Current Phase:** Phase 0 — Architecture Freeze  
+**Status:** In Progress — Phase 0 must be reviewed and frozen before Phase 1 begins.  
+**Last Reviewed:** 2026-09-12
+
+### Completed
+
+- Master roadmap and phased implementation plan drafted.
+- Core business rules, architecture direction, integrations, testing expectations, and rollout sequence documented.
+
+### Current Work
+
+- Validate the Phase 0 architecture against the current repository.
+- Turn remaining conceptual items into exact implementation decisions.
+
+### Outstanding
+
+- Final entity relationships and statuses.
+- PIC/contact and WhatsApp group/direct rules.
+- SharePoint folder/metadata and permission rules.
+- Request batching, anti-spam, follow-up, and workflow integration rules.
+- Failure, retry, idempotency, audit, and AI-boundary decisions.
+
+### Next Step
+
+Complete and review Phase 0. Do not begin Phase 1 until Phase 0 is approved and this file is updated accordingly.
+
+---
+
 ## 1. Objective
 
 Extend Billing Control into a mature **WhatsApp-first document collection and follow-up system** for accounting work.
@@ -1010,3 +1040,22 @@ The feature is mature when Billing Control can reliably do this:
 **Start with Phase 0 only.**
 
 Do not begin implementation until Phase 0 architecture decisions are reviewed and frozen. Phase 0 should validate this master plan against the current repository and turn any remaining conceptual items into exact entity relationships, statuses, permissions, SharePoint metadata/folder rules, WhatsApp conversation rules, and failure-handling rules.
+
+---
+
+## 21. AI Development Rules
+
+This file and the current repository are the authoritative source of truth for the project. Previous chat history or AI memory may provide useful context, but must not override the current repository or this plan.
+
+For every development phase:
+
+1. Read this master plan before making changes.
+2. Review the current repository implementation relevant to the phase.
+3. Work only on the current approved phase unless a directly required supporting change is necessary for correctness.
+4. Do not silently change architecture, business rules, database behaviour, security rules, or previously approved requirements.
+5. After Codex completes work, review the actual code changes rather than relying only on its summary.
+6. Run or review the relevant tests and check for regressions, security issues, data-integrity risks, concurrency issues, and missing requirements where applicable.
+7. Update this master plan when requirements, implementation decisions, architecture, risks, completed work, or project status change.
+8. Keep the **Current Project Status** section accurate, including the current phase, completed work, outstanding work, and next step.
+9. Preserve useful project history; do not rewrite the plan in a way that hides important prior decisions.
+10. Do not begin the next phase until the current phase has been reviewed and approved.
