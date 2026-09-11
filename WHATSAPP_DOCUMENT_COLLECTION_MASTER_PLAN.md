@@ -140,9 +140,9 @@ Worker Assignment
 Weekly Progress / Detailed Workflow
 ```
 
-Document collection should sit primarily under the **Work Item**, because documents belong to the job rather than to one individual worker.
+Document request/checklist state should sit primarily under the **Work Item**, because the request belongs to the job rather than to one individual worker. Raw `ReceivedDocument` intake is separate and may remain unclassified until explicit evidence linkage.
 
-Recommended relationship:
+Approved core relationship:
 
 ```text
 WorkItem
@@ -150,8 +150,10 @@ WorkItem
 ├── WorkerAssignment B
 └── DocumentRequest
     ├── DocumentRequestItem
-    ├── WhatsApp communication links
-    └── ReceivedDocument
+    │   └── DocumentRequestItemEvidence ──→ ReceivedDocument
+    └── WhatsApp communication links
+
+ReceivedDocument may exist with zero evidence links before classification.
 ```
 
 Existing detailed workflow statuses include:
@@ -880,7 +882,7 @@ The repository does not yet establish the exact cardinality or attachment level 
 The following conflicts were identified at Phase 0A close. Phase 0B resolves the core aggregate, status, linkage, invariant, and historical-record questions in the specification below; the external-boundary risks remain deferred.
 
 1. **Document workflow is not document tracking.** Existing `DocumentRequested`/`DocumentReceived` states are assignment workflow labels and weekly snapshots. They cannot identify a checklist item, message, file, sender, acceptance decision, or completeness.
-2. **The exact WorkItem linkage was a Phase 0B decision.** At Phase 0A close, the plan recommended collection primarily under `WorkItem`, while the current repository had one work item per billing record and multiple assignments. Phase 0B now fixes requests and received documents to one WorkItem; cross-company/period consolidation and confidentiality remain Phase 0C questions.
+2. **The exact WorkItem linkage was a Phase 0B decision.** At Phase 0A close, the plan recommended collection primarily under `WorkItem`, while the current repository had one work item per billing record and multiple assignments. Phase 0B now fixes each `DocumentRequest` to one WorkItem, while raw `ReceivedDocument` artifacts remain WorkItem-independent until explicitly linked through evidence; cross-company/period reuse, consolidation, and confidentiality remain Phase 0C questions.
 3. **PIC and external identity are missing.** The plan requires one PIC across multiple companies and group/direct conversation scope, but the repository has no contact, WhatsApp number, consent, participant, or customer-user model. Existing worker-based scope cannot be reused automatically for client messages.
 4. **Role boundaries may need extension.** AccountingFirm is excluded from work/progress routes, customers have no login role, and an inbound provider event is not an Identity principal. Phase 0C must define who may see, link, classify, accept, reject, download, re-request, or override incoming material.
 5. **No permanent media path exists in the application.** The plan’s SharePoint direction is not implemented. PostgreSQL stores metadata/financial data only; production Compose has no media volume. Temporary media handling, SharePoint upload failure state, hash/deduplication, malware scanning, retention, and backup/restore guarantees remain unimplemented.
