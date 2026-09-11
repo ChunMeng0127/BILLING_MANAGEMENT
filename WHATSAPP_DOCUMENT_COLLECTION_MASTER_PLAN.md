@@ -25,12 +25,13 @@
 - ChatGPT review approved Phase 0A against commit `de9ee10a0d884978dce79cb2e6ce0fffbd8e0869`; sampled repository claims matched the current source, and no blocking omission was found for this inventory phase.
 - Phase 0B core data-model freeze completed: entities, cardinalities, lifecycle/status transitions, WorkItem linkage, invariants, concurrency/audit rules, cancellation/reopen/replacement behaviour, and historical workflow treatment are specified below.
 - Phase 0B correction review completed: raw received artifacts may remain unclassified without a guessed WorkItem, and accepted-document correction/invalidation now has an explicit audited path with transactional evidence and request-state recalculation.
+- Phase 0B final corrections completed: request cancellation is scoped away from raw artifacts, request/template service consistency is transactional, and one active/default template per Service is protected by an explicit partial-unique-index rule.
 - No production code, migration, provider integration, PIC/contact model, SharePoint design, permission implementation, or Phase 0C work was started.
 
 ### Current Work
 
 - Phase 0A is closed and approved.
-- Phase 0B, including the requested correction amendments, is complete and awaiting review/approval; no Phase 0C work has started.
+- Phase 0B, including the final correction amendments, is complete and awaiting review/approval; no Phase 0C work has started.
 
 ### Outstanding
 
@@ -934,8 +935,8 @@ The model below freezes the deterministic document-collection core. It intention
 
 1. **`DocumentRequirementTemplate`** — a versioned checklist definition for one `Service`.
    - `Service` 1 → many templates; a template belongs to exactly one service.
-   - A template has a stable template key, positive version, name/description, and active/inactive state. A version becomes immutable once used to create a request.
-   - At most one active template version is selected as the default for a service. Historical inactive versions remain addressable by existing requests.
+   - A template has a stable template key, positive version, name/description, `IsActive`, and `IsDefault` state. A version becomes immutable once used to create a request.
+   - `IsDefault` implies `IsActive`. At most one active/default template version may exist for a service. Historical inactive versions remain addressable and valid for existing requests; later master-data changes never repoint their selected template/version or snapshots.
 
 2. **`DocumentRequirementTemplateItem`** — one checklist requirement within a template version.
    - One template 1 → many template items; every item belongs to exactly one template.
@@ -944,8 +945,10 @@ The model below freezes the deterministic document-collection core. It intention
 
 3. **`DocumentRequest`** — the current or historical collection aggregate for one job.
    - One `WorkItem` 1 → many document requests over time. Every request belongs to exactly one `WorkItem` and exactly one selected template version.
+   - The selected template’s `ServiceId` must equal the service reached through `DocumentRequest → WorkItem → BillingRecord → Engagement → ServiceId`. This is validated transactionally when a request is created or replaced; a request cannot use another service’s checklist.
    - A request is job-level, not worker-level: it does not belong directly to a `WorkerAssignment`, because one work item can have multiple assignments and responsibility may change.
    - A request has a positive `Revision` unique within the work item, current request-level status, the selected template reference, immutable request/item snapshots, and an optional self-reference to the immediately superseded request revision.
+   - Historical requests retain their selected template/version and request-item snapshots even when service/template master data later changes.
    - At most one request for a work item may be current at a time. A current request includes `Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, or `Paused`; `Cancelled` and `Superseded` are historical terminal states.
    - A request may be grouped into zero or more provider-neutral `DocumentRequestBatch` memberships over time. Batch membership never owns request state.
 
@@ -1121,7 +1124,7 @@ Accepted-document correction rules:
 - **Evidence carry-forward:** accepted evidence may be explicitly linked to a corresponding item in a replacement request through `DocumentRequestItemEvidence` when a human records the action. A normal replacement carries evidence within the same WorkItem; any cross-WorkItem reuse is a separate explicit classification action subject to later Phase 0C authorization/confidentiality rules. It is never copied or matched automatically.
 - **Partial receipt:** multiple accepted evidence rows may link to one item. The item remains `PartiallyReceived` until a human confirms that the requirement is complete; rejected/duplicate/superseded rows do not count.
 - **Duplicate:** duplicate detection may use artifact hash and any explicitly classified requirement context, but it never guesses WorkItem ownership or automatically reuses evidence. SHA-256 is indexed for detection but is not globally unique; a duplicate row points to its canonical raw artifact and remains auditable.
-- **Cancellation:** request cancellation is terminal and non-destructive. Child items, evidence links, received documents, and histories remain queryable but are frozen. A new request is required for further collection.
+- **Cancellation:** request cancellation is terminal and non-destructive. The cancelled request and its request items become frozen/non-actionable. Its evidence memberships and histories remain retained; each active membership is set inactive with a `RequestCancellation` link-history action and cannot progress that cancelled request. A raw `ReceivedDocument` remains immutable historical intake and may still be explicitly classified/reused elsewhere, including for another request/WorkItem, subject to authorization/confidentiality rules. Cancelling one request never deletes, rejects, quarantines, supersedes, or otherwise mutates the raw artifact or evidence memberships belonging to another request. A new request is required for further collection.
 - **Reopen:** reopening is an explicit human correction on the same non-cancelled request. It changes only the affected item/request states, records a reason/history row, and never reopens the financial or worker workflow aggregates.
 - **Not required:** an item is intentionally excluded because the requirement does not apply. It is satisfied for request completion, but the decision is reversible and audited.
 - **Waived:** an applicable requirement is intentionally excused. It is satisfied for request completion only with an actor and reason; it is reversible and audited.
@@ -1132,12 +1135,14 @@ Required invariants and indexes:
 
 - Required foreign keys: `DocumentRequest.WorkItemId`, `DocumentRequest.DocumentRequirementTemplateId`, `DocumentRequestItem.DocumentRequestId`, and both evidence-link foreign keys. `ReceivedDocument` has no required WorkItem foreign key; an unclassified raw artifact is valid with zero evidence links. All applicable foreign keys use restrictive deletes.
 - Unique template/version and item keys: `(ServiceId, TemplateKey, Version)`, `(DocumentRequirementTemplateId, RequirementKey)`, `(WorkItemId, Revision)`, and `(DocumentRequestId, RequirementKey)`.
+- Enforce `IsDefault ⇒ IsActive` and enforce one active/default template per service with a PostgreSQL partial unique index equivalent to `UNIQUE (ServiceId) WHERE IsActive = TRUE AND IsDefault = TRUE`. Historical/inactive template versions remain valid for existing requests.
+- Enforce the request/template service-consistency invariant transactionally: the selected `DocumentRequirementTemplate.ServiceId` must equal the service reached through the request’s `WorkItem → BillingRecord → Engagement`. Apply the same check when creating or replacing a request; never rely only on a caller-supplied service identifier.
 - At most one current request per work item, enforced with a PostgreSQL partial unique index over non-terminal request statuses (`Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, `Paused`).
 - Unique evidence membership: `(DocumentRequestItemId, ReceivedDocumentId)`. Every evidence link must point to an existing request item and received artifact and must record an explicit classification/reuse action; it must not be generated automatically from hash, sender, conversation, filename, or an inferred company.
 - Received-document replacement/duplicate references must be non-self-referential and acyclic. They are artifact-level references and must not infer a WorkItem. A duplicate row must reference a canonical artifact; a superseding row must reference the artifact it replaces. Any evidence links to the affected artifacts remain independently explicit and audited.
 - Positive/valid values are enforced for template version, revision, display order, byte length, SHA-256 format, and bounded text lengths. Exact limits for MIME types, file sizes, and storage references are deferred to the implementation/provider boundary.
 - A request may be `Complete` only when every required item is `Received`, `Waived`, or `NotRequired`, and the completion action is recorded. The database may enforce local row validity; the aggregate rule is enforced transactionally.
-- `Cancelled` and `Superseded` request rows, history rows, received-document rows, and evidence links are retained. No ordinary delete is allowed.
+- `Cancelled` and `Superseded` request rows, history rows, received-document rows, and evidence links are retained. No ordinary delete is allowed. Request cancellation does not change the raw received-document status or immutable intake metadata.
 
 Concurrency and audit rules:
 
