@@ -761,7 +761,7 @@ Key facts retained:
 
 ### Phase 0B — Final Core Data Model Specification (2026-09-12)
 
-The deterministic core is frozen as follows.
+The deterministic core is frozen as follows. The exact previously approved transition semantics and review history are also preserved by reference in Section 22 and remain binding if a condensed statement below is less specific.
 
 #### Core entities and cardinalities
 
@@ -1464,3 +1464,107 @@ For every development phase/sub-phase:
 10. Update this master plan when requirements/implementation decisions/status/risks change.
 11. Preserve project history and previously approved decisions.
 12. Do not begin the next phase/sub-phase until the current one has been reviewed and approved.
+
+---
+
+## 22. Preserved Phase 0A / 0B Approval History and Exactness
+
+The architecture was refined across several reviewed commits. The current file is the operational source of truth, but it intentionally preserves the stricter previously approved Phase 0A/0B semantics rather than weakening them through the later condensed restatement.
+
+Historical approval anchors:
+
+- `d8149bfe2350b97a9cbcb4f7092963cf32fa83a8` — Phase 0A review approved.
+- `7ef2b4ee26e92b9a3955201c66dc1f6aa4225045` — initial Phase 0B core-model freeze.
+- `7116cbc061421a37188a29ece14f4a471def5e64` — raw-intake and accepted-document correction amendments.
+- `3fb6601cd8b7cc65bc36f5a99e31ae3874e0db33` — final Phase 0B data-integrity corrections.
+- `a417225b3829db3b78687e5eca39099ebb302598` — final pre-0C/0D master plan with detailed Phase 0A inventory and full Phase 0B specification.
+
+If a later condensed sentence is less specific than those approved rules, implementation must follow the stricter approved semantics below and must not infer permission to broaden access, relax invariants, or skip audit/concurrency controls.
+
+### Preserved Phase 0A constraints
+
+- Existing document-requested/document-received workflow values are assignment workflow labels, not document/file evidence.
+- Existing roles and `AccessScope` must not be weakened; a phone number is never authorization.
+- Financial/Billing/WorkItem state remains isolated from document collection.
+- Existing database conventions remain applicable: restrictive foreign keys, protected historical fields, audit fields, `long Version`, safe migrations and isolated `_test` PostgreSQL integration databases.
+- Existing production architecture had no WhatsApp/SharePoint/background worker; integration reliability therefore requires explicit new boundaries rather than hidden controller-side network calls.
+- Existing historical `DocumentRequested`/`DocumentReceived` rows remain legacy workflow context and are never synthetically backfilled into new document entities.
+
+### Preserved exact request-level transitions
+
+```text
+Draft              → ReadyToSend, Paused, Cancelled
+ReadyToSend        → Requested, Paused, Cancelled
+Requested          → PartiallyReceived, Complete (human confirmation), Paused, Cancelled, Superseded (replacement only)
+PartiallyReceived  → Complete (human confirmation), Requested (after qualifying evidence withdrawn/rejected), Paused, Cancelled, Superseded (replacement only)
+Complete           → PartiallyReceived or Requested through explicit reopen, Cancelled, Superseded (replacement only)
+Paused             → Draft, ReadyToSend, Requested, or PartiallyReceived through explicit resume/recalculation; or Cancelled
+Cancelled          → terminal
+Superseded         → terminal
+```
+
+Additional preserved request rules:
+
+- No direct jump to Complete from an unissued request.
+- Paused preserves prior state/history and resume recalculates safely.
+- Cancelled never reopens; a new request revision is required.
+- Replacement supersedes the old request and creates the new revision in one transaction.
+- Reopening Complete is explicit/audited and never reopens financial/WorkItem/assignment state automatically.
+
+### Preserved exact request-item transitions
+
+```text
+Missing            → Requested, PartiallyReceived, NotRequired, Waived
+Requested          → PartiallyReceived, Received, NotRequired, Waived
+PartiallyReceived  → Received, Requested, NotRequired, Waived
+Received           → PartiallyReceived, Requested, NotRequired, Waived by explicit correction/reopen only
+NotRequired        → Missing or Requested by explicit reactivation only
+Waived             → Missing or Requested by explicit reactivation only
+```
+
+Additional preserved item rules:
+
+- `Received` requires at least one active Accepted evidence link plus human completeness confirmation.
+- Rejected, Duplicate, Quarantined, or Superseded artifacts never satisfy an item.
+- Removing/correcting the last qualifying evidence explicitly reopens/recalculates the item/request with history.
+- `NotRequired` and `Waived` require reason/actor and remain reversible/audited.
+- Optional items do not block request completion.
+- Child items under Cancelled/Superseded requests remain historical and frozen for ordinary changes.
+
+### Preserved exact received-document transitions
+
+```text
+PendingReview  → Accepted, Rejected, Duplicate, Quarantined
+Quarantined    → PendingReview or Rejected after safety issue resolution
+Accepted       → Superseded by explicit replacement, Rejected by explicit correction/invalidation, or Quarantined by explicit safety hold
+Rejected       → terminal
+Duplicate      → terminal
+Superseded     → terminal
+```
+
+Accepted-document correction remains atomic:
+
+- record actor/reason/source/time/correlation history;
+- deactivate every active evidence link for that artifact with evidence history;
+- recalculate every affected request item and request in the same transaction;
+- a completed request is explicitly reopened/recalculated rather than silently left Complete;
+- quarantined recovery returns through PendingReview and does not automatically reactivate old evidence links;
+- no financial, WorkItem, or assignment workflow state changes automatically.
+
+### Preserved Phase 0B database rules
+
+- `DocumentRequest.WorkItemId`, template, request-item and evidence FKs are restrictive.
+- Raw `ReceivedDocument` has no required WorkItem FK and zero evidence links is valid.
+- `(ServiceId, TemplateKey, Version)` unique.
+- `(DocumentRequirementTemplateId, RequirementKey)` unique.
+- `(WorkItemId, Revision)` unique.
+- `(DocumentRequestId, RequirementKey)` unique.
+- `(DocumentRequestItemId, ReceivedDocumentId)` unique.
+- One current request per WorkItem through a partial unique index over non-terminal request states.
+- `IsDefault ⇒ IsActive`; one active/default template per Service through a partial unique index equivalent to `UNIQUE (ServiceId) WHERE IsActive = TRUE AND IsDefault = TRUE`.
+- Request template Service must match authoritative `WorkItem → BillingRecord → Engagement → ServiceId` at creation/replacement.
+- Replacement/duplicate artifact references are non-self-referential and acyclic; they never infer WorkItem ownership.
+- Hash is an indexed detection aid, not a globally unique business identity.
+- Aggregate state changes, evidence changes and histories are transactionally consistent with optimistic concurrency plus serializable/locking patterns where needed.
+- History rows are append-only.
+- Request cancellation never mutates the shared raw artifact; it affects only the cancelled request/items and its evidence memberships.
