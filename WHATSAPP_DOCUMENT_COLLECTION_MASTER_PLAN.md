@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 0A — Repository & Architecture Inventory  
-**Status:** Approved — Phase 0A review is complete. Phase 0B has not started and must not begin until explicitly instructed.  
+**Current Phase:** Phase 0B — Core Data Model Freeze
+**Status:** Complete — the Phase 0B core data-model specification is recorded and ready for review/approval. Phase 0C has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -23,21 +23,22 @@
 - Phase 0A repository inventory completed against the current `codex/accounting-mvp` implementation, including entities, workflow/statuses, authorization, database/migration conventions, integration/job abstractions, tests/CI, conflicts, constraints, and unresolved architecture questions.
 - No production code, business logic, schema, migration, provider integration, or Phase 0B design was changed during Phase 0A.
 - ChatGPT review approved Phase 0A against commit `de9ee10a0d884978dce79cb2e6ce0fffbd8e0869`; sampled repository claims matched the current source, and no blocking omission was found for this inventory phase.
+- Phase 0B core data-model freeze completed: entities, cardinalities, lifecycle/status transitions, WorkItem linkage, invariants, concurrency/audit rules, cancellation/reopen/replacement behaviour, and historical workflow treatment are specified below.
+- No production code, migration, provider integration, PIC/contact model, SharePoint design, permission implementation, or Phase 0C work was started.
 
 ### Current Work
 
 - Phase 0A is closed and approved.
-- No implementation or Phase 0B work is currently in progress.
+- Phase 0B is complete and awaiting review/approval; no Phase 0C work has started.
 
 ### Outstanding
 
-- Phase 0B — Exact core entities, relationships, statuses, and invariants.
 - Phase 0C — PIC, WhatsApp conversation, SharePoint storage/metadata, and permission boundaries.
 - Phase 0D — Follow-up/workflow rules, failure/retry/idempotency, audit, AI boundaries, and final architecture freeze.
 
 ### Next Step
 
-When explicitly instructed, begin **Phase 0B — Core Data Model Freeze** only. Do not start Phase 0B automatically.
+Review and approve the completed **Phase 0B — Core Data Model Freeze**. Do not begin Phase 0C until this result is approved and this file is updated.
 
 ---
 
@@ -173,7 +174,9 @@ Recommended integration:
 
 ## 5. Proposed Core Data Model
 
-Final names may change during Phase 0 architecture review, but the mature model should cover these concepts.
+This section preserves the original mature-direction planning input. The Phase 0B specification below is now authoritative for the core entities, cardinalities, statuses, invariants, and WorkItem linkage. The contact/PIC, WhatsApp, and follow-up concepts remain later-phase roadmap guidance.
+
+For the core model, the Phase 0B freeze supersedes the earlier direct-link suggestions: `ReceivedDocument` is anchored to `WorkItem`, `BillingRecord` is reached through the existing WorkItem relationship, and request-item association is through `DocumentRequestItemEvidence` rather than duplicate foreign keys on the received-document row.
 
 ### Document requirement templates
 
@@ -226,6 +229,7 @@ PartiallyReceived
 Complete
 Paused
 Cancelled
+Superseded
 ```
 
 ### Contact / PIC model
@@ -288,9 +292,6 @@ Store metadata such as:
 
 ```text
 WorkItemId
-BillingRecordId
-DocumentRequestId
-DocumentRequestItemId
 Sender
 ReceivedAt
 OriginalFilename
@@ -303,6 +304,8 @@ SharePoint ItemId
 SharePoint WebUrl
 SharePoint ETag
 ```
+
+`BillingRecordId`, `DocumentRequestId`, and `DocumentRequestItemId` were early conceptual suggestions and are not direct Phase 0B columns. Billing is reached through `WorkItem`; a received document is linked to request items through the auditable evidence-link entity. SharePoint fields remain Phase 0C storage metadata.
 
 Do not store permanent document binaries in PostgreSQL.
 
@@ -789,6 +792,8 @@ Do not design all final entities yet and do not implement code.
 
 This is an inventory, not the Phase 0B data-model freeze. The mature direction in Sections 4–10 remains roadmap guidance; no proposed entity, provider, storage, or workflow design below is approved for implementation by this Phase 0A review.
 
+That statement records the position at Phase 0A close. The Phase 0B specification below now freezes the deterministic core model only; it does not approve the later provider, contact, storage, follow-up, or permission designs retained in Sections 4–10.
+
 #### Application and runtime architecture
 
 - The repository is an ASP.NET Core 10 MVC/Razor application using Entity Framework Core 10, ASP.NET Core Identity, PostgreSQL 17, and locally bundled Bootstrap. The README describes it as an internal billing/work MVP for fewer than 10 users and states that there are no external accounting integrations (`README.md:1-3`).
@@ -865,8 +870,10 @@ The repository does not yet establish the exact cardinality or attachment level 
 
 ### Phase 0A — Confirmed Conflicts, Risks, and Constraints
 
+The following conflicts were identified at Phase 0A close. Phase 0B resolves the core aggregate, status, linkage, invariant, and historical-record questions in the specification below; the external-boundary risks remain deferred.
+
 1. **Document workflow is not document tracking.** Existing `DocumentRequested`/`DocumentReceived` states are assignment workflow labels and weekly snapshots. They cannot identify a checklist item, message, file, sender, acceptance decision, or completeness.
-2. **The exact WorkItem linkage remains a Phase 0B decision.** The plan recommends collection primarily under `WorkItem`, while the current repository has one work item per billing record and multiple assignments. Phase 0B must decide whether requests are per work item, period, engagement, customer, or another approved aggregate, and how consolidation across companies/periods remains confidential.
+2. **The exact WorkItem linkage was a Phase 0B decision.** At Phase 0A close, the plan recommended collection primarily under `WorkItem`, while the current repository had one work item per billing record and multiple assignments. Phase 0B now fixes requests and received documents to one WorkItem; cross-company/period consolidation and confidentiality remain Phase 0C questions.
 3. **PIC and external identity are missing.** The plan requires one PIC across multiple companies and group/direct conversation scope, but the repository has no contact, WhatsApp number, consent, participant, or customer-user model. Existing worker-based scope cannot be reused automatically for client messages.
 4. **Role boundaries may need extension.** AccountingFirm is excluded from work/progress routes, customers have no login role, and an inbound provider event is not an Identity principal. Phase 0C must define who may see, link, classify, accept, reject, download, re-request, or override incoming material.
 5. **No permanent media path exists in the application.** The plan’s SharePoint direction is not implemented. PostgreSQL stores metadata/financial data only; production Compose has no media volume. Temporary media handling, SharePoint upload failure state, hash/deduplication, malware scanning, retention, and backup/restore guarantees remain unimplemented.
@@ -874,11 +881,11 @@ The repository does not yet establish the exact cardinality or attachment level 
 7. **Provider event idempotency and audit identity are absent.** Existing `RequestId` uniqueness covers customer receipts and worker payments, not provider message/event IDs. `SaveChangesAsync` derives the actor from an authenticated HTTP claim and otherwise uses `system`; provider-event identity and exact inbound/outbound snapshots need explicit design.
 8. **Workflow/status layering is a safety risk.** `WorkItem.Status`, `BillingStatus`, assignment workflow, weekly report status, request-item status, and request-level status must remain distinct. Collection automation must not silently complete/reopen work or change financial status.
 9. **Migration and deployment constraints apply.** Future schema changes must follow the repository’s additive/backfill/restrictive-FK conventions, use the isolated `_test` database rule, and account for the Hostinger importer sourcing `master`. No migration or deployment was performed in Phase 0A.
-10. **The remote plan’s proposed data model remains unapproved.** Sections 5–10 describe the mature target direction, including SharePoint and WhatsApp concepts. Phase 0A confirms repository gaps and constraints only; exact entities, cardinalities, invariants, provider boundaries, and transitions remain later Phase 0 work.
+10. **The remote plan’s proposed data model was unapproved at Phase 0A close.** Sections 5–10 still describe the mature target direction, including SharePoint and WhatsApp concepts. Phase 0B now approves only the deterministic core specification below; provider, storage, contact, permission, and workflow-automation boundaries remain later Phase 0 work.
 
-### Phase 0A — Unresolved Questions Carried Forward
+### Phase 0A — Unresolved Questions at Inventory Close
 
-These questions are intentionally not answered by this inventory.
+These questions were intentionally not answered by the inventory. The five Phase 0B gate questions are retained as project history and are resolved by the Phase 0B specification immediately below; the Phase 0C/0D questions remain intentionally open.
 
 #### Phase 0B gate questions
 
@@ -912,6 +919,234 @@ Using the confirmed Phase 0A repository facts, finalise only:
 Deliverable: exact reviewed data-model specification in this file.
 
 Do not cover WhatsApp/SharePoint provider implementation in this sub-phase.
+
+### Phase 0B — Final Core Data Model Specification (2026-09-12)
+
+**Phase 0B status:** Core model frozen for review. This is an architecture specification only; it introduces no production entities, migration, controller, provider, storage, or business-logic change. Phase 0C remains not started.
+
+The model below freezes the deterministic document-collection core. It intentionally leaves PIC/contact identity, WhatsApp conversation/provider details, SharePoint storage details, follow-up scheduling, permissions, and AI behaviour to Phase 0C/0D.
+
+#### Core entities and cardinalities
+
+1. **`DocumentRequirementTemplate`** — a versioned checklist definition for one `Service`.
+   - `Service` 1 → many templates; a template belongs to exactly one service.
+   - A template has a stable template key, positive version, name/description, and active/inactive state. A version becomes immutable once used to create a request.
+   - At most one active template version is selected as the default for a service. Historical inactive versions remain addressable by existing requests.
+
+2. **`DocumentRequirementTemplateItem`** — one checklist requirement within a template version.
+   - One template 1 → many template items; every item belongs to exactly one template.
+   - Each item has a stable `RequirementKey` within the template lineage, display name/description, required/optional flag, priority/wave, and display order.
+   - `(DocumentRequirementTemplateId, RequirementKey)` is unique. Template items are immutable after their template is used; changing a checklist creates a new template version.
+
+3. **`DocumentRequest`** — the current or historical collection aggregate for one job.
+   - One `WorkItem` 1 → many document requests over time. Every request belongs to exactly one `WorkItem` and exactly one selected template version.
+   - A request is job-level, not worker-level: it does not belong directly to a `WorkerAssignment`, because one work item can have multiple assignments and responsibility may change.
+   - A request has a positive `Revision` unique within the work item, current request-level status, the selected template reference, immutable request/item snapshots, and an optional self-reference to the immediately superseded request revision.
+   - At most one request for a work item may be current at a time. A current request includes `Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, or `Paused`; `Cancelled` and `Superseded` are historical terminal states.
+   - A request may be grouped into zero or more provider-neutral `DocumentRequestBatch` memberships over time. Batch membership never owns request state.
+
+4. **`DocumentRequestItem`** — the frozen requirement instance inside one request.
+   - One request 1 → many request items; every item belongs to exactly one request.
+   - Each item references the source template item where available and snapshots the requirement key, name/description, required/optional flag, priority/wave, and display order. Later template edits cannot change an existing request.
+   - `(DocumentRequestId, RequirementKey)` is unique. A request cannot contain the same requirement twice.
+   - Request items do not belong directly to a billing record or worker assignment; their parent request reaches the billing record through `WorkItem`.
+
+5. **`ReceivedDocument`** — one immutable receipt/evidence record for one received document file or equivalent document artifact.
+   - One `WorkItem` 1 → many received documents. Every received document has exactly one work item, including an initially unclassified document.
+   - A received document may be linked to zero or more request items through the evidence link below. Zero links represents an unclassified/unmatched document; links must always resolve to request items under the same work item.
+   - Original receipt metadata (received timestamp, source actor/sender snapshot, original filename, MIME type, byte length, and SHA-256 where a file exists) is immutable. Permanent storage references are metadata only and are finalized in Phase 0C; PostgreSQL does not store permanent document binaries.
+   - Replacement is represented by a new received-document row pointing to the row it supersedes. The old row remains immutable history and is never overwritten or deleted.
+
+6. **`DocumentRequestItemEvidence`** — explicit, auditable evidence linking.
+   - One request item 0 → many evidence links; one received document 0 → many evidence links. Multiple links are permitted only by an explicit classification/reuse action and never across different work items.
+   - `(DocumentRequestItemId, ReceivedDocumentId)` is unique. Unlinking is a status/audit operation, not row deletion.
+   - The link has an active/inactive lifecycle. A new link is active; unlinking sets it inactive with an audit reason and timestamp. Inactive links remain queryable and do not satisfy an item.
+   - An evidence link is satisfying only when the linked received document is `Accepted` and the link is active. A received file is not automatically accepted merely because it is present.
+   - This link permits a valid document to be carried into a replacement request revision without mutating the original receipt record, while preventing implicit cross-company or cross-work-item reuse.
+
+7. **`DocumentRequestBatch` and `DocumentRequestBatchMember`** — provider-neutral grouping scaffolding.
+   - A batch has 1 → many membership rows; a request may have 0 → many memberships over its lifetime because an initial request and later follow-up may be separate batches.
+   - `(DocumentRequestBatchId, DocumentRequestId)` is unique. Batch membership is not a request revision and does not change request/item completion.
+   - Phase 0B freezes only this neutral grouping relationship. PIC identity, conversation identity, authorised participants, batch eligibility, batch statuses, and follow-up cadence are Phase 0C/0D decisions and must not be added to the core model from this phase.
+
+8. **Append-only status histories** — `DocumentRequestStatusHistory`, `DocumentRequestItemStatusHistory`, `ReceivedDocumentStatusHistory`, and `DocumentRequestItemEvidenceHistory`.
+   - Each status-history row belongs to exactly one current entity and records the previous status (nullable for the first row), new status, action/reason, actor/source, and UTC occurrence time.
+   - Evidence-link history records link/unlink actions and the link identifier; it uses the same append-only/audit rules even though the link itself has an active/inactive lifecycle rather than a request-item status enum.
+   - History rows are append-only, never deleted or edited, and are separate from the mutable current-status row. The existing `Record` audit fields remain on current and history entities.
+
+There is deliberately no direct `BillingRecordId` on `DocumentRequest`, `DocumentRequestItem`, or `ReceivedDocument`. The authoritative linkage is:
+
+```text
+DocumentRequest → WorkItem → BillingRecord → Engagement / service period
+DocumentRequestItem → DocumentRequest
+ReceivedDocument → WorkItem
+DocumentRequestItemEvidence → DocumentRequestItem + ReceivedDocument
+```
+
+This avoids a second billing foreign key that could disagree with the existing one-to-one `WorkItem`/`BillingRecord` relationship. It also keeps document collection independent of invoice, receipt, revenue-share, and payment tables.
+
+#### Request-level statuses and allowed transitions
+
+The request status enum is:
+
+```text
+Draft
+ReadyToSend
+Requested
+PartiallyReceived
+Complete
+Paused
+Cancelled
+Superseded
+```
+
+Meaning and transitions:
+
+| Status | Meaning | Allowed next states |
+| --- | --- | --- |
+| `Draft` | Request and item snapshot exists but has not passed the send/readiness gate. | `ReadyToSend`, `Paused`, `Cancelled` |
+| `ReadyToSend` | Snapshot is validated and can be issued by a later communication phase. | `Requested`, `Paused`, `Cancelled` |
+| `Requested` | The request has been activated/issued; applicable outstanding items are requested. | `PartiallyReceived`, `Complete` by human confirmation, `Paused`, `Cancelled`, `Superseded` through replacement only |
+| `PartiallyReceived` | At least one applicable item has qualifying evidence or has been partially acknowledged, but the mandatory set is not complete. | `Complete` by human confirmation, `Requested` after all qualifying evidence is withdrawn/rejected, `Paused`, `Cancelled`, `Superseded` through replacement only |
+| `Complete` | Every required item is `Received`, `Waived`, or `NotRequired`, and a human has confirmed completion. Optional items do not block completion. | `PartiallyReceived`/`Requested` through explicit reopen, `Cancelled`, `Superseded` through replacement only |
+| `Paused` | Collection progression is intentionally paused without losing item/evidence state. | `Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived` after an explicit resume/recalculation, or `Cancelled` |
+| `Cancelled` | Explicitly cancelled; historical and non-actionable. | None |
+| `Superseded` | Replaced by a later request revision; historical and non-actionable. | None |
+
+Rules:
+
+- A request cannot jump directly to `Complete` from an unissued state. Completion requires an active request, qualifying item states, and an explicit human confirmation action.
+- Request status is recalculated transactionally from item/evidence state and the transition action; callers cannot set an arbitrary status that violates the table.
+- `Paused` retains the prior state in status history. Resume returns to `Draft`/`ReadyToSend` if it was never issued, otherwise to `Requested` or `PartiallyReceived` based on current item evidence.
+- `Cancelled` is terminal. Re-requesting after cancellation creates a new revision; it never reopens or rewrites the cancelled row.
+- `Superseded` is terminal. Creating a replacement revision changes the old current request to `Superseded` and creates the new request in the same transaction.
+- Reopening a `Complete` request is an explicit audited action and does not reopen `WorkItem`, `WorkerAssignment`, or any financial status. It recalculates to `PartiallyReceived` or `Requested` after the affected item is reopened.
+
+#### Request-item statuses and allowed transitions
+
+The request-item status enum is:
+
+```text
+Missing
+Requested
+PartiallyReceived
+Received
+NotRequired
+Waived
+```
+
+- `Missing` is the initial state for a draft/ready request or the state after an issued requirement has no qualifying evidence.
+- `Requested` is set when the parent request is activated, except for items already `NotRequired` or `Waived`.
+- `PartiallyReceived` means one or more active accepted evidence links exist but the worker has not confirmed the requirement complete.
+- `Received` requires at least one active link to an `Accepted`, non-superseded received document and an explicit human confirmation that the requirement is complete. File arrival/classification alone cannot set this state.
+- `NotRequired` means the requirement does not apply to this work item. It counts as satisfied but requires an auditable reason.
+- `Waived` means the requirement applies but an authorised human has approved an exception. It counts as satisfied and requires an auditable reason and actor.
+
+Allowed item transitions:
+
+```text
+Missing            → Requested, PartiallyReceived, NotRequired, Waived
+Requested          → PartiallyReceived, Received, NotRequired, Waived
+PartiallyReceived  → Received, Requested, NotRequired, Waived
+Received           → PartiallyReceived, Requested, NotRequired, Waived by explicit correction/reopen only
+NotRequired        → Missing or Requested by explicit reactivation only
+Waived             → Missing or Requested by explicit reactivation only
+```
+
+Additional rules:
+
+- A rejected, duplicate, quarantined, or superseded received document never satisfies an item. Removing or superseding the last qualifying evidence causes an explicit audited item reopen and request-state recalculation; it does not silently rewrite a completed request.
+- `NotRequired` and `Waived` are reversible decisions, not deletes. Existing evidence remains historical and is not silently destroyed. Reactivation requires a reason and returns the item to `Requested` when the parent has been issued, otherwise `Missing`.
+- Child item rows remain readable after parent cancellation/supersession but are frozen for ordinary changes. They do not need a separate `Cancelled` enum because the parent terminal state is authoritative.
+- Optional items may remain `Missing`, `Requested`, or `PartiallyReceived` when the request reaches `Complete`; required items may reach completion only through `Received`, `NotRequired`, or `Waived`.
+
+#### Received-document statuses and lifecycle
+
+The received-document status enum is:
+
+```text
+PendingReview
+Quarantined
+Accepted
+Rejected
+Duplicate
+Superseded
+```
+
+Allowed transitions:
+
+```text
+PendingReview  → Accepted, Rejected, Duplicate, Quarantined
+Quarantined    → PendingReview or Rejected after the safety issue is resolved
+Accepted       → Superseded through an explicit replacement action only
+Rejected       → terminal
+Duplicate      → terminal
+Superseded     → terminal
+```
+
+- `PendingReview` is the initial state for a received artifact that has been recorded but not accepted as evidence.
+- `Quarantined` blocks classification/acceptance while a later safety/processing decision is pending. Provider and scanner implementation is outside Phase 0B.
+- `Accepted` means the artifact is valid evidence for its active evidence links; it still does not by itself mark a request item `Received` because human completeness confirmation remains required.
+- `Rejected` means the artifact does not satisfy the requirement; a new receipt is required. The rejection reason is mandatory.
+- `Duplicate` means the artifact is a duplicate of a canonical received-document row; `DuplicateOfReceivedDocumentId` is mandatory and the row never satisfies an item.
+- `Superseded` means a later version replaces this artifact; `SupersedesReceivedDocumentId` on the new row and the old row’s status history preserve the chain. The original file metadata remains immutable.
+- A received-document row is never deleted or overwritten to represent a replacement. A new row is created and the old row is transitioned through the audited replacement action.
+
+#### WorkItem/BillingRecord linkage and financial isolation
+
+- A document request is created only for one existing `WorkItem`. Because the repository has one `WorkItem` per `BillingRecord`, the billing record and service period are reached transitively and cannot drift from the work item.
+- A request is not attached directly to `WorkerAssignment`; documents belong to the job and must remain available to authorised future/current assignments according to later permission rules.
+- New requests and received documents for a cancelled `WorkItem` or cancelled `BillingRecord` are not actionable. Existing collection history is retained; parent cancellation does not delete or fabricate child history.
+- Document request/item/received-document state never changes `BillingRecord.Status`, invoice/receipt/payment state, revenue-share snapshots, `WorkItem.Status`, or assignment workflow automatically in Phase 0B. Any approved workflow mapping is a later Phase 0D rule.
+- A request revision cannot alter the historical billing period, customer/service snapshot, revenue-share base, invoice allocation, worker entitlement, or payment data.
+
+#### Replacement, version, partial receipt, duplicate, cancellation, and reopen rules
+
+- **Template version:** editing a used template creates a new template version. Existing requests retain their original template and item snapshots.
+- **Request revision:** a replacement is a new `DocumentRequest` row with the next work-item revision and `SupersedesRequestId`. The old request becomes `Superseded` in the same transaction. No request item is edited in place after activation.
+- **Evidence carry-forward:** accepted evidence may be explicitly linked to a corresponding item in a replacement request through `DocumentRequestItemEvidence` only when the work item is identical and a human records the action. It is never copied or matched automatically.
+- **Partial receipt:** multiple accepted evidence rows may link to one item. The item remains `PartiallyReceived` until a human confirms that the requirement is complete; rejected/duplicate/superseded rows do not count.
+- **Duplicate:** duplicate detection is scoped at least to the work item and relevant requirement/evidence context. SHA-256 is indexed for detection but is not globally unique; a duplicate row points to its canonical row and remains auditable.
+- **Cancellation:** request cancellation is terminal and non-destructive. Child items, evidence links, received documents, and histories remain queryable but are frozen. A new request is required for further collection.
+- **Reopen:** reopening is an explicit human correction on the same non-cancelled request. It changes only the affected item/request states, records a reason/history row, and never reopens the financial or worker workflow aggregates.
+- **Not required:** an item is intentionally excluded because the requirement does not apply. It is satisfied for request completion, but the decision is reversible and audited.
+- **Waived:** an applicable requirement is intentionally excused. It is satisfied for request completion only with an actor and reason; it is reversible and audited.
+
+#### Database invariants, uniqueness, concurrency, and audit
+
+Required invariants and indexes:
+
+- Required foreign keys: `DocumentRequest.WorkItemId`, `DocumentRequest.DocumentRequirementTemplateId`, `DocumentRequestItem.DocumentRequestId`, `ReceivedDocument.WorkItemId`, and both evidence-link foreign keys. All use restrictive deletes.
+- Unique template/version and item keys: `(ServiceId, TemplateKey, Version)`, `(DocumentRequirementTemplateId, RequirementKey)`, `(WorkItemId, Revision)`, and `(DocumentRequestId, RequirementKey)`.
+- At most one current request per work item, enforced with a PostgreSQL partial unique index over non-terminal request statuses (`Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, `Paused`).
+- Unique evidence membership: `(DocumentRequestItemId, ReceivedDocumentId)`. An active evidence link must point to a received document with the same `WorkItemId` as the request item’s parent request.
+- Received-document replacement/duplicate references must be same-work-item, non-self-referential, and acyclic. A duplicate row must reference a canonical row; a superseding row must reference the row it replaces.
+- Positive/valid values are enforced for template version, revision, display order, byte length, SHA-256 format, and bounded text lengths. Exact limits for MIME types, file sizes, and storage references are deferred to the implementation/provider boundary.
+- A request may be `Complete` only when every required item is `Received`, `Waived`, or `NotRequired`, and the completion action is recorded. The database may enforce local row validity; the aggregate rule is enforced transactionally.
+- `Cancelled` and `Superseded` request rows, history rows, received-document rows, and evidence links are retained. No ordinary delete is allowed.
+
+Concurrency and audit rules:
+
+- Current request, request item, received document, evidence link, and mutable template records use the repository’s `Record` audit fields and `long Version` concurrency token. `CreatedAt`/`CreatedBy` never change; updates advance `UpdatedAt`/`UpdatedBy` and `Version`.
+- Every status/reopen/waive/not-required/replace/link/unlink action appends an immutable history row containing previous/new state, action, reason where required, actor, source, correlation/request identifier where available, and UTC timestamp.
+- State-changing operations update the child/current row, aggregate request status, and history rows in one database transaction. Operations racing on the same work item/current request use optimistic version checks plus the repository’s serializable/locking pattern where needed to guarantee one current request and no lost aggregate transition. A conflict returns a refresh/retry result; it never silently overwrites a newer decision.
+- History rows are append-only and must not be used as editable snapshots. Provider/system actor semantics and external event identifiers are reserved for Phase 0C/0D, but the core audit contract requires them to be representable rather than relying only on the generic `system` actor.
+
+#### Existing historical workflow records
+
+- Existing `WorkerAssignmentWorkflowHistory` and weekly-report snapshots containing `DocumentRequested` or `DocumentReceived` remain unchanged and are treated as historical workflow evidence only.
+- Phase 0B creates no synthetic `DocumentRequest`, `DocumentRequestItem`, `ReceivedDocument`, or evidence rows from those old workflow values. The repository has no reliable document/item/file mapping or historical acceptance evidence to justify a backfill.
+- Existing historical rows are not retroactively linked to a new request. A future UI may display them as legacy workflow context, but they do not satisfy a new request item.
+- The core model owns document-collection state, not `WorkflowStatus`. A later approved Phase 0D rule may map a successful first request to `DocumentRequested` and a human-confirmed complete request to `DocumentReceived`; those transitions must preserve the existing assignment workflow history and must not change financial status.
+
+#### Phase 0B unresolved questions carried to later phases
+
+No core entity, cardinality, status, transition, invariant, WorkItem linkage, replacement rule, or historical-record treatment remains unresolved within Phase 0B. The following are intentionally deferred and must not be pulled into this phase:
+
+- Phase 0C: PIC/contact identity, customer/firm/manager/worker participant scope, group/direct conversation ownership, batch confidentiality, provider identifiers, webhook identity, and permission implementation.
+- Phase 0C: SharePoint site/library/folder/metadata references, storage-provider failure states, temporary media handling, and external file-access rules.
+- Phase 0D: follow-up cadence, anti-spam scheduling, promised-date/snooze scope, exact workflow transition authority, retry/idempotency/outbox behaviour, provider/system audit correlation, and AI suggestion boundaries.
+- Phase 1/implementation: exact CLR/table names, migration ordering, backfill execution, provider-specific processing states, and concrete MIME/size/security limits once the external boundaries are approved.
 
 #### Phase 0C — Contact, WhatsApp & SharePoint Boundaries
 
@@ -1198,11 +1433,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0A is approved. Do not start Phase 0B automatically.**
+**Phase 0B is complete and ready for review/approval. Do not start Phase 0C automatically.**
 
-When explicitly instructed, begin **Phase 0B — Core Data Model Freeze** only. Phase 0B remains a non-coding architecture task: finalise the exact core entities, relationships/cardinalities, statuses/transitions, database invariants/uniqueness rules, and WorkItem/BillingRecord linkage. Do not cover WhatsApp/SharePoint provider implementation in Phase 0B.
+Review the Phase 0B specification above against the current repository and approve or amend it before implementation. When explicitly instructed after approval, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Do not start Phase 0C automatically.
 
-After Phase 0B, ChatGPT must review the actual result and update this file before Phase 0C begins.
+No production code, migration, provider integration, or Phase 0C work was started in Phase 0B.
 
 ---
 
