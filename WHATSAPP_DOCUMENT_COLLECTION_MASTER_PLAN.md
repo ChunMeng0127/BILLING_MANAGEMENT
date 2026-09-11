@@ -2,7 +2,7 @@
 
 > **Repository:** `ChunMeng0127/BILLING_MANAGEMENT`  
 > **Planning baseline:** `6677680feb12141eefe97dd5d21b37fd3b6b4bf1`  
-> **Primary implementation model:** Luna Max, split into small bounded phases  
+> **Primary implementation model:** Codex Luna Max only, split into small bounded execution phases  
 > **Permanent document storage:** SharePoint  
 > **Status:** Architecture / roadmap only — implement phase-by-phase, do not build everything in one Codex run.
 
@@ -10,31 +10,32 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 0 — Architecture Freeze  
-**Status:** In Progress — Phase 0 must be reviewed and frozen before Phase 1 begins.  
+**Current Phase:** Phase 0A — Repository & Architecture Inventory  
+**Status:** In Progress — complete and review each Phase 0 sub-phase before moving to the next.  
 **Last Reviewed:** 2026-09-12
 
 ### Completed
 
 - Master roadmap and phased implementation plan drafted.
 - Core business rules, architecture direction, integrations, testing expectations, and rollout sequence documented.
+- AI/Codex working rules added so the repository and this plan remain the source of truth.
+- Roadmap adjusted for Codex Luna Max only, with small reviewable execution units.
 
 ### Current Work
 
-- Validate the Phase 0 architecture against the current repository.
-- Turn remaining conceptual items into exact implementation decisions.
+- Validate the master plan against the current repository.
+- Inventory existing entities, workflow/status logic, permissions, integrations, tests, and architectural constraints relevant to document collection.
 
 ### Outstanding
 
-- Final entity relationships and statuses.
-- PIC/contact and WhatsApp group/direct rules.
-- SharePoint folder/metadata and permission rules.
-- Request batching, anti-spam, follow-up, and workflow integration rules.
-- Failure, retry, idempotency, audit, and AI-boundary decisions.
+- Phase 0A — Repository & architecture inventory.
+- Phase 0B — Exact core entities, relationships, statuses, and invariants.
+- Phase 0C — PIC, WhatsApp conversation, SharePoint storage/metadata, and permission boundaries.
+- Phase 0D — Follow-up/workflow rules, failure/retry/idempotency, audit, AI boundaries, and final architecture freeze.
 
 ### Next Step
 
-Complete and review Phase 0. Do not begin Phase 1 until Phase 0 is approved and this file is updated accordingly.
+Complete **Phase 0A only** and review the result. Do not begin Phase 0B until Phase 0A is approved and this file is updated.
 
 ---
 
@@ -742,36 +743,96 @@ Snoozed
 
 ---
 
-## 14. Phased Luna Max Implementation Roadmap
+## 14. Phased Codex Luna Max Implementation Roadmap
 
-Use **small bounded phases**. One phase should not quietly expand into multiple architectural changes.
+Use **Codex Luna Max only** for this project.
 
-For architecture/database/security/integration phases, use **Luna Max**.
+The numbered phases below are project milestones. A milestone does **not** automatically equal one Codex run.
+
+### Luna Max execution-unit rule
+
+Before giving work to Codex:
+
+1. Each execution task should have **one primary objective** and a clearly reviewable deliverable.
+2. Prefer small sub-phases that can be understood and reviewed without mixing several architectural concerns.
+3. If a milestone touches multiple major concerns, requires broad repository changes, or looks too large/risky for one focused Luna Max run, split it into `A/B/C` sub-phases first.
+4. Do not ask Luna Max to design, implement, migrate, integrate external providers, harden security, and build UI in the same execution task.
+5. After every sub-phase, ChatGPT reviews the actual diff/tests and updates this master plan before the next sub-phase starts.
+6. A sub-phase may be split again if repository inspection shows it is still too broad. Correctness and reviewability take priority over keeping the phase count small.
 
 ### Phase 0 — Architecture Freeze
 
+Phase 0 is intentionally split into four small non-coding review units.
+
+#### Phase 0A — Repository & Architecture Inventory
+
 **No production coding.**
 
-Finalise:
+Inspect the current repository and document only the existing facts relevant to this feature:
 
-- Entity model
-- Statuses
-- Relationships
-- PIC/contact model
-- WhatsApp group/direct model
-- SharePoint folder + metadata design
-- Template rules
-- Request batching
-- Anti-spam rules
-- Follow-up rules
-- Workflow integration
+- Existing entities and relationships
+- Current Work Item / Worker Assignment / workflow implementation
+- Existing status enums/state transitions
+- Authorization/role model
+- Existing database conventions and migration patterns
+- Existing background-job/integration abstractions, if any
+- Existing tests and CI relevant to this feature
+- Constraints/conflicts between the repository and this master plan
+
+Deliverable: update this file with confirmed repository facts and unresolved architecture questions only.
+
+Do not design all final entities yet and do not implement code.
+
+#### Phase 0B — Core Data Model Freeze
+
+**No production coding.**
+
+Using the confirmed Phase 0A repository facts, finalise only:
+
+- Core document collection entities
+- Exact relationships/cardinalities
+- Statuses and allowed transitions
+- Required database invariants/uniqueness rules
+- WorkItem/BillingRecord linkage
+
+Deliverable: exact reviewed data-model specification in this file.
+
+Do not cover WhatsApp/SharePoint provider implementation in this sub-phase.
+
+#### Phase 0C — Contact, WhatsApp & SharePoint Boundaries
+
+**No production coding.**
+
+Finalise only:
+
+- PIC/contact relationships
+- Group/direct conversation model and authorised scope
+- Request batching confidentiality boundary
+- SharePoint folder/metadata strategy
+- Storage abstraction boundary
+- Permission/least-privilege direction
+- External configuration prerequisites that must be verified later
+
+Deliverable: reviewed integration-boundary specification in this file.
+
+#### Phase 0D — Automation, Reliability & Final Freeze
+
+**No production coding.**
+
+Finalise only:
+
+- Follow-up and anti-spam rules
+- Promised-date/snooze scope
+- Workflow integration rules
+- Failure/retry/idempotency requirements
+- Audit requirements
+- Security constraints
 - AI boundaries
-- Permissions
-- Failure/retry model
+- Remaining unresolved decisions
 
-Deliverable: architecture/specification update to this file or a reviewed implementation section before Phase 1.
+Deliverable: final Phase 0 architecture freeze and explicit approval/readiness statement for Phase 1.
 
-Estimated Codex time: 1–2 hours.
+Only after Phase 0D is reviewed and approved may Phase 1 begin.
 
 ### Phase 1 — Core Database Model
 
@@ -779,25 +840,25 @@ Add only the structural entities/enums/migration/tests.
 
 No WhatsApp API. No SharePoint API. No AI.
 
-Estimated Codex time: 2–4 hours.
+Split into smaller `1A/1B/...` execution units before implementation if repository inspection shows the migration/model work is too broad for one focused Luna Max run.
 
 ### Phase 2 — Document Requirement Templates
 
 Add reusable service-based document requirement templates with Required/Optional, Priority/Wave, display order, active status.
 
-Estimated Codex time: 3–5 hours.
+Split before implementation if model, UI, validation, and tests cannot remain one small cohesive change.
 
 ### Phase 3 — Document Request Internal UI
 
 Build request/checklist UI and manual state transitions before external integrations.
 
-Estimated Codex time: 3–5 hours.
+Split UI, application logic, and workflow integration if the diff would otherwise become broad.
 
 ### Phase 4 — Contact / PIC Model
 
 Support one PIC across multiple companies/engagements, WhatsApp consent/preferences, pause/do-not-contact.
 
-Estimated Codex time: 3–4 hours.
+Split schema/model work from UI/management work where useful.
 
 ### Phase 5 — Request Batching
 
@@ -805,19 +866,17 @@ Create `DocumentRequestBatch` logic and preview consolidated requests for the sa
 
 No sending yet.
 
-Estimated Codex time: 3–5 hours.
+Split deterministic batching rules from preview UI if needed.
 
 ### Phase 6 — Request Waves / Client Workload Control
 
 Implement Start Work / Normal / Later / Optional and default 3–5 client-facing next-action items.
 
-Estimated Codex time: 2–4 hours.
-
 ### Phase 7 — SharePoint Integration Foundation
 
 Implement `IDocumentStorage` + `SharePointDocumentStorage`, metadata/reference model, safe upload test path.
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows if tenant/Graph debugging is required.
+This milestone should normally be split into smaller execution units such as abstraction/reference model first, provider integration second, and failure/retry test path third.
 
 ### Phase 8 — WhatsApp Infrastructure
 
@@ -825,79 +884,69 @@ Implement WhatsApp service abstraction, Meta provider, webhook verification, sig
 
 Manual/test sending only.
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows.
+This milestone must be split into smaller execution units before coding; do not implement the entire provider/webhook/reliability stack in one Luna Max run.
 
 ### Phase 9 — WhatsApp Group / Direct Conversation Management
 
 Implement conversation type, group/direct metadata, participants, authorised scope, and current Meta eligibility handling.
 
-Estimated Codex time: 3–5 hours.
+Split data model/rules from management UI/provider-specific behaviour if needed.
 
 ### Phase 10 — Manual WhatsApp Document Request
 
 Add Preview → Send flow. Persist exact outbound snapshot and provider status. Link successful first request to `Document Requested` workflow as approved.
 
-Estimated Codex time: 3–4 hours.
+Split message preparation/persistence from provider sending/workflow update if the change becomes broad.
 
 ### Phase 11 — Incoming WhatsApp Messages
 
 Handle inbound text, PDF, image, and document webhooks. Show WhatsApp timeline in Billing Control.
 
-Estimated Codex time: 3–5 hours.
+Split webhook ingestion/persistence from timeline UI and media handling.
 
 ### Phase 12 — Incoming Document → SharePoint
 
 Download media temporarily, validate, upload to SharePoint, persist metadata/reference, remove temporary copy.
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows.
+This milestone must be split into smaller execution units covering safe media handling, SharePoint persistence, and failure/retry behaviour.
 
 ### Phase 13 — Manual Document Classification
 
 Build fast worker UI to classify Company + Document Type + Period + Request Item and confirm receipt.
 
-Estimated Codex time: 2–4 hours.
-
 ### Phase 14 — Automatic Follow-Up Engine
 
 Implement scheduler at PIC/conversation/batch level, business-day/cooling-off rules, outstanding-item selection, Follow up now / Snooze / Pause / Resume / Stop.
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows.
+This milestone must be split into smaller execution units before coding, for example deterministic scheduling rules, persistence/state transitions, then scheduler execution/UI controls.
 
 ### Phase 15 — Promised Date Handling
 
 Add promised date and scoped snooze behaviour. Ensure automated reminders respect it.
 
-Estimated Codex time: 2–3 hours.
-
 ### Phase 16 — Workflow Automation
 
 Integrate Document Requested / Ready for Document Received / human Confirm Complete behaviour. Do not auto-drive financial states.
-
-Estimated Codex time: 3–4 hours.
 
 ### Phase 17 — AI Document Classification
 
 Add AI suggestions for Company + Document Type + Period + confidence. Human confirmation first.
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows.
+Split provider abstraction, suggestion workflow, and UI/validation if needed.
 
 ### Phase 18 — AI Conversation Understanding
 
 Detect promised dates, not-applicable statements, and other useful conversation intents as suggestions requiring confirmation initially.
 
-Estimated Codex time: 3–5 hours.
-
 ### Phase 19 — Smart Follow-Up Composition
 
 Use deterministic facts from Billing Control and AI only for natural-language wording.
-
-Estimated Codex time: 2–4 hours.
 
 ### Phase 20 — Mature Document Collection Dashboard
 
 Add operational KPIs, PIC-centric view, filters, next-action list, failures, snoozes, classification queue.
 
-Estimated Codex time: 3–5 hours.
+Split dashboard data/query work from UI if needed.
 
 ### Phase 21 — Audit / Reliability / Security Hardening
 
@@ -918,7 +967,7 @@ Verify:
 - Health checks
 - CSRF where applicable
 
-Estimated Codex time: 4–5 hours; allow 1–2 usage windows.
+This is a milestone, not one Codex run. Split it into focused reliability/security sub-phases and review each separately.
 
 ### Phase 22 — Controlled Production Rollout
 
@@ -933,27 +982,22 @@ Stage 4 — Normal production
 
 Monitor complaints, reminder frequency, completion time, WhatsApp failures, SharePoint upload issues, AI classification corrections, and support load.
 
-Estimated Codex time: 2–4 hours.
-
 ---
 
-## 15. Estimated Luna Max Usage Budget
+## 15. Codex Luna Max Capacity Planning
 
-Treat the following as planning capacity, not literal runtime.
+Use planning capacity only to judge whether a milestone needs splitting. Do not treat a long milestone estimate as permission to give Luna Max one very large task.
 
-| Area | Approx. 5-hour Codex windows |
-| --- | ---: |
-| Core document request system | 4–5 |
-| SharePoint integration | 1–2 |
-| WhatsApp base integration | 3–4 |
-| Batch/follow-up automation | 2–3 |
-| AI maturity | 3–4 |
-| Dashboard/hardening/deployment | 2–3 |
-| **Full mature version** | **15–20** |
+Rules:
 
-Recommended planning reserve: **20 × 5-hour windows**.
+- **Codex Luna Max is the only Codex model used for this project.**
+- Prefer one cohesive, reviewable execution unit at a time.
+- Any milestone that appears to require several independent changes must be split before coding.
+- External-integration, database, concurrency, security, or reliability work should be split more aggressively.
+- It is acceptable to create more sub-phases than originally planned.
+- Never combine sub-phases merely to reduce the number of Codex runs.
 
-Do not combine phases merely to reduce the number of windows. Correct architecture and testability matter more than squeezing work into one run.
+Correct architecture, data integrity, testability, and reviewability matter more than speed.
 
 ---
 
@@ -980,18 +1024,21 @@ Do not deploy automatically unless explicitly instructed for the rollout phase.
 
 ## 17. Codex Working Rules
 
-For every implementation phase:
+For every implementation phase or sub-phase:
 
-1. Start from the latest approved SHA.
-2. Implement **only that phase** plus directly required support code.
-3. Do not silently begin the next phase.
-4. Preserve all current Billing Control business logic unless the phase explicitly changes an approved operational rule.
-5. Do not modify the existing 35/25/40 revenue-share logic.
-6. Do not weaken role-based access or historical workflow rules.
-7. Add migrations only when the phase explicitly requires schema changes.
-8. Report files changed, migration(s), tests, CI, and final SHA.
-9. Stop and explain when Meta/SharePoint tenant configuration prevents safe implementation rather than inventing credentials or bypassing security.
-10. Update/synchronise `master` and `codex/accounting-mvp` only after the phase is reviewed/approved according to the current development workflow.
+1. Use **Codex Luna Max only**.
+2. Start from the latest approved SHA.
+3. Read this master plan and inspect the relevant existing repository code before changing anything.
+4. Implement **only the approved phase/sub-phase** plus directly required support code.
+5. If the requested task becomes broader than expected, stop at a safe boundary and report what should become the next sub-phase rather than expanding scope silently.
+6. Do not silently begin the next phase.
+7. Preserve all current Billing Control business logic unless the phase explicitly changes an approved operational rule.
+8. Do not modify the existing 35/25/40 revenue-share logic.
+9. Do not weaken role-based access or historical workflow rules.
+10. Add migrations only when the phase explicitly requires schema changes.
+11. Report files changed, migration(s), tests, CI, and final SHA.
+12. Stop and explain when Meta/SharePoint tenant configuration prevents safe implementation rather than inventing credentials or bypassing security.
+13. Update/synchronise `master` and `codex/accounting-mvp` only after the phase/sub-phase is reviewed/approved according to the current development workflow.
 
 ---
 
@@ -1037,9 +1084,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Start with Phase 0 only.**
+**Start with Phase 0A only.**
 
-Do not begin implementation until Phase 0 architecture decisions are reviewed and frozen. Phase 0 should validate this master plan against the current repository and turn any remaining conceptual items into exact entity relationships, statuses, permissions, SharePoint metadata/folder rules, WhatsApp conversation rules, and failure-handling rules.
+Do not begin implementation. Phase 0A is repository inspection and architecture inventory only. It should validate the current repository against this master plan, record confirmed facts and conflicts, and leave final design decisions for the later Phase 0 sub-phases.
+
+After Phase 0A, ChatGPT must review the actual result and update this file before Phase 0B begins.
 
 ---
 
@@ -1047,15 +1096,17 @@ Do not begin implementation until Phase 0 architecture decisions are reviewed an
 
 This file and the current repository are the authoritative source of truth for the project. Previous chat history or AI memory may provide useful context, but must not override the current repository or this plan.
 
-For every development phase:
+For every development phase or sub-phase:
 
-1. Read this master plan before making changes.
-2. Review the current repository implementation relevant to the phase.
-3. Work only on the current approved phase unless a directly required supporting change is necessary for correctness.
-4. Do not silently change architecture, business rules, database behaviour, security rules, or previously approved requirements.
-5. After Codex completes work, review the actual code changes rather than relying only on its summary.
-6. Run or review the relevant tests and check for regressions, security issues, data-integrity risks, concurrency issues, and missing requirements where applicable.
-7. Update this master plan when requirements, implementation decisions, architecture, risks, completed work, or project status change.
-8. Keep the **Current Project Status** section accurate, including the current phase, completed work, outstanding work, and next step.
-9. Preserve useful project history; do not rewrite the plan in a way that hides important prior decisions.
-10. Do not begin the next phase until the current phase has been reviewed and approved.
+1. Use **Codex Luna Max only** for Codex work in this project.
+2. Read this master plan before making changes.
+3. Review the current repository implementation relevant to the phase/sub-phase.
+4. Keep the execution unit small and focused. If the work is too broad, split it before implementation rather than forcing a large Codex task.
+5. Work only on the current approved phase/sub-phase unless a directly required supporting change is necessary for correctness.
+6. Do not silently change architecture, business rules, database behaviour, security rules, or previously approved requirements.
+7. After Codex completes work, review the actual code changes rather than relying only on its summary.
+8. Run or review the relevant tests and check for regressions, security issues, data-integrity risks, concurrency issues, and missing requirements where applicable.
+9. Update this master plan when requirements, implementation decisions, architecture, risks, completed work, or project status change.
+10. Keep the **Current Project Status** section accurate, including the current phase/sub-phase, completed work, outstanding work, and next step.
+11. Preserve useful project history; do not rewrite the plan in a way that hides important prior decisions.
+12. Do not begin the next phase/sub-phase until the current one has been reviewed and approved.
