@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 0B — Core Data Model Freeze
-**Status:** Complete — the Phase 0B core data-model specification and requested correction amendments are recorded and ready for review/approval. Phase 0C has not started.
+**Current Phase:** Phase 0B — Core Data Model Freeze  
+**Status:** Approved — Phase 0B architecture review is complete. Phase 0C has not started and must not begin until explicitly instructed.  
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -26,12 +26,14 @@
 - Phase 0B core data-model freeze completed: entities, cardinalities, lifecycle/status transitions, WorkItem linkage, invariants, concurrency/audit rules, cancellation/reopen/replacement behaviour, and historical workflow treatment are specified below.
 - Phase 0B correction review completed: raw received artifacts may remain unclassified without a guessed WorkItem, and accepted-document correction/invalidation now has an explicit audited path with transactional evidence and request-state recalculation.
 - Phase 0B final corrections completed: request cancellation is scoped away from raw artifacts, request/template service consistency is transactional, and one active/default template per Service is protected by an explicit partial-unique-index rule.
+- ChatGPT review approved Phase 0B against commit `3fb6601cd8b7cc65bc36f5a99e31ae3874e0db33`; no blocking architecture, security, or data-integrity omission remains within the Phase 0B scope.
 - No production code, migration, provider integration, PIC/contact model, SharePoint design, permission implementation, or Phase 0C work was started.
 
 ### Current Work
 
 - Phase 0A is closed and approved.
-- Phase 0B, including the final correction amendments, is complete and awaiting review/approval; no Phase 0C work has started.
+- Phase 0B is closed and approved.
+- No implementation or Phase 0C work is currently in progress.
 
 ### Outstanding
 
@@ -40,7 +42,7 @@
 
 ### Next Step
 
-Review and approve the completed **Phase 0B — Core Data Model Freeze**. Do not begin Phase 0C until this result is approved and this file is updated.
+When explicitly instructed, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Do not start Phase 0C automatically.
 
 ---
 
@@ -927,7 +929,7 @@ Do not cover WhatsApp/SharePoint provider implementation in this sub-phase.
 
 ### Phase 0B — Final Core Data Model Specification (2026-09-12)
 
-**Phase 0B status:** Core model frozen for review. This is an architecture specification only; it introduces no production entities, migration, controller, provider, storage, or business-logic change. Phase 0C remains not started.
+**Phase 0B status:** Approved — the deterministic core data model is frozen. This is an architecture specification only; it introduces no production entities, migration, controller, provider, storage, or business-logic change. Phase 0C remains not started.
 
 The model below freezes the deterministic document-collection core. It intentionally leaves PIC/contact identity, WhatsApp conversation/provider details, SharePoint storage details, follow-up scheduling, permissions, and AI behaviour to Phase 0C/0D.
 
@@ -1452,11 +1454,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0B is complete and ready for review/approval. Do not start Phase 0C automatically.**
+**Phase 0B is approved. Do not start Phase 0C automatically.**
 
-Review the Phase 0B specification above against the current repository and approve or amend it before implementation. When explicitly instructed after approval, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Do not start Phase 0C automatically.
+When explicitly instructed, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Phase 0C remains a non-coding architecture task covering PIC/contact relationships, group/direct conversation scope, batching confidentiality, SharePoint storage/metadata boundaries, and permission/least-privilege direction.
 
-No production code, migration, provider integration, or Phase 0C work was started in Phase 0B.
+No production code, migration, provider integration, or Phase 0C work was started in Phase 0B. After Phase 0C, ChatGPT must review the architecture result before Phase 0D begins.
 
 ---
 
