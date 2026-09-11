@@ -11,7 +11,7 @@
 ## Current Project Status
 
 **Current Phase:** Phase 0B — Core Data Model Freeze
-**Status:** Complete — the Phase 0B core data-model specification is recorded and ready for review/approval. Phase 0C has not started.
+**Status:** Complete — the Phase 0B core data-model specification and requested correction amendments are recorded and ready for review/approval. Phase 0C has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -24,12 +24,13 @@
 - No production code, business logic, schema, migration, provider integration, or Phase 0B design was changed during Phase 0A.
 - ChatGPT review approved Phase 0A against commit `de9ee10a0d884978dce79cb2e6ce0fffbd8e0869`; sampled repository claims matched the current source, and no blocking omission was found for this inventory phase.
 - Phase 0B core data-model freeze completed: entities, cardinalities, lifecycle/status transitions, WorkItem linkage, invariants, concurrency/audit rules, cancellation/reopen/replacement behaviour, and historical workflow treatment are specified below.
+- Phase 0B correction review completed: raw received artifacts may remain unclassified without a guessed WorkItem, and accepted-document correction/invalidation now has an explicit audited path with transactional evidence and request-state recalculation.
 - No production code, migration, provider integration, PIC/contact model, SharePoint design, permission implementation, or Phase 0C work was started.
 
 ### Current Work
 
 - Phase 0A is closed and approved.
-- Phase 0B is complete and awaiting review/approval; no Phase 0C work has started.
+- Phase 0B, including the requested correction amendments, is complete and awaiting review/approval; no Phase 0C work has started.
 
 ### Outstanding
 
@@ -176,7 +177,7 @@ Recommended integration:
 
 This section preserves the original mature-direction planning input. The Phase 0B specification below is now authoritative for the core entities, cardinalities, statuses, invariants, and WorkItem linkage. The contact/PIC, WhatsApp, and follow-up concepts remain later-phase roadmap guidance.
 
-For the core model, the Phase 0B freeze supersedes the earlier direct-link suggestions: `ReceivedDocument` is anchored to `WorkItem`, `BillingRecord` is reached through the existing WorkItem relationship, and request-item association is through `DocumentRequestItemEvidence` rather than duplicate foreign keys on the received-document row.
+For the core model, the Phase 0B freeze supersedes the earlier direct-link suggestions: `ReceivedDocument` is a raw intake artifact with no direct `WorkItemId`, `BillingRecordId`, request, or request-item foreign key; a classified artifact reaches a WorkItem only through explicit `DocumentRequestItemEvidence` links. The existing WorkItem relationship still provides the authoritative path to `BillingRecord`.
 
 ### Document requirement templates
 
@@ -291,7 +292,6 @@ Exact message body / snapshot
 Store metadata such as:
 
 ```text
-WorkItemId
 Sender
 ReceivedAt
 OriginalFilename
@@ -305,7 +305,7 @@ SharePoint WebUrl
 SharePoint ETag
 ```
 
-`BillingRecordId`, `DocumentRequestId`, and `DocumentRequestItemId` were early conceptual suggestions and are not direct Phase 0B columns. Billing is reached through `WorkItem`; a received document is linked to request items through the auditable evidence-link entity. SharePoint fields remain Phase 0C storage metadata.
+`WorkItemId`, `BillingRecordId`, `DocumentRequestId`, and `DocumentRequestItemId` were early conceptual suggestions and are not direct Phase 0B columns on the raw received artifact. An unclassified artifact may have zero evidence links; after explicit classification, evidence links reach the relevant request item and therefore its WorkItem. SharePoint fields remain Phase 0C storage metadata.
 
 Do not store permanent document binaries in PostgreSQL.
 
@@ -570,6 +570,8 @@ OriginalFilename
 ClassificationStatus
 ```
 
+These are post-classification storage metadata suggestions. Raw intake may omit `WorkItemId`, `BillingRecordId`, and request identifiers until an explicit evidence link is confirmed; the storage/provider mapping remains Phase 0C.
+
 ### SharePoint security direction
 
 Prefer least-privilege app-only access, ideally restricted to the specific SharePoint site/library rather than broad tenant-wide file access.
@@ -607,6 +609,8 @@ Webhook processing should include:
 ## 11. Human Classification Before AI
 
 Before adding AI, make manual classification fast and reliable.
+
+The intake step first records a `ReceivedDocument` artifact without a guessed WorkItem or request-item link. The worker/AI classification confirmation then creates the explicit evidence link to the selected `DocumentRequestItem`; until that happens, the artifact remains unclassified and does not satisfy any request item.
 
 Example:
 
@@ -951,16 +955,18 @@ The model below freezes the deterministic document-collection core. It intention
    - `(DocumentRequestId, RequirementKey)` is unique. A request cannot contain the same requirement twice.
    - Request items do not belong directly to a billing record or worker assignment; their parent request reaches the billing record through `WorkItem`.
 
-5. **`ReceivedDocument`** — one immutable receipt/evidence record for one received document file or equivalent document artifact.
-   - One `WorkItem` 1 → many received documents. Every received document has exactly one work item, including an initially unclassified document.
-   - A received document may be linked to zero or more request items through the evidence link below. Zero links represents an unclassified/unmatched document; links must always resolve to request items under the same work item.
-   - Original receipt metadata (received timestamp, source actor/sender snapshot, original filename, MIME type, byte length, and SHA-256 where a file exists) is immutable. Permanent storage references are metadata only and are finalized in Phase 0C; PostgreSQL does not store permanent document binaries.
+5. **`ReceivedDocument`** — one immutable received-artifact/intake record for one received document file or equivalent document artifact.
+   - A raw received document has no direct `WorkItemId`, `BillingRecordId`, `DocumentRequestId`, or `DocumentRequestItemId`. It may be recorded before classification and may have zero evidence links while unclassified or unmatched.
+   - A received document may be linked to zero or more request items through the evidence link below. A link reaches its request’s WorkItem and therefore the existing BillingRecord relationship. Links are created only by an explicit classification/reuse action; they are not inferred from a hash, sender, conversation, filename, or guessed company.
+   - A single artifact may be explicitly linked to request items under more than one WorkItem only when that cross-work-item use is separately audited and later Phase 0C authorization/confidentiality rules permit it. No automatic evidence reuse occurs across companies or WorkItems.
+   - Original receipt metadata (received timestamp, source actor/sender snapshot, original filename, MIME type, byte length, and SHA-256 where a file exists) is immutable. The lifecycle status and explicit evidence links are separately mutable/audited. Permanent storage references are metadata only and are finalized in Phase 0C; PostgreSQL does not store permanent document binaries.
    - Replacement is represented by a new received-document row pointing to the row it supersedes. The old row remains immutable history and is never overwritten or deleted.
 
 6. **`DocumentRequestItemEvidence`** — explicit, auditable evidence linking.
-   - One request item 0 → many evidence links; one received document 0 → many evidence links. Multiple links are permitted only by an explicit classification/reuse action and never across different work items.
+   - One request item 0 → many evidence links; one received document 0 → many evidence links. Multiple links are permitted only by an explicit classification/reuse action. Cross-work-item links are allowed only as separately audited classification/reuse actions subject to later Phase 0C authorization/confidentiality rules.
    - `(DocumentRequestItemId, ReceivedDocumentId)` is unique. Unlinking is a status/audit operation, not row deletion.
    - The link has an active/inactive lifecycle. A new link is active; unlinking sets it inactive with an audit reason and timestamp. Inactive links remain queryable and do not satisfy an item.
+   - Reactivating an inactive link requires a fresh explicit classification/reuse action and history entry; status changes or hash matches never reactivate it automatically.
    - An evidence link is satisfying only when the linked received document is `Accepted` and the link is active. A received file is not automatically accepted merely because it is present.
    - This link permits a valid document to be carried into a replacement request revision without mutating the original receipt record, while preventing implicit cross-company or cross-work-item reuse.
 
@@ -974,13 +980,12 @@ The model below freezes the deterministic document-collection core. It intention
    - Evidence-link history records link/unlink actions and the link identifier; it uses the same append-only/audit rules even though the link itself has an active/inactive lifecycle rather than a request-item status enum.
    - History rows are append-only, never deleted or edited, and are separate from the mutable current-status row. The existing `Record` audit fields remain on current and history entities.
 
-There is deliberately no direct `BillingRecordId` on `DocumentRequest`, `DocumentRequestItem`, or `ReceivedDocument`. The authoritative linkage is:
+There is deliberately no direct `WorkItemId`, `BillingRecordId`, `DocumentRequestId`, or `DocumentRequestItemId` on the raw `ReceivedDocument`. The authoritative linkage is:
 
 ```text
 DocumentRequest → WorkItem → BillingRecord → Engagement / service period
 DocumentRequestItem → DocumentRequest
-ReceivedDocument → WorkItem
-DocumentRequestItemEvidence → DocumentRequestItem + ReceivedDocument
+ReceivedDocument → zero or more explicit DocumentRequestItemEvidence links → DocumentRequestItem → DocumentRequest → WorkItem → BillingRecord
 ```
 
 This avoids a second billing foreign key that could disagree with the existing one-to-one `WorkItem`/`BillingRecord` relationship. It also keeps document collection independent of invoice, receipt, revenue-share, and payment tables.
@@ -1078,7 +1083,7 @@ Allowed transitions:
 ```text
 PendingReview  → Accepted, Rejected, Duplicate, Quarantined
 Quarantined    → PendingReview or Rejected after the safety issue is resolved
-Accepted       → Superseded through an explicit replacement action only
+Accepted       → Superseded through an explicit replacement action, Rejected through an explicit correction/invalidation action, or Quarantined through an explicit safety-hold action
 Rejected       → terminal
 Duplicate      → terminal
 Superseded     → terminal
@@ -1087,16 +1092,25 @@ Superseded     → terminal
 - `PendingReview` is the initial state for a received artifact that has been recorded but not accepted as evidence.
 - `Quarantined` blocks classification/acceptance while a later safety/processing decision is pending. Provider and scanner implementation is outside Phase 0B.
 - `Accepted` means the artifact is valid evidence for its active evidence links; it still does not by itself mark a request item `Received` because human completeness confirmation remains required.
-- `Rejected` means the artifact does not satisfy the requirement; a new receipt is required. The rejection reason is mandatory.
+- `Rejected` means the artifact does not satisfy any requirement; a new receipt is required. The rejection reason is mandatory. If the artifact was previously `Accepted`, the transition is a `CorrectAcceptedDocument`/invalidation action and the history must preserve the prior acceptance and correction actor/reason.
 - `Duplicate` means the artifact is a duplicate of a canonical received-document row; `DuplicateOfReceivedDocumentId` is mandatory and the row never satisfies an item.
 - `Superseded` means a later version replaces this artifact; `SupersedesReceivedDocumentId` on the new row and the old row’s status history preserve the chain. The original file metadata remains immutable.
+- An `Accepted` artifact later found unsafe or requiring investigation may be moved to `Quarantined` through an explicit safety-hold action with a mandatory actor and reason. While quarantined, it cannot satisfy evidence links; it may return to `PendingReview` for a new review or move to terminal `Rejected`.
 - A received-document row is never deleted or overwritten to represent a replacement. A new row is created and the old row is transitioned through the audited replacement action.
+
+Accepted-document correction rules:
+
+- A correction is never a silent metadata edit or deletion. The correction/safety-hold action records the previous status, new status, actor, source, UTC time, mandatory reason, and correlation identifier where available.
+- In the same database transaction, every active evidence link for the corrected artifact is set inactive with an `AcceptedDocumentCorrection` or `AcceptedDocumentSafetyHold` link-history action. The links remain queryable; they no longer satisfy their request items, including when one artifact had explicit links across multiple WorkItems.
+- The transaction recalculates every affected request-item status and every affected request-level status. A completed request is explicitly reopened/recalculated with history; it is never silently left `Complete` and no unrelated item is changed.
+- If a quarantined artifact later passes a fresh review, it returns through `PendingReview`; existing corrected links are not automatically restored. A fresh explicit classification action must reactivate a retained inactive link or create the link where no prior link exists before the artifact can satisfy any item.
+- Correction changes only document/evidence/request-collection state. It never changes `BillingRecord.Status`, invoice/receipt/payment state, revenue-share snapshots, `WorkItem.Status`, or worker-assignment workflow automatically.
 
 #### WorkItem/BillingRecord linkage and financial isolation
 
 - A document request is created only for one existing `WorkItem`. Because the repository has one `WorkItem` per `BillingRecord`, the billing record and service period are reached transitively and cannot drift from the work item.
 - A request is not attached directly to `WorkerAssignment`; documents belong to the job and must remain available to authorised future/current assignments according to later permission rules.
-- New requests and received documents for a cancelled `WorkItem` or cancelled `BillingRecord` are not actionable. Existing collection history is retained; parent cancellation does not delete or fabricate child history.
+- A request linked to a cancelled `WorkItem` or cancelled `BillingRecord` is not actionable. A raw received artifact may still be ingested without a WorkItem; linking it to a cancelled WorkItem is non-actionable and remains subject to later authorization rules. Existing collection history is retained; parent cancellation does not delete or fabricate child history.
 - Document request/item/received-document state never changes `BillingRecord.Status`, invoice/receipt/payment state, revenue-share snapshots, `WorkItem.Status`, or assignment workflow automatically in Phase 0B. Any approved workflow mapping is a later Phase 0D rule.
 - A request revision cannot alter the historical billing period, customer/service snapshot, revenue-share base, invoice allocation, worker entitlement, or payment data.
 
@@ -1104,9 +1118,9 @@ Superseded     → terminal
 
 - **Template version:** editing a used template creates a new template version. Existing requests retain their original template and item snapshots.
 - **Request revision:** a replacement is a new `DocumentRequest` row with the next work-item revision and `SupersedesRequestId`. The old request becomes `Superseded` in the same transaction. No request item is edited in place after activation.
-- **Evidence carry-forward:** accepted evidence may be explicitly linked to a corresponding item in a replacement request through `DocumentRequestItemEvidence` only when the work item is identical and a human records the action. It is never copied or matched automatically.
+- **Evidence carry-forward:** accepted evidence may be explicitly linked to a corresponding item in a replacement request through `DocumentRequestItemEvidence` when a human records the action. A normal replacement carries evidence within the same WorkItem; any cross-WorkItem reuse is a separate explicit classification action subject to later Phase 0C authorization/confidentiality rules. It is never copied or matched automatically.
 - **Partial receipt:** multiple accepted evidence rows may link to one item. The item remains `PartiallyReceived` until a human confirms that the requirement is complete; rejected/duplicate/superseded rows do not count.
-- **Duplicate:** duplicate detection is scoped at least to the work item and relevant requirement/evidence context. SHA-256 is indexed for detection but is not globally unique; a duplicate row points to its canonical row and remains auditable.
+- **Duplicate:** duplicate detection may use artifact hash and any explicitly classified requirement context, but it never guesses WorkItem ownership or automatically reuses evidence. SHA-256 is indexed for detection but is not globally unique; a duplicate row points to its canonical raw artifact and remains auditable.
 - **Cancellation:** request cancellation is terminal and non-destructive. Child items, evidence links, received documents, and histories remain queryable but are frozen. A new request is required for further collection.
 - **Reopen:** reopening is an explicit human correction on the same non-cancelled request. It changes only the affected item/request states, records a reason/history row, and never reopens the financial or worker workflow aggregates.
 - **Not required:** an item is intentionally excluded because the requirement does not apply. It is satisfied for request completion, but the decision is reversible and audited.
@@ -1116,20 +1130,20 @@ Superseded     → terminal
 
 Required invariants and indexes:
 
-- Required foreign keys: `DocumentRequest.WorkItemId`, `DocumentRequest.DocumentRequirementTemplateId`, `DocumentRequestItem.DocumentRequestId`, `ReceivedDocument.WorkItemId`, and both evidence-link foreign keys. All use restrictive deletes.
+- Required foreign keys: `DocumentRequest.WorkItemId`, `DocumentRequest.DocumentRequirementTemplateId`, `DocumentRequestItem.DocumentRequestId`, and both evidence-link foreign keys. `ReceivedDocument` has no required WorkItem foreign key; an unclassified raw artifact is valid with zero evidence links. All applicable foreign keys use restrictive deletes.
 - Unique template/version and item keys: `(ServiceId, TemplateKey, Version)`, `(DocumentRequirementTemplateId, RequirementKey)`, `(WorkItemId, Revision)`, and `(DocumentRequestId, RequirementKey)`.
 - At most one current request per work item, enforced with a PostgreSQL partial unique index over non-terminal request statuses (`Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, `Paused`).
-- Unique evidence membership: `(DocumentRequestItemId, ReceivedDocumentId)`. An active evidence link must point to a received document with the same `WorkItemId` as the request item’s parent request.
-- Received-document replacement/duplicate references must be same-work-item, non-self-referential, and acyclic. A duplicate row must reference a canonical row; a superseding row must reference the row it replaces.
+- Unique evidence membership: `(DocumentRequestItemId, ReceivedDocumentId)`. Every evidence link must point to an existing request item and received artifact and must record an explicit classification/reuse action; it must not be generated automatically from hash, sender, conversation, filename, or an inferred company.
+- Received-document replacement/duplicate references must be non-self-referential and acyclic. They are artifact-level references and must not infer a WorkItem. A duplicate row must reference a canonical artifact; a superseding row must reference the artifact it replaces. Any evidence links to the affected artifacts remain independently explicit and audited.
 - Positive/valid values are enforced for template version, revision, display order, byte length, SHA-256 format, and bounded text lengths. Exact limits for MIME types, file sizes, and storage references are deferred to the implementation/provider boundary.
 - A request may be `Complete` only when every required item is `Received`, `Waived`, or `NotRequired`, and the completion action is recorded. The database may enforce local row validity; the aggregate rule is enforced transactionally.
 - `Cancelled` and `Superseded` request rows, history rows, received-document rows, and evidence links are retained. No ordinary delete is allowed.
 
 Concurrency and audit rules:
 
-- Current request, request item, received document, evidence link, and mutable template records use the repository’s `Record` audit fields and `long Version` concurrency token. `CreatedAt`/`CreatedBy` never change; updates advance `UpdatedAt`/`UpdatedBy` and `Version`.
-- Every status/reopen/waive/not-required/replace/link/unlink action appends an immutable history row containing previous/new state, action, reason where required, actor, source, correlation/request identifier where available, and UTC timestamp.
-- State-changing operations update the child/current row, aggregate request status, and history rows in one database transaction. Operations racing on the same work item/current request use optimistic version checks plus the repository’s serializable/locking pattern where needed to guarantee one current request and no lost aggregate transition. A conflict returns a refresh/retry result; it never silently overwrites a newer decision.
+- Current request, request item, raw received artifact, evidence link, and mutable template records use the repository’s `Record` audit fields and `long Version` concurrency token. `CreatedAt`/`CreatedBy` never change; updates advance `UpdatedAt`/`UpdatedBy` and `Version`.
+- Every status/reopen/waive/not-required/replace/link/unlink/classification/correction action appends an immutable history row containing previous/new state where applicable, action, reason where required, actor, source, correlation/request identifier where available, and UTC timestamp.
+- State-changing operations update the child/current row, affected evidence links, aggregate request status, and history rows in one database transaction. Operations racing on the same work item/current request or received artifact use optimistic version checks plus the repository’s serializable/locking pattern where needed to guarantee one current request, no lost aggregate transition, and no partially applied accepted-document correction. A conflict returns a refresh/retry result; it never silently overwrites a newer decision.
 - History rows are append-only and must not be used as editable snapshots. Provider/system actor semantics and external event identifiers are reserved for Phase 0C/0D, but the core audit contract requires them to be representable rather than relying only on the generic `system` actor.
 
 #### Existing historical workflow records
