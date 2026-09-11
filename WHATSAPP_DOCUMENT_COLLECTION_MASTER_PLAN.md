@@ -4,14 +4,14 @@
 > **Planning baseline:** `6677680feb12141eefe97dd5d21b37fd3b6b4bf1`  
 > **Primary implementation model:** Codex Luna Max only, split into small bounded execution phases  
 > **Permanent document storage:** SharePoint  
-> **Status:** Architecture / roadmap only — implement phase-by-phase, do not build everything in one Codex run.
+> **Status:** Phase 0 architecture frozen — implement phase-by-phase, do not build everything in one Codex run.
 
 ---
 
 ## Current Project Status
 
-**Current Phase:** Phase 0B — Core Data Model Freeze  
-**Status:** Approved — Phase 0B architecture review is complete. Phase 0C has not started and must not begin until explicitly instructed.  
+**Current Phase:** Phase 0 — Architecture Freeze  
+**Status:** Approved — Phases 0A, 0B, 0C, and 0D are complete. Phase 1 has not started and must not begin until explicitly instructed.  
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -20,29 +20,30 @@
 - Core business rules, architecture direction, integrations, testing expectations, and rollout sequence documented.
 - AI/Codex working rules added so the repository and this plan remain the source of truth.
 - Roadmap adjusted for Codex Luna Max only, with small reviewable execution units.
-- Phase 0A repository inventory completed against the current `codex/accounting-mvp` implementation, including entities, workflow/statuses, authorization, database/migration conventions, integration/job abstractions, tests/CI, conflicts, constraints, and unresolved architecture questions.
-- No production code, business logic, schema, migration, provider integration, or Phase 0B design was changed during Phase 0A.
-- ChatGPT review approved Phase 0A against commit `de9ee10a0d884978dce79cb2e6ce0fffbd8e0869`; sampled repository claims matched the current source, and no blocking omission was found for this inventory phase.
-- Phase 0B core data-model freeze completed: entities, cardinalities, lifecycle/status transitions, WorkItem linkage, invariants, concurrency/audit rules, cancellation/reopen/replacement behaviour, and historical workflow treatment are specified below.
-- Phase 0B correction review completed: raw received artifacts may remain unclassified without a guessed WorkItem, and accepted-document correction/invalidation now has an explicit audited path with transactional evidence and request-state recalculation.
-- Phase 0B final corrections completed: request cancellation is scoped away from raw artifacts, request/template service consistency is transactional, and one active/default template per Service is protected by an explicit partial-unique-index rule.
-- ChatGPT review approved Phase 0B against commit `3fb6601cd8b7cc65bc36f5a99e31ae3874e0db33`; no blocking architecture, security, or data-integrity omission remains within the Phase 0B scope.
-- No production code, migration, provider integration, PIC/contact model, SharePoint design, permission implementation, or Phase 0C work was started.
+- Phase 0A repository inventory completed and approved.
+- Phase 0B deterministic core data model completed, corrected, and approved.
+- Phase 0C contact/PIC, WhatsApp conversation, authorization/confidentiality, SharePoint storage, and permission boundaries completed and approved.
+- Phase 0D automation, workflow, inbox/outbox reliability, retry/idempotency, audit, security, and AI boundaries completed and approved.
+- Phase 0 external-platform verification was refreshed on 2026-09-12: Meta Cloud API remains the WhatsApp Business Platform integration boundary; group capability remains account/eligibility dependent; Microsoft Graph supports Selected permission scopes for SharePoint/OneDrive and resumable upload sessions.
+- No production code, migration, provider integration, SharePoint integration, background worker, or Phase 1 implementation was started during Phase 0.
 
 ### Current Work
 
 - Phase 0A is closed and approved.
 - Phase 0B is closed and approved.
-- No implementation or Phase 0C work is currently in progress.
+- Phase 0C is closed and approved.
+- Phase 0D is closed and approved.
+- No implementation work is currently in progress.
 
 ### Outstanding
 
-- Phase 0C — PIC, WhatsApp conversation, SharePoint storage/metadata, and permission boundaries.
-- Phase 0D — Follow-up/workflow rules, failure/retry/idempotency, audit, AI boundaries, and final architecture freeze.
+- Phase 1 onward — implementation according to the approved architecture and roadmap.
+- Before Phase 1 coding, split the milestone into small Luna Max execution units and review the exact implementation scope against this frozen architecture.
+- Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-When explicitly instructed, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Do not start Phase 0C automatically.
+When explicitly instructed, prepare and begin **Phase 1 — Core Database Model** only. Do not begin Phase 1 automatically.
 
 ---
 
@@ -53,17 +54,17 @@ Extend Billing Control into a mature **WhatsApp-first document collection and fo
 The system should:
 
 - Request documents through WhatsApp rather than email.
-- Prefer a WhatsApp group where the client, accounting firm, manager, and LCM MGT can monitor the same conversation.
-- Keep Direct WhatsApp as a fallback.
+- Prefer a WhatsApp group where the client, accounting firm, manager, and LCM MGT can monitor the same authorised conversation when the provider/account supports groups.
+- Keep Direct WhatsApp as a fully supported fallback.
 - Support one PIC handling multiple companies without spamming them.
-- Consolidate multiple company requests into one communication where authorised participants are the same.
-- Make the requested work feel manageable by showing only the next small set of useful items, not a huge outstanding list.
+- Consolidate multiple company requests only when the PIC, conversation, active participant set, and approved confidentiality scope permit it.
+- Make requested work feel manageable by showing only the next small set of useful items, not a huge outstanding list.
 - Receive client replies and documents from WhatsApp.
 - Store permanent files in SharePoint.
-- Track every request, item, message, received file, follow-up, snooze, and workflow transition in Billing Control.
+- Track every request, item, message, received artifact, evidence link, follow-up, snooze, promise, override, and workflow transition in Billing Control.
 - Stop or delay reminders when the client has promised a later date.
-- Integrate with the existing Work Item / Worker Assignment / Workflow Status model.
-- Use AI later for classification, promise-date detection, and message wording, while deterministic business rules remain authoritative.
+- Integrate safely with the existing Work Item / Worker Assignment / Workflow Status model without driving financial state.
+- Use AI later for suggestions such as classification, promise-date detection, and wording while deterministic business rules remain authoritative.
 
 ---
 
@@ -76,29 +77,37 @@ Work Item
     ↓
 Document Request generated from service template
     ↓
-Document Request Batch groups requests for the same PIC/conversation
+Eligible requests grouped into a reviewed Document Request Batch
     ↓
-Worker reviews preview
+Authorisation + consent + conversation scope revalidated
     ↓
-WhatsApp Group / Direct message sent
+Outbound message snapshot queued in durable outbox
     ↓
-Client sends text / PDF / image / document in WhatsApp
+WhatsApp Group / Direct message accepted by provider
     ↓
-Billing Control receives webhook
+Client sends text / PDF / image / document
     ↓
-File validated and uploaded to SharePoint
+Webhook signature verified on raw body
     ↓
-Worker/AI classifies file against Company + Period + Document Item
+Provider event durably recorded in inbox
     ↓
-Document Request Item status updated
+ReceivedDocument raw intake record created
     ↓
-Follow-up engine asks only for the next outstanding items
+Media validated / scanned / stored once in SharePoint
     ↓
-All mandatory documents confirmed
+Staff/authorised worker classifies artifact against request item
     ↓
-Worker confirms complete
+DocumentRequestItemEvidence created explicitly
     ↓
-Workflow → Document Received
+Request/item state recalculated deterministically
+    ↓
+Follow-up engine evaluates PIC + conversation + outstanding scope
+    ↓
+All mandatory items confirmed
+    ↓
+Human confirms collection complete
+    ↓
+Optional human-approved assignment workflow transition
 ```
 
 ---
@@ -106,23 +115,25 @@ Workflow → Document Received
 ## 3. Non-Negotiable Design Principles
 
 1. **WhatsApp-first. No email workflow is required.**
-2. **Group conversation preferred; Direct conversation remains supported.**
+2. **Group conversation preferred when available and authorised; Direct remains fully supported.**
 3. **One company does not automatically equal one WhatsApp message.**
 4. A PIC may represent several companies.
-5. Requests may be consolidated only when the **same PIC + same WhatsApp conversation + same authorised participants** apply.
-6. Never mix unrelated companies or companies with different authorised participants in one group/message.
-7. Follow-up frequency is controlled at the **PIC/conversation/batch level**, not independently by every Document Request.
+5. Requests may be consolidated only when the **same PIC + same WhatsApp conversation + current approved participant/scope version** apply.
+6. Never mix unrelated companies or engagements with different authorised participants/scope in one batch/message.
+7. Follow-up frequency is controlled mainly at the **PIC + conversation** level; each outbound batch is an immutable send snapshot.
 8. Automated follow-ups should normally show only **3–5 next-action items**, even if many more are outstanding internally.
 9. Client can send documents gradually.
-10. Promised dates / snooze must suppress reminders until the agreed time.
-11. A received attachment is **not automatically an accepted document**.
-12. SharePoint is the authoritative permanent file repository.
-13. Billing Control stores workflow state, metadata, audit records, and SharePoint references.
-14. AI may suggest; deterministic database rules decide what is outstanding.
-15. AI should not silently change operational records during initial rollout.
-16. Every inbound/outbound WhatsApp action must be auditable.
-17. Worker/staff must always be able to pause, snooze, resume, or override automation.
-18. Do not auto-drive financial status from document collection unless separately approved.
+10. Promised dates / snooze / pause / stop-automation rules must suppress automated reminders where their scope applies.
+11. A received attachment is **not automatically an accepted document** and is **not automatically classified to a WorkItem**.
+12. SharePoint is the authoritative permanent binary repository; Billing Control is the authoritative workflow/audit/evidence-link store.
+13. Raw `ReceivedDocument` intake is artifact-centric and may remain unclassified with zero evidence links.
+14. AI may suggest; deterministic database rules decide authorization, send eligibility, status, completeness, and financial isolation.
+15. AI must not silently change operational records during initial rollout.
+16. Every inbound/outbound/provider/human override action must be auditable.
+17. Staff must always be able to pause, snooze, resume, stop, correct, or manually recover automation within authorization rules.
+18. Do not auto-drive financial status, `WorkItem.Status`, invoice/receipt/payment state, revenue-share state, or worker entitlement from document collection.
+19. A phone-number or provider-ID match is identity evidence only; it is never sufficient authorization by itself.
+20. Provider/API eligibility and changing external rules are capability-checked at implementation/runtime rather than hard-coded into the domain model.
 
 ---
 
@@ -140,7 +151,7 @@ Worker Assignment
 Weekly Progress / Detailed Workflow
 ```
 
-Document request/checklist state should sit primarily under the **Work Item**, because the request belongs to the job rather than to one individual worker. Raw `ReceivedDocument` intake is separate and may remain unclassified until explicit evidence linkage.
+Document request/checklist state sits primarily under the **Work Item**, because the request belongs to the job rather than to one individual worker. Raw `ReceivedDocument` intake is separate and may remain unclassified until explicit evidence linkage.
 
 Approved core relationship:
 
@@ -151,7 +162,7 @@ WorkItem
 └── DocumentRequest
     ├── DocumentRequestItem
     │   └── DocumentRequestItemEvidence ──→ ReceivedDocument
-    └── WhatsApp communication links
+    └── DocumentRequestBatch membership
 
 ReceivedDocument may exist with zero evidence links before classification.
 ```
@@ -170,26 +181,28 @@ Existing detailed workflow statuses include:
 10. Final Management Report Sent
 11. Completed
 
-Recommended integration:
+Approved integration rule:
 
-- Successful first request send may move the relevant workflow to **Document Requested**.
-- When all mandatory items are confirmed, show **Ready for Document Received**.
-- Initially require a human **Confirm documents complete** action before moving to **Document Received**.
+- Collection state remains authoritative inside the new document-collection aggregate.
+- A successful provider-accepted first request makes the collection request `Requested`; merely queueing a send does not.
+- Assignment workflow is not automatically changed because one WorkItem may have multiple assignments.
+- UI may show **Ready to mark Document Requested** after the first successful outbound request.
+- When all mandatory request items are satisfied and a human confirms completion, show **Ready to mark Document Received**.
+- Any assignment workflow transition requires an authorised human action against explicitly selected eligible assignment(s) and must pass the existing assignment workflow rules.
+- No collection action automatically changes financial or WorkItem state.
 
 ---
 
-## 5. Proposed Core Data Model
+## 5. Proposed / Approved Data Model Direction
 
-This section preserves the original mature-direction planning input. The Phase 0B specification below is now authoritative for the core entities, cardinalities, statuses, invariants, and WorkItem linkage. The contact/PIC, WhatsApp, and follow-up concepts remain later-phase roadmap guidance.
-
-For the core model, the Phase 0B freeze supersedes the earlier direct-link suggestions: `ReceivedDocument` is a raw intake artifact with no direct `WorkItemId`, `BillingRecordId`, request, or request-item foreign key; a classified artifact reaches a WorkItem only through explicit `DocumentRequestItemEvidence` links. The existing WorkItem relationship still provides the authoritative path to `BillingRecord`.
+The Phase 0B, 0C, and 0D specifications below are authoritative. Earlier examples in Sections 5–13 are explanatory only and must not override the frozen architecture.
 
 ### Document requirement templates
 
 - `DocumentRequirementTemplate`
 - `DocumentRequirementTemplateItem`
 
-Template items should support:
+Template items support:
 
 - Name
 - Description
@@ -213,8 +226,10 @@ Optional
 - `DocumentRequest`
 - `DocumentRequestItem`
 - `DocumentRequestBatch`
+- `DocumentRequestBatchMember`
+- `DocumentRequestItemEvidence`
 
-Suggested item statuses:
+Item statuses:
 
 ```text
 Missing
@@ -225,7 +240,7 @@ NotRequired
 Waived
 ```
 
-Suggested request-level states may include:
+Request statuses:
 
 ```text
 Draft
@@ -238,104 +253,41 @@ Cancelled
 Superseded
 ```
 
-### Contact / PIC model
+### Contact / PIC and WhatsApp boundary
 
-A proper contact layer is required because one PIC may handle many companies.
+Approved concepts include:
 
-Suggested fields/concepts:
-
-```text
-Name
-WhatsAppNumber
-PreferredLanguage
-WhatsAppOptIn
-OptInDate
-OptInSource
-DoNotWhatsApp
-PreferredFollowUpDays
-PreferredFollowUpTime
-Paused
-```
-
-A Contact/PIC must be linkable to multiple customers/engagements.
-
-### WhatsApp model
-
+- `Contact`
+- `ContactWhatsAppAddress`
+- `ContactCustomerLink`
 - `WhatsAppConversation`
-- `WhatsAppParticipant`
-- `WhatsAppMessage`
-
-Conversation type:
-
-```text
-Group
-Direct
-```
-
-Track at least:
-
-```text
-Provider Conversation / Group ID
-Participants
-Authorised customer/engagement scope
-Active / Inactive
-Message direction
-Provider message ID
-Template name/version where applicable
-SentAt
-DeliveredAt
-ReadAt
-FailedAt
-Failure reason
-Exact message body / snapshot
-```
+- `WhatsAppConversationParticipant`
+- `WhatsAppConversationEngagementScope`
+- immutable participant/scope snapshot for every queued outbound batch/message
 
 ### Received documents
 
 - `ReceivedDocument`
+- provider-neutral storage reference/state for the SharePoint object
+- explicit evidence links to request items
 
-Store metadata such as:
+Raw `ReceivedDocument` contains no direct WorkItem/BillingRecord/Request/RequestItem foreign key. Permanent SharePoint metadata is artifact-centric; request-specific classification remains authoritative in Billing Control evidence links.
 
-```text
-Sender
-ReceivedAt
-OriginalFilename
-MIME type
-File size
-SHA-256 hash
-Classification status
-SharePoint DriveId
-SharePoint ItemId
-SharePoint WebUrl
-SharePoint ETag
-```
+### Automation / integration state
 
-`WorkItemId`, `BillingRecordId`, `DocumentRequestId`, and `DocumentRequestItemId` were early conceptual suggestions and are not direct Phase 0B columns on the raw received artifact. An unclassified artifact may have zero evidence links; after explicit classification, evidence links reach the relevant request item and therefore its WorkItem. SharePoint fields remain Phase 0C storage metadata.
+Approved concepts include:
 
-Do not store permanent document binaries in PostgreSQL.
-
-### Follow-up state
-
-- `DocumentFollowUpState` or equivalent
-
-Support:
-
-```text
-NextFollowUpAt
-Paused
-SnoozedUntil
-PromisedDate
-Reason
-LastAutomatedFollowUpAt
-FollowUpStage
-StopAutomation
-```
+- conversation/PIC follow-up control
+- scoped holds/snoozes/promised dates
+- immutable outbound batch/message snapshot
+- durable provider-event inbox
+- durable outbound-message outbox
+- durable storage/integration work state
+- append-only provider/message/delivery/audit histories
 
 ---
 
-## 6. Multiple Companies per PIC — Anti-Spam Design
-
-This is a major requirement.
+## 6. Multiple Companies per PIC — Anti-Spam / Confidentiality Design
 
 Example:
 
@@ -349,354 +301,383 @@ Mr Tan
 
 Do not send four independent reminders when they can be safely consolidated.
 
-Instead:
+Eligibility is not based only on a shared phone number. A request may join one outbound batch only when all of these are true:
 
 ```text
-PIC
-  ↓
-WhatsApp Conversation
-  ↓
-Document Request Batch
-  ├── ABC Request
-  ├── XYZ Request
-  ├── DEF Request
-  └── GHI Request
-```
-
-Eligibility to consolidate:
-
-```text
-Same PIC
+Same approved Contact/PIC
 +
-Same WhatsApp conversation
+Same WhatsAppConversation
 +
-Same authorised participants
+Contact is active PIC for each request customer
++
+Each request Engagement is active in the conversation's approved Engagement scope
++
+Conversation participant set has not changed since scope approval
++
+Consent / do-not-contact / provider-policy gates pass
++
+No confidentiality or hold rule blocks the request
 =
-Can consolidate
+Eligible to consolidate
 ```
 
-If the participants differ, the requests must remain separate for confidentiality.
+If any condition differs, split the batch.
+
+Every outbound batch snapshots:
+
+- Contact/PIC identity
+- Conversation identity
+- conversation authorization version
+- current participant set / participant-set hash
+- included Engagement/request memberships
+- exact next-action items
+- exact message/template body or template parameters
+
+If the participant set, engagement scope, request revision, or authorization version changes after preview and before queue/send, the batch is invalidated and must be rebuilt. Never silently send a stale preview.
 
 ### Client-facing workload rule
 
-Billing Control may know there are 17 outstanding items, but an automated message should usually show only the **next 3–5 useful items**.
-
-Example:
-
-```text
-Hi Mr Tan, to keep things moving, could you send these next?
-
-1. ABC — Maybank statement
-2. XYZ — CIMB statement
-3. DEF — Payroll
-
-You can send the remaining documents later.
-```
-
-Internal system still tracks the complete outstanding list.
-
-### Progress-oriented communication
-
-Prefer:
-
-```text
-ABC  5/6 received
-XYZ  Complete
-DEF  3/5 received
-```
-
-rather than repeatedly presenting a large missing-document count.
+Billing Control may know there are many outstanding items, but an automated message should normally show only the **next 3–5 useful items**. Deterministic ranking/waves select the facts; AI may only rewrite wording later.
 
 ---
 
 ## 7. Follow-Up Engine Rules
 
-Do not create a separate uncontrolled reminder timer for every Document Request.
+The scheduler evaluates the **Contact/PIC + Conversation** as the global anti-spam boundary and selects eligible outstanding requests into a fresh immutable batch for each send.
 
-The scheduler should mainly evaluate:
-
-```text
-PIC
-+
-Conversation
-+
-Request Batch
-```
-
-Initial suggested cadence, configurable later:
+Initial policy remains configurable rather than hard-coded:
 
 ```text
-Initial request          Day 0
-Follow-up 1              +3 business days
-Follow-up 2              +4 business days
-Escalation               +5 business days
+Initial request
+Follow-up 1 after configured business-day interval
+Follow-up 2 after configured business-day interval
+Escalation after configured business-day interval
+Then manual attention unless explicitly configured otherwise
 ```
 
-Recommended global anti-spam rule:
+Default planning cadence may start from the earlier `Day 0 / +3 / +4 / +5 business days` proposal, but implementation must store policy/config rather than bury those values in controllers or provider code.
 
-> Normally no more than one automated document reminder to the same PIC/conversation within the configured cooling-off period (initially around 2–3 business days).
+Global rules:
 
-Actions required:
+- No automated reminder may bypass the configured Contact+Conversation cooling-off window.
+- Use existing business timezone/business-calendar abstractions where possible.
+- Automated sending is allowed only inside configured business send windows.
+- After the configured escalation/max automated stage, automation stops and the thread requires manual attention.
+- A manual **Follow up now** may override the cooling-off timer only for authorised staff and with an audited reason; it may not bypass do-not-contact, invalid conversation scope, missing consent, provider-policy, or security blocks.
+
+Actions:
 
 ```text
 Follow up now
-Snooze
+Snooze until
+Record promised date/time
 Pause
 Resume
 Stop automation
+Re-enable automation
 ```
 
-### Promised dates
+### Promised dates and holds
 
-If a client says:
-
-> I will send on Friday.
-
-The system should support:
+A promised date/hold has an explicit scope:
 
 ```text
-Promised date: Friday
-Scope: selected request / current batch / all relevant requests for this PIC
+one DocumentRequest
+one current batch
+or Contact + Conversation
 ```
 
-No automated reminder should be sent before the promised date where the scope applies.
+Rules:
 
-AI may later detect promised dates, but a human should initially confirm them.
+- Human confirmation is required during initial rollout.
+- If scope is ambiguous, default to the narrowest safe/current batch scope rather than all companies.
+- A date-only promise suppresses automated reminders through that local business date; next eligibility begins after the promise window according to the business calendar.
+- Completing all scoped requests closes the hold naturally.
+- Receiving an unrelated document does not silently clear a promise/hold.
+- Snooze is temporary; Pause is indefinite but resumable; Stop automation remains blocked until explicit re-enable.
+- Contact `DoNotWhatsApp` / revoked consent has higher precedence than all follow-up state.
 
 ---
 
 ## 8. WhatsApp Conversation Strategy
 
-### Preferred: Group
+### Provider-neutral rule
 
-Typical participants:
+Business/domain code depends on an `IWhatsAppProvider`-style boundary rather than Meta request/response classes.
+
+The adapter must expose provider capability information such as:
 
 ```text
-Client contact(s)
-Accounting Firm / X Group
-Manager / Signitive
-LCM MGT WhatsApp business number
-Optional authorised internal participant
+Direct messaging supported
+Group messaging supported for this account/number
+Template/policy constraints
+Media capability
+Provider health / rate-limit state
 ```
 
-Benefits:
+Do not encode current Meta eligibility/participant limits as database invariants.
 
-- Firm and manager can monitor the same request/follow-up history.
-- Delays and client responses are visible to authorised parties.
-- Less dependence on private staff phones.
+### Group
 
-### Fallback: Direct
+Group is preferred only when:
 
-The system must retain Direct conversation support in case:
+- the actual WhatsApp business account/number is currently eligible;
+- the provider adapter reports group capability;
+- the active group participant set is known;
+- the participant set is approved for every Engagement in the conversation scope;
+- consent/policy requirements are satisfied.
 
-- Group API is unavailable for the account/customer.
-- Group eligibility changes.
-- Customer prefers direct communication.
-- Participant confidentiality makes a group inappropriate.
+Any participant join/leave/remove or unknown membership change increments the conversation authorization version, marks the conversation/scope as **NeedsAuthorizationReview**, and blocks new outbound batches until authorised staff re-approve the engagement scope.
 
-### Important implementation prerequisite
+### Direct
 
-Before WhatsApp Group development begins, verify current Meta WhatsApp Business Platform / Groups API availability and eligibility for the actual business account. Do not assume current API limits or eligibility from an old specification.
+Direct is always a supported architectural fallback. A direct conversation is anchored to one active `ContactWhatsAppAddress` plus the configured business sender endpoint. If the provider does not expose a native conversation ID, the provider adapter may produce an opaque stable thread key; business code never parses provider-specific key structure.
+
+### Inbound identity rule
+
+- Provider `wa_id`, phone number, sender name, group ID, or conversation ID are routing/identity evidence only.
+- They do not grant application authorization.
+- Inbound messages may be stored even when the sender is not yet mapped, but untrusted/unmapped content cannot be used to mutate a request or satisfy an item until an authorised classification/action occurs.
+
+### Consent / opt-out
+
+Consent is associated with the actual WhatsApp destination endpoint, not merely the person name.
+
+`ContactWhatsAppAddress` records at least:
+
+```text
+ContactId
+Normalized E.164 number
+Provider wa_id when known
+Active / inactive
+Primary flag
+Opt-in state
+Opt-in timestamp/source/evidence reference
+Opt-out timestamp/reason
+DoNotWhatsApp
+Version/audit fields
+```
+
+An active normalized WhatsApp destination maps to one Contact in the initial model. If a shared departmental number is genuinely used, model it as one explicit Contact/PIC identity rather than mapping one number ambiguously to several contacts.
+
+Inbound communication alone does not automatically grant broad consent or confidentiality scope.
 
 ---
 
 ## 9. SharePoint Storage Architecture
 
-SharePoint is the **permanent authoritative document store**.
+SharePoint is the **permanent authoritative binary store**. Billing Control stores the received-artifact record, storage state/reference, classification/evidence links, and audit trail.
 
-Flow:
+Approved flow:
 
 ```text
-WhatsApp media
+Verified provider event
     ↓
-Meta API temporary download
+ReceivedDocument raw intake metadata created
     ↓
-Validation / safe temporary processing
+Private temporary media download / stream
     ↓
-SharePoint upload
+Size + MIME + magic-byte + filename validation
     ↓
-ReceivedDocument metadata saved in Billing Control
+Malware/safety scan gate
     ↓
-Temporary local file removed
+SharePoint upload job
+    ↓
+Store DriveId + ItemId + ETag + WebUrl + StoredAt
+    ↓
+Delete temporary copy
+    ↓
+Later classification creates DB evidence links only
 ```
-
-Do not permanently store client documents in:
-
-- PostgreSQL `byte[]`
-- normal web root
-- permanent VPS folders
 
 ### Storage abstraction
 
-Use an interface such as:
+Use an `IDocumentStorage`-style interface with a SharePoint implementation. Domain/controllers must not contain Microsoft Graph mechanics.
+
+The normal abstraction should provide operations equivalent to:
 
 ```text
-IDocumentStorage
+Store new immutable object
+Read/open object through server-side authorization
+Read metadata/reference
+Verify object still exists / reconcile metadata
 ```
 
-with:
+Do **not** expose unrestricted delete/replace as an ordinary application operation. Corrections create lifecycle/audit changes; they do not overwrite the original received artifact.
 
-```text
-SharePointDocumentStorage
-```
+### SharePoint site/library strategy
 
-Controllers/services should not directly contain Microsoft Graph implementation details.
+Use a dedicated SharePoint site and dedicated document library for Billing Control client documents where tenant administration allows it.
 
-### Suggested SharePoint organisation
+Prefer app-only least-privilege access restricted to that site/library using Microsoft Graph Selected permissions where supported and operationally practical. Selected scopes require both tenant/admin consent and an explicit resource permission assignment; consent alone must not be treated as access.
 
-Example only; final folder/metadata design is Phase 0 work:
+If the required upload/read operation cannot be achieved with the selected scope in the actual tenant, broader application permission requires an explicit security decision rather than silent escalation to tenant-wide access.
+
+Prefer certificate-based app credentials on the VPS when practical; if a client secret is used, it is server-only, rotated, and never exposed to the browser/repository/logs.
+
+### Permanent storage layout
+
+Because one raw `ReceivedDocument` can remain unclassified or can later support multiple WorkItems/companies, permanent storage is **artifact-centric**, not WorkItem-folder-centric.
+
+Recommended core layout:
 
 ```text
 Client Documents
-├── ABC001 - ABC SDN BHD
-│   └── 2026
-│       ├── MA-2026-08
-│       └── MA-2026-09
-└── XYZ002 - XYZ SDN BHD
+└── Intake
+    └── YYYY
+        └── MM
+            └── server-generated stable filename
 ```
 
-Do not rely only on folders. Use SharePoint metadata where practical.
+Rules:
 
-Useful metadata:
+- Upload the binary once.
+- Use a server-generated stable filename containing a non-sensitive identifier; preserve `OriginalFilename` as metadata.
+- `DriveId + ItemId` is the canonical SharePoint identity. Path/WebUrl may change and is not a database key.
+- Do not automatically move/copy the permanent object into one customer/WorkItem folder after classification, because one artifact may support multiple evidence links.
+- Do not create duplicate permanent SharePoint copies merely to reflect multiple classifications.
+- A future archival/export feature may create human-friendly copies/shortcuts only as a separately approved feature.
+
+Artifact-level SharePoint metadata may include:
 
 ```text
-CustomerId
-WorkItemId
-BillingRecordId
-DocumentRequestId
-DocumentRequestItemId
-PeriodStart
-PeriodEnd
-Service
+ReceivedDocumentId
 Source = WhatsApp
-Sender
+Sender snapshot / provider sender key
 ReceivedAt
 OriginalFilename
-ClassificationStatus
+MIME type
+Byte length
+SHA-256
+ReceivedDocument lifecycle status
+Provider message/media reference where appropriate
 ```
 
-These are post-classification storage metadata suggestions. Raw intake may omit `WorkItemId`, `BillingRecordId`, and request identifiers until an explicit evidence link is confirmed; the storage/provider mapping remains Phase 0C.
+Do not store a singular `WorkItemId`, `DocumentRequestId`, or `DocumentRequestItemId` as authoritative SharePoint metadata, because the same raw artifact may have zero or multiple evidence links. Those relationships live in Billing Control.
 
-### SharePoint security direction
+### Storage reference/state
 
-Prefer least-privilege app-only access, ideally restricted to the specific SharePoint site/library rather than broad tenant-wide file access.
+One received artifact has one active permanent-storage reference in the initial SharePoint design.
 
-Before implementation, verify the tenant/admin can grant the required Microsoft Graph / SharePoint permissions.
+Provider-neutral state must distinguish storage from document validity, for example:
+
+```text
+Pending
+Stored
+RetryPending
+FailedPermanent
+Missing / NeedsReconciliation
+```
+
+Storage state does not replace `ReceivedDocumentStatus` (`PendingReview`, `Quarantined`, `Accepted`, etc.).
+
+If an external user deletes/moves an item unexpectedly, reconciliation marks the storage reference missing/needs-reconciliation and raises an operational failure; the database history is not deleted or rewritten.
+
+### Temporary media handling
+
+Temporary media is not permanent storage:
+
+- private non-webroot location or streaming buffer;
+- random/non-user-controlled filename;
+- restrictive OS permissions;
+- never backed up as business document storage;
+- bounded TTL with cleanup worker;
+- removed promptly after successful SharePoint persistence;
+- if retry retention expires before successful permanent storage, mark manual recovery required instead of pretending the document is safely stored.
+
+Exact maximum file size, spool TTL, scanner product, and retention duration are implementation/configuration values to be approved in the relevant phase.
 
 ---
 
 ## 10. File Safety and Reliability Requirements
 
-Incoming media handling should include:
+Incoming media handling must include:
 
-- File-size limits
-- Allowed MIME types
-- File-name sanitisation
-- SHA-256 hash
-- Duplicate detection
-- Retry-safe uploads
-- SharePoint upload failure state
-- Malware/antivirus scanning strategy
-- Audit record of original sender and receipt time
-- Never expose SharePoint app credentials to the browser
+- configured maximum file size;
+- MIME allowlist;
+- file-signature / magic-byte validation rather than trusting MIME headers/extensions;
+- safe filename handling;
+- SHA-256 hash;
+- duplicate detection without global hash uniqueness;
+- malware/safety scan before an artifact can become accepted evidence;
+- retry-safe SharePoint storage;
+- storage failure visibility;
+- immutable sender/receipt metadata;
+- no credentials, binaries, access tokens, or unredacted sensitive payloads in normal logs.
 
-Webhook processing should include:
+A scan failure or suspicious file remains quarantined/non-satisfying. Scanner unavailability must not silently treat the file as safe.
 
-- Signature/authenticity verification
-- Idempotency
-- Provider message-ID deduplication
-- Retry handling
-- Dead-letter / failed-event visibility
-- Structured logging
+Webhook handling must include:
+
+- provider authenticity/signature verification against the **raw request body before JSON processing**;
+- constant-time signature comparison;
+- durable inbox persistence before heavy processing;
+- provider event/message idempotency;
+- replay-safe processing;
+- structured redacted logging;
+- retry/dead-letter/manual-recovery visibility.
 
 ---
 
 ## 11. Human Classification Before AI
 
-Before adding AI, make manual classification fast and reliable.
-
-The intake step first records a `ReceivedDocument` artifact without a guessed WorkItem or request-item link. The worker/AI classification confirmation then creates the explicit evidence link to the selected `DocumentRequestItem`; until that happens, the artifact remains unclassified and does not satisfy any request item.
-
-Example:
+Before AI, manual classification is the deterministic baseline.
 
 ```text
-New WhatsApp Document
-
-Maybank_Aug.pdf
-From: Mr Tan
-
-Company:   [ABC SDN BHD]
-Type:      [Bank Statement]
-Period:    [Aug 2026]
-
-[Confirm]
+ReceivedDocument raw artifact
+    ↓
+Authorised user chooses request item
+    ↓
+Authorization/confidentiality checks run
+    ↓
+DocumentRequestItemEvidence created
+    ↓
+Artifact acceptance / item completeness handled explicitly
 ```
 
-After confirmation:
+File arrival/classification alone does not make a request item `Received`; the Phase 0B human completeness rules remain authoritative.
 
-```text
-DocumentRequestItem: Bank Statement
-→ Received
-```
+### Access to unclassified intake
 
-This is the deterministic baseline against which later AI features are measured.
+Initial rollout is deliberately conservative:
+
+- Admin/InternalUser may manage the global unclassified intake queue.
+- Worker does not receive global unclassified access merely because a conversation might contain one of the worker's jobs.
+- Worker may view/use an artifact after it is explicitly linked to a WorkItem/RequestItem the worker can access, or after a later approved scoped-classification mechanism narrows the artifact to work the worker is authorised to handle.
+- Manager/AccountingFirm do not receive raw unclassified-file access.
+
+Cross-WorkItem evidence reuse is staff-controlled initially and requires an audited reason plus authorization checks for every target WorkItem.
 
 ---
 
 ## 12. Mature AI Strategy
 
-### AI document classification
-
-AI may suggest:
-
-```text
-Company: ABC SDN BHD
-Document: Maybank Bank Statement
-Period: Aug 2026
-Confidence: 96%
-```
-
-Initial rollout:
-
-```text
-[Confirm]
-[Correct]
-```
-
-Do not silently auto-accept low/unknown confidence results.
-
-### AI conversation understanding
-
-AI may detect:
-
-```text
-"I'll send tomorrow"
-→ Suggested promised date
-
-"Payroll not applicable this month"
-→ Suggested Not Required
-```
-
-Human confirms before operational state changes during initial rollout.
-
-### AI message composition
-
-Deterministic system provides facts:
-
-```text
-PIC
-Companies
-Outstanding next-action items
-Last contact
-Promised date
-Follow-up stage
-```
-
-AI may write natural wording.
-
 Principle:
 
-> **Database decides WHAT. AI decides HOW TO SAY IT.**
+> **Database decides WHAT. AI may suggest HOW TO CLASSIFY or HOW TO SAY IT.**
+
+AI must never be the authority for:
+
+- contact identity or consent;
+- conversation/participant authorization;
+- batch confidentiality;
+- send eligibility;
+- provider-policy compliance;
+- document acceptance/completeness;
+- waived/not-required status;
+- financial status;
+- WorkItem status;
+- worker entitlement/revenue share.
+
+### Initial-rollout AI rules
+
+- AI classification is a suggestion requiring human confirmation.
+- AI-detected promised dates, non-applicable statements, or exceptions require human confirmation.
+- AI message wording is generated only after deterministic code supplies the approved Contact, conversation, eligible requests, next-action items, hold state, and policy context.
+- AI output does not bypass the outbox send-eligibility gate.
+- Do not send raw client documents or full conversation history to an AI provider until the AI phase explicitly approves provider, data-processing, retention, region, and access controls.
+- Store model/provider/version, prompt/template version, input references, output, confidence where applicable, and human accept/correct/reject result for audit/evaluation.
+- Apply the same server-side authorization scope to AI retrieval that applies to the human user/action.
 
 ---
 
@@ -707,37 +688,16 @@ Target operational dashboard:
 ```text
 DOCUMENT COLLECTION
 
-Awaiting documents          24
-Partially received          11
-Overdue                      7
-Snoozed                      4
-Complete this week          18
-Needs classification         6
-WhatsApp failures            1
-```
-
-PIC-centric view example:
-
-```text
-Mr Tan
-4 companies
-72% collected
-Next follow-up: 15 Sep 2026
-
-ABC       5/6
-XYZ       COMPLETE
-DEF       3/5
-GHI       2/4
-
-Next requested:
-• ABC — CIMB statement
-• DEF — Payroll
-• GHI — Maybank statement
-
-[Send now]
-[Snooze PIC]
-[Pause automation]
-[View all outstanding]
+Awaiting documents
+Partially received
+Overdue
+Snoozed / promised
+Complete this week
+Needs classification
+Needs authorization review
+WhatsApp failures
+SharePoint/storage failures
+Dead-letter/manual recovery
 ```
 
 Useful filters:
@@ -748,12 +708,18 @@ Manager
 Firm
 Customer
 PIC
+Conversation
 Service
 Period
-Status
+Request status
 Overdue
 Snoozed
+Needs classification
+Needs authorization review
+Integration failure
 ```
+
+The dashboard must not expose file/message data merely because a count is visible; every drill-down uses server-side access scope.
 
 ---
 
@@ -765,241 +731,93 @@ The numbered phases below are project milestones. A milestone does **not** autom
 
 ### Luna Max execution-unit rule
 
-Before giving work to Codex:
-
-1. Each execution task should have **one primary objective** and a clearly reviewable deliverable.
+1. Each execution task has one primary objective and a clearly reviewable deliverable.
 2. Prefer small sub-phases that can be understood and reviewed without mixing several architectural concerns.
-3. If a milestone touches multiple major concerns, requires broad repository changes, or looks too large/risky for one focused Luna Max run, split it into `A/B/C` sub-phases first.
-4. Do not ask Luna Max to design, implement, migrate, integrate external providers, harden security, and build UI in the same execution task.
-5. After every sub-phase, ChatGPT reviews the actual diff/tests and updates this master plan before the next sub-phase starts.
-6. A sub-phase may be split again if repository inspection shows it is still too broad. Correctness and reviewability take priority over keeping the phase count small.
+3. Split database, provider, security, concurrency, migration, background processing, and UI work aggressively.
+4. Do not ask Luna Max to design, implement, migrate, integrate external providers, harden security, and build UI in the same run.
+5. After every coding sub-phase, ChatGPT reviews the actual GitHub diff/tests and updates this master plan before the next sub-phase.
+6. Never begin the next phase silently.
 
-### Phase 0 — Architecture Freeze
+### Phase 0 — Architecture Freeze — APPROVED
 
-Phase 0 is intentionally split into four small non-coding review units.
+#### Phase 0A — Repository & Architecture Inventory — APPROVED
 
-#### Phase 0A — Repository & Architecture Inventory
+No production coding. Repository facts, existing workflow/role/database conventions, tests/CI, integration gaps, and constraints were inventoried and reviewed.
 
-**No production coding.**
+Key facts retained:
 
-Inspect the current repository and document only the existing facts relevant to this feature:
+- ASP.NET Core 10 MVC/Razor, EF Core 10, Identity, PostgreSQL 17.
+- Existing business graph: `Engagement → BillingRecord → WorkItem → WorkerAssignment`.
+- Existing workflow is assignment-level and separate from financial/WorkItem state.
+- Current five roles: Admin, InternalUser, AccountingFirm, Manager, Worker.
+- Existing `AccessScope` is the server-side authorization pattern.
+- Record entities use audit fields + `long Version`; restrictive deletes and migration safety conventions are established.
+- No WhatsApp/SharePoint/provider/background-job abstraction existed at inventory time.
+- Real PostgreSQL integration tests and CI conventions already exist.
 
-- Existing entities and relationships
-- Current Work Item / Worker Assignment / workflow implementation
-- Existing status enums/state transitions
-- Authorization/role model
-- Existing database conventions and migration patterns
-- Existing background-job/integration abstractions, if any
-- Existing tests and CI relevant to this feature
-- Constraints/conflicts between the repository and this master plan
-
-Deliverable: update this file with confirmed repository facts and unresolved architecture questions only.
-
-Do not design all final entities yet and do not implement code.
-
-### Phase 0A — Confirmed Repository Findings (2026-09-12)
-
-This is an inventory, not the Phase 0B data-model freeze. The mature direction in Sections 4–10 remains roadmap guidance; no proposed entity, provider, storage, or workflow design below is approved for implementation by this Phase 0A review.
-
-That statement records the position at Phase 0A close. The Phase 0B specification below now freezes the deterministic core model only; it does not approve the later provider, contact, storage, follow-up, or permission designs retained in Sections 4–10.
-
-#### Application and runtime architecture
-
-- The repository is an ASP.NET Core 10 MVC/Razor application using Entity Framework Core 10, ASP.NET Core Identity, PostgreSQL 17, and locally bundled Bootstrap. The README describes it as an internal billing/work MVP for fewer than 10 users and states that there are no external accounting integrations (`README.md:1-3`).
-- `Program.cs` configures one web application, one `AppDbContext`, Identity, authorization, the existing scoped domain services, `TimeProvider`/`BusinessClock`, and rate limiting. There is no `IHostedService`, `BackgroundService`, scheduler, queue consumer, or separate worker process (`src/BillingControl/Program.cs:13-78`).
-- The production topology is PostgreSQL, a one-shot migration container, one long-running application container, and a reverse proxy (`compose.yaml`, `docker-compose.yaml`). Persistent volumes cover PostgreSQL and data-protection keys; there is no application media/file-storage volume. The Hostinger-oriented `docker-compose.yaml` sources `master`, so `codex/accounting-mvp` is not its automatic deployment source.
-- The request/response boundary is MVC controller → scoped domain service → EF Core/PostgreSQL. `AppController` converts business, database, and serialization errors into a redirect with a user-facing message (`src/BillingControl/Controllers/AppController.cs:9-44`).
-- The project has no WhatsApp SDK/provider package, typed external client, SharePoint/Graph SDK, object-storage adapter, queue package, malware scanner, OCR library, or document-management package (`src/BillingControl/BillingControl.csproj`).
-
-#### Existing entities and relationships
-
-The current graph is financial/work-oriented:
-
-```text
-Customer / Service / BusinessParty / Manager
-                         ↓
-                    Engagement
-                         ↓
-                   BillingRecord
-                         ↓ one-to-one
-                      WorkItem
-                         ↓ one-to-many
-                  WorkerAssignment → Worker
-```
-
-- `Engagement` links one customer, service, accounting firm (`BusinessParty`), and manager, with service dates, billing amount, revenue-share percentages, status, and one `BillingSchedule` (`src/BillingControl/Models/Domain.cs:63-89`).
-- `BillingRecord` belongs to an engagement, stores the service period, billing status, customer/service snapshots, customer amount, revenue-share base snapshot, and share allocations. Each billing record has exactly one `WorkItem` and may have invoice lines (`Domain.cs:91-110`, `src/BillingControl/Data/AppDbContext.cs:64-88`).
-- `WorkItem` stores `WorkStatus`, notes, and worker assignments. Billing generation creates the billing record and its work item together (`src/BillingControl/Services/BillingService.cs:13-60`).
-- `WorkerAssignment` belongs to a work item and worker. It stores worker-name, percentage, LCM-gross snapshot, entitlement, cancellation/visibility state, current workflow state/version/progress, and links to worker payments, weekly reports, progress-update history, and workflow history (`Domain.cs:131-154`).
-- `WeeklyProgressReport` is unique per assignment/week and stores the latest weekly summary and workflow snapshot. `WeeklyProgressUpdateHistory` is an append-only timeline linked to both the report and assignment. `WorkerAssignmentWorkflowHistory` records assignment-level workflow/visibility transitions (`Domain.cs:156-198`, `AppDbContext.cs:95-120`).
-- `Invoice`, `InvoiceLine`, `CustomerReceipt`, and `CustomerReceiptAllocation` are existing financial documents and allocations. They are not uploaded source documents and have no file, media, message, or SharePoint metadata (`Domain.cs:220-265`).
-- There is no entity/table for a document request, requirement template item, received document, attachment/media, PIC/contact, WhatsApp conversation/participant/message, provider event, webhook delivery, consent, or file-retention state. The only contact-like fields are optional email fields on `Customer` and `Worker`; no WhatsApp number exists (`Domain.cs:26-37`).
-
-The repository therefore confirms the existing relationship path relevant to the plan as:
-
-`Engagement → BillingRecord → WorkItem → WorkerAssignment → Worker`
-
-The repository does not yet establish the exact cardinality or attachment level for a future `DocumentRequest`/`DocumentRequestItem`/`ReceivedDocument` structure.
-
-#### Work Item, Worker Assignment, Billing Record, and workflow behaviour
-
-- `WorkItem.Status` is only `Upcoming`, `InProgress`, or `Completed`; `WorkItem.Notes` is free text. Only Admin/InternalUser may edit shared work status/notes. Workers submit weekly progress instead (`src/BillingControl/Models/Domain.cs:38-42`, `src/BillingControl/Controllers/WorkController.cs:45-60`).
-- Assignment is separate from billing generation. Multiple active assignments are allowed, combined percentages/rounded entitlements are capped against the immutable LCM gross share, and 0% assignments remain active operational assignments with RM0.00 entitlement (`BillingService.cs:141-158`).
-- Assignment cancellation is a business-state operation, not row deletion; active worker payments must be cancelled first. Assignment edits use the `Version` token, and changing the worker after progress exists is blocked (`BillingService.cs:160-190`, `:235-247`).
-- The existing detailed workflow has eleven stages: `DocumentRequested`, `DocumentReceived`, `AssignedNotStarted`, `AssignmentStarted`, `StartPreparing`, `QueriesSent`, `DraftManagementReportSent`, `PendingReview`, `AmendmentRevision`, `FinalManagementReportSent`, and `Completed` (`Domain.cs:44-56`). The two report-related stages require positive versions.
-- Assignment workflow is deliberately separate from `WorkItem.Status`, `BillingStatus`, invoicing, and payments. `AssignmentWorkflowService` records current state plus append-only transition history and explicitly does not change financial/work-item state (`src/BillingControl/Services/AssignmentWorkflowService.cs:7-15`, `:120-170`).
-- Weekly reporting uses business-timezone Monday–Sunday windows. Missing is calculated when no report exists; submitted/late classification is based on the first update timestamp. Current-week worker edits update assignment state and append history; historical reports preserve historical snapshots (`src/BillingControl/Services/ProgressReportService.cs:1-113`, `README.md:87-93`).
-- `DocumentRequested` and `DocumentReceived` are currently workflow labels/snapshots, not document-level evidence. They do not identify a requested item, sender, message, file, acceptance decision, or completeness of a request batch. Any integration with the plan’s “Ready for Document Received” and human confirmation rule must be specified in Phase 0B/0D before implementation.
-- Billing generation and corrections are serializable and dependency-locked. Billing statuses derived from active invoices/receipts cannot be safely treated as document-collection statuses; the plan’s non-negotiable rule not to auto-drive financial status is consistent with the repository constraints (`BillingService.cs:13-139`, `README.md:72-84`).
-
-#### Authorization and role handling
-
-- The five Identity roles are `Admin`, `InternalUser`, `AccountingFirm`, `Manager`, and `Worker`. Admin/InternalUser are staff. External roles link to exactly one `BusinessParty`, `Manager`, or `Worker` respectively (`src/BillingControl/Services/AccessScope.cs:9-47`).
-- The fallback authorization policy requires authentication and a valid access profile for every endpoint except explicitly anonymous login/denied actions. The custom handler verifies one role, an active user, and role/link consistency against the database (`src/BillingControl/Program.cs:23-32`, `AccessScope.cs:49-60`). Security-stamp validation is immediate.
-- `AccessScope` is the server-side scope boundary for engagements, billing, schedules, work items, assignments, progress reports, payments, masters, invoices, and reports. `CreatedBy` is audit metadata, not ownership (`AccessScope.cs:63-202`).
-- Staff can edit shared work and assignments; workers can access their own active, visible assignments and weekly updates; managers have scoped read-only progress access; AccountingFirm has no work/progress route. Hidden assignments are not exposed to the linked worker, including through forged URLs (`src/BillingControl/Controllers/WorkController.cs:10-103`, `ProgressController.cs:9-164`, `AccessScope.cs:127-148`).
-- User administration is Admin-only. Role/entity-link changes update the security stamp and revoke existing sessions. A database check constraint prevents more than one external entity link (`src/BillingControl/Controllers/UsersController.cs:12-75`, `src/BillingControl/Data/AppDbContext.cs:37-40`).
-- No role represents a customer/end-customer user or an unauthenticated external WhatsApp sender. A phone-number match must not be treated as authorization without an explicit identity, consent, sender-matching, and permitted-scope rule.
-
-#### Database and migration conventions
-
-- `AppDbContext` derives from `IdentityDbContext<AppUser>`. Record-derived entities use integer keys, `long Version` concurrency tokens, UTC audit fields/actors, PostgreSQL numeric precision, and string-length conventions (`src/BillingControl/Data/AppDbContext.cs:8-49`).
-- Record foreign keys default to `DeleteBehavior.Restrict`. Ordinary record deletion is rejected by `SaveChangesAsync`; only narrowly scoped invoice-line, billing-snapshot, and receipt-allocation corrections are permitted. Modified-field allowlists protect historical snapshots and audit origins (`AppDbContext.cs:129-189`).
-- Explicit check constraints and indexes enforce positive money, percentage/date validity, workflow versions, one report per assignment/week, request-id idempotency for existing payment/receipt flows, and allocation uniqueness (`AppDbContext.cs:50-128`).
-- Migrations are timestamp-prefixed EF Core migrations with generated designer files and `AppDbContextModelSnapshot.cs`. The latest committed migration is `20260910052737_WeeklyProgressUpdateHistory`; schema changes run through the explicit `--migrate` path, while normal startup does not alter schema (`src/BillingControl/Data/Migrations`, `Program.cs:71-76`).
-- Existing migration precedent includes explicit SQL backfills, safety checks, restrictive foreign keys, and additive workflow/history changes. `InvoiceDocuments` migrated legacy invoice/receipt fields into normalized rows and refused unsafe downgrade after richer document data existed (`20260907101738_InvoiceDocuments.cs:160-201`, `:229-275`).
-- Integration tests refuse a database name that does not end in `_test`; `Fresh()` drops/recreates only that database and applies committed migrations (`tests/BillingControl.Tests/IntegrationTests.cs:14-27`).
-
-#### Background jobs, integrations, tests, and CI
-
-- No WhatsApp/webhook/provider integration, provider signature verifier, message inbox/outbox, media-download service, SharePoint adapter, file scanner, durable queue, retry policy, hosted worker, or outbox dispatcher exists in the current repository.
-- The existing tests use xUnit, `WebApplicationFactory<Program>`, real PostgreSQL integration tests, a fixed `TimeProvider` for workflow windows, and dependency-free Node tests. Current coverage includes financial allocation/concurrency, workflow/history, authentication/CSRF, all five roles, scope/tampering, reporting/export scope, redaction, and session revocation. It does not cover WhatsApp, SharePoint, attachments, media retrieval, file access, retention, webhook signatures, provider retries, or external failure states.
-- CI runs JavaScript tests, .NET restore/build/test, PostgreSQL 17 integration tests, Docker image build, and a production Compose HTTPS smoke test with .NET 10 and Node 22 (`.github/workflows/ci.yml`). CI has no provider credentials or external WhatsApp/SharePoint environment.
-- Phase 0A checks completed on the reconciled repository baseline: `dotnet build -c Release` passed with 0 warnings/errors; EF reported no pending model changes; JavaScript tests passed 12/12; the isolated PostgreSQL suite passed 51/51 with 0 failures and 0 skips; staged-diff whitespace checks passed before commit.
-
-### Phase 0A — Confirmed Conflicts, Risks, and Constraints
-
-The following conflicts were identified at Phase 0A close. Phase 0B resolves the core aggregate, status, linkage, invariant, and historical-record questions in the specification below; the external-boundary risks remain deferred.
-
-1. **Document workflow is not document tracking.** Existing `DocumentRequested`/`DocumentReceived` states are assignment workflow labels and weekly snapshots. They cannot identify a checklist item, message, file, sender, acceptance decision, or completeness.
-2. **The exact WorkItem linkage was a Phase 0B decision.** At Phase 0A close, the plan recommended collection primarily under `WorkItem`, while the current repository had one work item per billing record and multiple assignments. Phase 0B now fixes each `DocumentRequest` to one WorkItem, while raw `ReceivedDocument` artifacts remain WorkItem-independent until explicitly linked through evidence; cross-company/period reuse, consolidation, and confidentiality remain Phase 0C questions.
-3. **PIC and external identity are missing.** The plan requires one PIC across multiple companies and group/direct conversation scope, but the repository has no contact, WhatsApp number, consent, participant, or customer-user model. Existing worker-based scope cannot be reused automatically for client messages.
-4. **Role boundaries may need extension.** AccountingFirm is excluded from work/progress routes, customers have no login role, and an inbound provider event is not an Identity principal. Phase 0C must define who may see, link, classify, accept, reject, download, re-request, or override incoming material.
-5. **No permanent media path exists in the application.** The plan’s SharePoint direction is not implemented. PostgreSQL stores metadata/financial data only; production Compose has no media volume. Temporary media handling, SharePoint upload failure state, hash/deduplication, malware scanning, retention, and backup/restore guarantees remain unimplemented.
-6. **No asynchronous or durable integration boundary exists.** WhatsApp media retrieval, SharePoint upload, outbound reminders, retries, rate limits, dead-letter/manual retry, and webhook replay cannot be expressed safely by the current synchronous MVC services alone.
-7. **Provider event idempotency and audit identity are absent.** Existing `RequestId` uniqueness covers customer receipts and worker payments, not provider message/event IDs. `SaveChangesAsync` derives the actor from an authenticated HTTP claim and otherwise uses `system`; provider-event identity and exact inbound/outbound snapshots need explicit design.
-8. **Workflow/status layering is a safety risk.** `WorkItem.Status`, `BillingStatus`, assignment workflow, weekly report status, request-item status, and request-level status must remain distinct. Collection automation must not silently complete/reopen work or change financial status.
-9. **Migration and deployment constraints apply.** Future schema changes must follow the repository’s additive/backfill/restrictive-FK conventions, use the isolated `_test` database rule, and account for the Hostinger importer sourcing `master`. No migration or deployment was performed in Phase 0A.
-10. **The remote plan’s proposed data model was unapproved at Phase 0A close.** Sections 5–10 still describe the mature target direction, including SharePoint and WhatsApp concepts. Phase 0B now approves only the deterministic core specification below; provider, storage, contact, permission, and workflow-automation boundaries remain later Phase 0 work.
-
-### Phase 0A — Unresolved Questions at Inventory Close
-
-These questions were intentionally not answered by the inventory. The five Phase 0B gate questions are retained as project history and are resolved by the Phase 0B specification immediately below; the Phase 0C/0D questions remain intentionally open.
-
-#### Phase 0B gate questions
-
-- Confirm the exact approved aggregate and cardinalities: does a `DocumentRequest` belong to a `WorkItem`, and can one request/batch span multiple billing records, companies, engagements, or periods?
-- Confirm the exact distinction and transitions among request-level state, request-item state, received-document state, existing assignment workflow, and the human “Confirm documents complete” action.
-- Define mandatory/optional/waived/not-required semantics, partial receipt, replacement/version handling, duplicate handling, cancellation, and what can be reopened.
-- Define database invariants, uniqueness, concurrency/version behaviour, audit fields, and migration/backfill rules for the new deterministic collection records without changing financial snapshots.
-- Decide whether any existing historical `DocumentRequested`/`DocumentReceived` workflow rows are merely historical labels or require a non-destructive link to future collection records.
-
-#### Questions reserved for Phase 0C/0D
-
-- Which PIC/contact, customer, firm, manager, worker, and provider identities are authorised for each conversation, request batch, file, message, and classification action?
-- Which WhatsApp provider/API mode, group eligibility, webhook signature/replay rules, consent/opt-out rules, template rules, and service-window constraints apply to the real business account?
-- What SharePoint site/library/app-only permissions, folder/metadata conventions, temporary-file limits, malware scanning, retention, and restore guarantees are available?
-- Is a durable queue/hosted worker/outbox required, and what retry, backoff, dead-letter, rate-limit, manual-replay, and failure-state behaviour is required?
-- What exact audit trail is required for provider events, human overrides, automated follow-ups, promise dates, snoozes, classification, file access, and SharePoint failures?
-- Which deterministic provider fakes/contract fixtures, signed-webhook tests, media/storage tests, authorization tests, concurrency/idempotency tests, and CI smoke checks are acceptance gates?
-
-#### Phase 0B — Core Data Model Freeze
+#### Phase 0B — Core Data Model Freeze — APPROVED
 
 **No production coding.**
-
-Using the confirmed Phase 0A repository facts, finalise only:
-
-- Core document collection entities
-- Exact relationships/cardinalities
-- Statuses and allowed transitions
-- Required database invariants/uniqueness rules
-- WorkItem/BillingRecord linkage
-
-Deliverable: exact reviewed data-model specification in this file.
-
-Do not cover WhatsApp/SharePoint provider implementation in this sub-phase.
 
 ### Phase 0B — Final Core Data Model Specification (2026-09-12)
 
-**Phase 0B status:** Approved — the deterministic core data model is frozen. This is an architecture specification only; it introduces no production entities, migration, controller, provider, storage, or business-logic change. Phase 0C remains not started.
-
-The model below freezes the deterministic document-collection core. It intentionally leaves PIC/contact identity, WhatsApp conversation/provider details, SharePoint storage details, follow-up scheduling, permissions, and AI behaviour to Phase 0C/0D.
+The deterministic core is frozen as follows.
 
 #### Core entities and cardinalities
 
-1. **`DocumentRequirementTemplate`** — a versioned checklist definition for one `Service`.
-   - `Service` 1 → many templates; a template belongs to exactly one service.
-   - A template has a stable template key, positive version, name/description, `IsActive`, and `IsDefault` state. A version becomes immutable once used to create a request.
-   - `IsDefault` implies `IsActive`. At most one active/default template version may exist for a service. Historical inactive versions remain addressable and valid for existing requests; later master-data changes never repoint their selected template/version or snapshots.
+1. **`DocumentRequirementTemplate`** — versioned checklist definition for one `Service`.
+   - `Service` 1 → many templates.
+   - Stable template key + positive version.
+   - `IsDefault ⇒ IsActive`.
+   - At most one active/default version per service using a partial unique rule.
+   - Used versions become immutable; historical versions remain addressable.
 
-2. **`DocumentRequirementTemplateItem`** — one checklist requirement within a template version.
-   - One template 1 → many template items; every item belongs to exactly one template.
-   - Each item has a stable `RequirementKey` within the template lineage, display name/description, required/optional flag, priority/wave, and display order.
-   - `(DocumentRequirementTemplateId, RequirementKey)` is unique. Template items are immutable after their template is used; changing a checklist creates a new template version.
+2. **`DocumentRequirementTemplateItem`** — one requirement inside one template version.
+   - `(DocumentRequirementTemplateId, RequirementKey)` unique.
+   - Snapshot fields include requirement key, name/description, required/optional, wave/priority, display order.
+   - Used template items are immutable; change creates a new template version.
 
-3. **`DocumentRequest`** — the current or historical collection aggregate for one job.
-   - One `WorkItem` 1 → many document requests over time. Every request belongs to exactly one `WorkItem` and exactly one selected template version.
-   - The selected template’s `ServiceId` must equal the service reached through `DocumentRequest → WorkItem → BillingRecord → Engagement → ServiceId`. This is validated transactionally when a request is created or replaced; a request cannot use another service’s checklist.
-   - A request is job-level, not worker-level: it does not belong directly to a `WorkerAssignment`, because one work item can have multiple assignments and responsibility may change.
-   - A request has a positive `Revision` unique within the work item, current request-level status, the selected template reference, immutable request/item snapshots, and an optional self-reference to the immediately superseded request revision.
-   - Historical requests retain their selected template/version and request-item snapshots even when service/template master data later changes.
-   - At most one request for a work item may be current at a time. A current request includes `Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, or `Paused`; `Cancelled` and `Superseded` are historical terminal states.
-   - A request may be grouped into zero or more provider-neutral `DocumentRequestBatch` memberships over time. Batch membership never owns request state.
+3. **`DocumentRequest`** — collection aggregate for one `WorkItem`.
+   - One WorkItem → many request revisions; at most one current non-terminal request.
+   - Selected template Service must transactionally match `WorkItem → BillingRecord → Engagement → ServiceId`.
+   - Positive `Revision` unique within WorkItem.
+   - Existing request retains selected template/version and snapshots.
+   - No direct WorkerAssignment ownership.
 
-4. **`DocumentRequestItem`** — the frozen requirement instance inside one request.
-   - One request 1 → many request items; every item belongs to exactly one request.
-   - Each item references the source template item where available and snapshots the requirement key, name/description, required/optional flag, priority/wave, and display order. Later template edits cannot change an existing request.
-   - `(DocumentRequestId, RequirementKey)` is unique. A request cannot contain the same requirement twice.
-   - Request items do not belong directly to a billing record or worker assignment; their parent request reaches the billing record through `WorkItem`.
+4. **`DocumentRequestItem`** — frozen requirement instance.
+   - One request → many items.
+   - `(DocumentRequestId, RequirementKey)` unique.
+   - Request reaches BillingRecord only through WorkItem.
 
-5. **`ReceivedDocument`** — one immutable received-artifact/intake record for one received document file or equivalent document artifact.
-   - A raw received document has no direct `WorkItemId`, `BillingRecordId`, `DocumentRequestId`, or `DocumentRequestItemId`. It may be recorded before classification and may have zero evidence links while unclassified or unmatched.
-   - A received document may be linked to zero or more request items through the evidence link below. A link reaches its request’s WorkItem and therefore the existing BillingRecord relationship. Links are created only by an explicit classification/reuse action; they are not inferred from a hash, sender, conversation, filename, or guessed company.
-   - A single artifact may be explicitly linked to request items under more than one WorkItem only when that cross-work-item use is separately audited and later Phase 0C authorization/confidentiality rules permit it. No automatic evidence reuse occurs across companies or WorkItems.
-   - Original receipt metadata (received timestamp, source actor/sender snapshot, original filename, MIME type, byte length, and SHA-256 where a file exists) is immutable. The lifecycle status and explicit evidence links are separately mutable/audited. Permanent storage references are metadata only and are finalized in Phase 0C; PostgreSQL does not store permanent document binaries.
-   - Replacement is represented by a new received-document row pointing to the row it supersedes. The old row remains immutable history and is never overwritten or deleted.
+5. **`ReceivedDocument`** — immutable raw received-artifact/intake record.
+   - No direct WorkItemId/BillingRecordId/RequestId/RequestItemId.
+   - May exist unclassified with zero evidence links.
+   - Original receipt metadata immutable.
+   - Lifecycle status and evidence links are separately mutable/audited.
+   - Replacement creates a new row; old artifact remains history.
 
-6. **`DocumentRequestItemEvidence`** — explicit, auditable evidence linking.
-   - One request item 0 → many evidence links; one received document 0 → many evidence links. Multiple links are permitted only by an explicit classification/reuse action. Cross-work-item links are allowed only as separately audited classification/reuse actions subject to later Phase 0C authorization/confidentiality rules.
-   - `(DocumentRequestItemId, ReceivedDocumentId)` is unique. Unlinking is a status/audit operation, not row deletion.
-   - The link has an active/inactive lifecycle. A new link is active; unlinking sets it inactive with an audit reason and timestamp. Inactive links remain queryable and do not satisfy an item.
-   - Reactivating an inactive link requires a fresh explicit classification/reuse action and history entry; status changes or hash matches never reactivate it automatically.
-   - An evidence link is satisfying only when the linked received document is `Accepted` and the link is active. A received file is not automatically accepted merely because it is present.
-   - This link permits a valid document to be carried into a replacement request revision without mutating the original receipt record, while preventing implicit cross-company or cross-work-item reuse.
+6. **`DocumentRequestItemEvidence`** — explicit auditable many-to-many evidence link.
+   - `(DocumentRequestItemId, ReceivedDocumentId)` unique.
+   - Active/inactive lifecycle; unlink/reactivate are explicit audited actions.
+   - Satisfying evidence requires active link + Accepted artifact.
+   - Cross-WorkItem reuse is never automatic and requires explicit audited classification plus 0C authorization checks.
 
-7. **`DocumentRequestBatch` and `DocumentRequestBatchMember`** — provider-neutral grouping scaffolding.
-   - A batch has 1 → many membership rows; a request may have 0 → many memberships over its lifetime because an initial request and later follow-up may be separate batches.
-   - `(DocumentRequestBatchId, DocumentRequestId)` is unique. Batch membership is not a request revision and does not change request/item completion.
-   - Phase 0B freezes only this neutral grouping relationship. PIC identity, conversation identity, authorised participants, batch eligibility, batch statuses, and follow-up cadence are Phase 0C/0D decisions and must not be added to the core model from this phase.
+7. **`DocumentRequestBatch` / membership** — provider-neutral grouping scaffold.
+   - Request may appear in multiple historical batches.
+   - Batch membership does not own request completion state.
 
-8. **Append-only status histories** — `DocumentRequestStatusHistory`, `DocumentRequestItemStatusHistory`, `ReceivedDocumentStatusHistory`, and `DocumentRequestItemEvidenceHistory`.
-   - Each status-history row belongs to exactly one current entity and records the previous status (nullable for the first row), new status, action/reason, actor/source, and UTC occurrence time.
-   - Evidence-link history records link/unlink actions and the link identifier; it uses the same append-only/audit rules even though the link itself has an active/inactive lifecycle rather than a request-item status enum.
-   - History rows are append-only, never deleted or edited, and are separate from the mutable current-status row. The existing `Record` audit fields remain on current and history entities.
+8. **Append-only histories** for request, item, received artifact, and evidence actions.
 
-There is deliberately no direct `WorkItemId`, `BillingRecordId`, `DocumentRequestId`, or `DocumentRequestItemId` on the raw `ReceivedDocument`. The authoritative linkage is:
+#### Frozen linkage
 
 ```text
-DocumentRequest → WorkItem → BillingRecord → Engagement / service period
+DocumentRequest → WorkItem → BillingRecord → Engagement
 DocumentRequestItem → DocumentRequest
-ReceivedDocument → zero or more explicit DocumentRequestItemEvidence links → DocumentRequestItem → DocumentRequest → WorkItem → BillingRecord
+ReceivedDocument → zero or more DocumentRequestItemEvidence
+DocumentRequestItemEvidence → DocumentRequestItem + ReceivedDocument
 ```
 
-This avoids a second billing foreign key that could disagree with the existing one-to-one `WorkItem`/`BillingRecord` relationship. It also keeps document collection independent of invoice, receipt, revenue-share, and payment tables.
-
-#### Request-level statuses and allowed transitions
-
-The request status enum is:
+#### Request statuses
 
 ```text
 Draft
@@ -1012,31 +830,12 @@ Cancelled
 Superseded
 ```
 
-Meaning and transitions:
+- `Cancelled` and `Superseded` terminal.
+- Completion requires all mandatory items satisfied plus human confirmation.
+- Reopen/correction is explicit and audited.
+- Request status is transactionally recalculated; callers cannot set arbitrary inconsistent state.
 
-| Status | Meaning | Allowed next states |
-| --- | --- | --- |
-| `Draft` | Request and item snapshot exists but has not passed the send/readiness gate. | `ReadyToSend`, `Paused`, `Cancelled` |
-| `ReadyToSend` | Snapshot is validated and can be issued by a later communication phase. | `Requested`, `Paused`, `Cancelled` |
-| `Requested` | The request has been activated/issued; applicable outstanding items are requested. | `PartiallyReceived`, `Complete` by human confirmation, `Paused`, `Cancelled`, `Superseded` through replacement only |
-| `PartiallyReceived` | At least one applicable item has qualifying evidence or has been partially acknowledged, but the mandatory set is not complete. | `Complete` by human confirmation, `Requested` after all qualifying evidence is withdrawn/rejected, `Paused`, `Cancelled`, `Superseded` through replacement only |
-| `Complete` | Every required item is `Received`, `Waived`, or `NotRequired`, and a human has confirmed completion. Optional items do not block completion. | `PartiallyReceived`/`Requested` through explicit reopen, `Cancelled`, `Superseded` through replacement only |
-| `Paused` | Collection progression is intentionally paused without losing item/evidence state. | `Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived` after an explicit resume/recalculation, or `Cancelled` |
-| `Cancelled` | Explicitly cancelled; historical and non-actionable. | None |
-| `Superseded` | Replaced by a later request revision; historical and non-actionable. | None |
-
-Rules:
-
-- A request cannot jump directly to `Complete` from an unissued state. Completion requires an active request, qualifying item states, and an explicit human confirmation action.
-- Request status is recalculated transactionally from item/evidence state and the transition action; callers cannot set an arbitrary status that violates the table.
-- `Paused` retains the prior state in status history. Resume returns to `Draft`/`ReadyToSend` if it was never issued, otherwise to `Requested` or `PartiallyReceived` based on current item evidence.
-- `Cancelled` is terminal. Re-requesting after cancellation creates a new revision; it never reopens or rewrites the cancelled row.
-- `Superseded` is terminal. Creating a replacement revision changes the old current request to `Superseded` and creates the new request in the same transaction.
-- Reopening a `Complete` request is an explicit audited action and does not reopen `WorkItem`, `WorkerAssignment`, or any financial status. It recalculates to `PartiallyReceived` or `Requested` after the affected item is reopened.
-
-#### Request-item statuses and allowed transitions
-
-The request-item status enum is:
+#### Item statuses
 
 ```text
 Missing
@@ -1047,34 +846,11 @@ NotRequired
 Waived
 ```
 
-- `Missing` is the initial state for a draft/ready request or the state after an issued requirement has no qualifying evidence.
-- `Requested` is set when the parent request is activated, except for items already `NotRequired` or `Waived`.
-- `PartiallyReceived` means one or more active accepted evidence links exist but the worker has not confirmed the requirement complete.
-- `Received` requires at least one active link to an `Accepted`, non-superseded received document and an explicit human confirmation that the requirement is complete. File arrival/classification alone cannot set this state.
-- `NotRequired` means the requirement does not apply to this work item. It counts as satisfied but requires an auditable reason.
-- `Waived` means the requirement applies but an authorised human has approved an exception. It counts as satisfied and requires an auditable reason and actor.
+- `Received` requires qualifying evidence plus explicit human completeness confirmation.
+- `NotRequired` and `Waived` are reasoned/audited reversible decisions.
+- Optional items do not block request completion.
 
-Allowed item transitions:
-
-```text
-Missing            → Requested, PartiallyReceived, NotRequired, Waived
-Requested          → PartiallyReceived, Received, NotRequired, Waived
-PartiallyReceived  → Received, Requested, NotRequired, Waived
-Received           → PartiallyReceived, Requested, NotRequired, Waived by explicit correction/reopen only
-NotRequired        → Missing or Requested by explicit reactivation only
-Waived             → Missing or Requested by explicit reactivation only
-```
-
-Additional rules:
-
-- A rejected, duplicate, quarantined, or superseded received document never satisfies an item. Removing or superseding the last qualifying evidence causes an explicit audited item reopen and request-state recalculation; it does not silently rewrite a completed request.
-- `NotRequired` and `Waived` are reversible decisions, not deletes. Existing evidence remains historical and is not silently destroyed. Reactivation requires a reason and returns the item to `Requested` when the parent has been issued, otherwise `Missing`.
-- Child item rows remain readable after parent cancellation/supersession but are frozen for ordinary changes. They do not need a separate `Cancelled` enum because the parent terminal state is authoritative.
-- Optional items may remain `Missing`, `Requested`, or `PartiallyReceived` when the request reaches `Complete`; required items may reach completion only through `Received`, `NotRequired`, or `Waived`.
-
-#### Received-document statuses and lifecycle
-
-The received-document status enum is:
+#### Received-document statuses
 
 ```text
 PendingReview
@@ -1085,265 +861,471 @@ Duplicate
 Superseded
 ```
 
-Allowed transitions:
+- Accepted may be explicitly invalidated to Rejected or safety-held to Quarantined.
+- Correction deactivates all affected active evidence links and recalculates every impacted item/request transactionally.
+- Rejected/Duplicate/Superseded do not satisfy request items.
+
+#### Key invariants
+
+- Restrictive foreign keys; no ordinary deletes.
+- `(ServiceId, TemplateKey, Version)`, `(DocumentRequirementTemplateId, RequirementKey)`, `(WorkItemId, Revision)`, `(DocumentRequestId, RequirementKey)`, and evidence pair uniqueness.
+- One current request per WorkItem via PostgreSQL partial unique index.
+- One active/default template per Service via PostgreSQL partial unique index.
+- Request/template Service consistency checked transactionally from authoritative relationships.
+- Hash is detection aid, not globally unique identity.
+- optimistic concurrency + serializable/locking where needed; no silent overwrite.
+- historical `DocumentRequested`/`DocumentReceived` workflow rows are not backfilled into synthetic document records.
+
+#### Cancellation isolation
+
+Cancelling one request freezes that request/items and inactivates only its evidence memberships. It never deletes/rejects/quarantines/supersedes the shared raw artifact or another request's memberships.
+
+#### Phase 0C — Contact, WhatsApp & SharePoint Boundaries — APPROVED
+
+**No production coding.**
+
+### Phase 0C — Final Integration Boundary Specification (2026-09-12)
+
+#### Contact/PIC model
+
+1. **`Contact`** is the stable human/operational PIC identity.
+   - Name, preferred language, active/inactive and audit fields live here.
+   - Contact identity alone is not authorization.
+
+2. **`ContactWhatsAppAddress`** represents an actual WhatsApp destination endpoint.
+   - One Contact may have multiple historical/current endpoints; one active normalized endpoint maps to one Contact in the initial model.
+   - Store normalized E.164 number, provider `wa_id` when known, primary/active flags, opt-in state/evidence, opt-out/do-not-contact state, and audit/version fields.
+   - Consent/opt-out is evaluated at the address/channel level.
+
+3. **`ContactCustomerLink`** maps one Contact/PIC to one or many Customers.
+   - Many-to-many with active/effective state and optional role/note.
+   - This confirms the PIC/customer relationship but does **not** by itself authorize every Engagement/conversation.
+
+#### Conversation model
+
+4. **`WhatsAppConversation`** is provider-neutral.
+   - Type: `Direct` or `Group`.
+   - Stores provider/account/business-sender references and one opaque provider thread/conversation key.
+   - Status includes at least `Active`, `Inactive`, and `NeedsAuthorizationReview`.
+   - Has a monotonically increasing `AuthorizationVersion`.
+   - Provider-specific identifier structure is opaque to domain code.
+
+5. **`WhatsAppConversationParticipant`** records active/historical membership.
+   - Strongly map known participants to Contact/BusinessParty/Manager/AppUser/business sender where applicable; do not use an unvalidated generic entity-id string as the authorization source.
+   - Snapshot provider participant key/phone/display information for audit.
+   - Join/leave/remove/change is append-only/audited.
+
+6. **`WhatsAppConversationEngagementScope`** is the explicit confidentiality grant for the **current participant set**.
+   - Scope is Engagement-level, not merely Customer-level, because accounting firm/manager/service relationships may differ by Engagement.
+   - Stores approval actor/time/reason and the conversation authorization version it approved.
+   - Any participant-set change increments AuthorizationVersion and invalidates prior scope for new sends until authorised staff re-approve.
+
+#### Conversation authorization rules
+
+- No send/classification/reuse authorization comes from a phone-number match alone.
+- Direct send requires active ContactWhatsAppAddress + ContactCustomerLink + approved conversation Engagement scope + consent/policy gates.
+- Group send requires current group capability + known participant set + approved Engagement scope for that exact authorization version.
+- Provider/webhook identity is not an ASP.NET Identity principal.
+- Unknown inbound senders/events may be ingested/audited but cannot mutate business state until mapped/authorised.
+
+#### Batch confidentiality rules
+
+Before `DocumentRequestBatch` can become send-ready:
+
+- all requests have the same Contact/PIC and conversation;
+- Contact is linked to each request Customer;
+- each request Engagement is approved in current conversation scope;
+- conversation is Active and not NeedsAuthorizationReview;
+- current participant set/version matches approval;
+- destination consent/do-not-contact/policy gates pass;
+- no request-level confidentiality block exists.
+
+The batch snapshots ContactId, ConversationId, AuthorizationVersion, participant set/hash, engagement/request memberships, and exact message facts. Any relevant change before queueing invalidates the batch.
+
+#### Provider boundary
+
+Use an `IWhatsAppProvider`-style adapter. Business/domain logic must not depend on Meta DTOs/endpoints.
+
+Provider capability checks cover at least Direct, Group, media, template/policy, account eligibility, rate-limit/health. Group capability is optional and runtime/account dependent; Direct fallback remains valid.
+
+As of 2026-09-12, Meta Cloud API remains the official WhatsApp Business Platform integration surface. Current Meta materials also expose group capabilities, but exact eligibility, participant limits, pricing, templates and service-window rules remain implementation-time verification items and are **not** frozen as domain invariants.
+
+#### SharePoint boundary
+
+- Dedicated SharePoint site + dedicated document library preferred.
+- App-only least privilege preferred; use Microsoft Graph Selected permission scopes where supported/operationally practical, with explicit resource assignment.
+- Do not silently escalate to tenant-wide permissions if selected scope fails; require explicit security approval.
+- Prefer certificate credential where practical; otherwise secure/rotate server-side secret.
+- No credentials in browser, repo, generated links, or normal logs.
+
+#### Artifact-centric permanent storage
+
+- Upload one permanent binary per ReceivedDocument.
+- Store under intake/date hierarchy using server-generated stable filename.
+- Preserve original filename as metadata.
+- Canonical identity is `DriveId + ItemId`, not path/WebUrl.
+- Do not auto-move/copy into one customer/WorkItem folder after classification.
+- Permanent SharePoint metadata is artifact-level; DB evidence links own zero/many request relationships.
+
+#### Storage reference / temporary media
+
+- Keep provider-neutral storage state/reference separate from ReceivedDocument lifecycle.
+- Temporary media is private, bounded, non-webroot and deleted after permanent storage.
+- Scanner/validation failure prevents artifact acceptance.
+- Missing/deleted SharePoint object becomes reconciliation failure; DB history remains.
+
+#### Application access boundary
+
+Initial access policy:
+
+- **Admin/InternalUser:** full collection operations subject to server-side scope; manage contacts/conversation scope; classify; accept/reject; cross-WorkItem reuse; send/pause/recover.
+- **Worker:** no global unclassified inbox. After explicit evidence/scoping to an accessible WorkItem, may view/use documents according to worker assignment scope. Future scoped worker-classification must be explicit, not inferred from conversation alone.
+- **Manager:** read-only collection status for matching manager engagements; raw file download disabled by default unless a later explicit permission policy grants it.
+- **AccountingFirm:** read-only collection status for matching firm engagements; raw file download disabled by default unless explicitly approved later.
+- **Customer/PIC WhatsApp sender:** not an Identity application user by default.
+
+Direct SharePoint URLs/anonymous sharing are not the application authorization mechanism. File open/download from Billing Control requires server-side access checking and is audited.
+
+#### Phase 0D — Automation, Reliability & Final Freeze — APPROVED
+
+**No production coding.**
+
+### Phase 0D — Final Automation / Reliability / Security Specification (2026-09-12)
+
+#### Outbound batch lifecycle
+
+`DocumentRequestBatch` communication lifecycle is separate from request completeness:
 
 ```text
-PendingReview  → Accepted, Rejected, Duplicate, Quarantined
-Quarantined    → PendingReview or Rejected after the safety issue is resolved
-Accepted       → Superseded through an explicit replacement action, Rejected through an explicit correction/invalidation action, or Quarantined through an explicit safety-hold action
-Rejected       → terminal
-Duplicate      → terminal
-Superseded     → terminal
+Draft
+Ready
+Queued
+Sent
+Failed
+Cancelled
+Invalidated
 ```
 
-- `PendingReview` is the initial state for a received artifact that has been recorded but not accepted as evidence.
-- `Quarantined` blocks classification/acceptance while a later safety/processing decision is pending. Provider and scanner implementation is outside Phase 0B.
-- `Accepted` means the artifact is valid evidence for its active evidence links; it still does not by itself mark a request item `Received` because human completeness confirmation remains required.
-- `Rejected` means the artifact does not satisfy any requirement; a new receipt is required. The rejection reason is mandatory. If the artifact was previously `Accepted`, the transition is a `CorrectAcceptedDocument`/invalidation action and the history must preserve the prior acceptance and correction actor/reason.
-- `Duplicate` means the artifact is a duplicate of a canonical received-document row; `DuplicateOfReceivedDocumentId` is mandatory and the row never satisfies an item.
-- `Superseded` means a later version replaces this artifact; `SupersedesReceivedDocumentId` on the new row and the old row’s status history preserve the chain. The original file metadata remains immutable.
-- An `Accepted` artifact later found unsafe or requiring investigation may be moved to `Quarantined` through an explicit safety-hold action with a mandatory actor and reason. While quarantined, it cannot satisfy evidence links; it may return to `PendingReview` for a new review or move to terminal `Rejected`.
-- A received-document row is never deleted or overwritten to represent a replacement. A new row is created and the old row is transitioned through the audited replacement action.
+- Draft membership may be prepared/reviewed.
+- Ready means deterministic eligibility checks passed at preview time.
+- Ready → Queued revalidates authorization version, participants, request revisions, consent/holds and provider policy; then freezes the exact outbound snapshot and commits an outbox row in the same transaction.
+- Queued content/membership is immutable.
+- Sent means provider accepted the logical message and provider message/reference is persisted.
+- Failed is permanent/manual-attention after retry policy.
+- Invalidated means preview became stale before queue/send; build a new batch.
+- Never resend an already Sent batch as a follow-up; each follow-up is a new batch/snapshot.
 
-Accepted-document correction rules:
+#### Request activation timing
 
-- A correction is never a silent metadata edit or deletion. The correction/safety-hold action records the previous status, new status, actor, source, UTC time, mandatory reason, and correlation identifier where available.
-- In the same database transaction, every active evidence link for the corrected artifact is set inactive with an `AcceptedDocumentCorrection` or `AcceptedDocumentSafetyHold` link-history action. The links remain queryable; they no longer satisfy their request items, including when one artifact had explicit links across multiple WorkItems.
-- The transaction recalculates every affected request-item status and every affected request-level status. A completed request is explicitly reopened/recalculated with history; it is never silently left `Complete` and no unrelated item is changed.
-- If a quarantined artifact later passes a fresh review, it returns through `PendingReview`; existing corrected links are not automatically restored. A fresh explicit classification action must reactivate a retained inactive link or create the link where no prior link exists before the artifact can satisfy any item.
-- Correction changes only document/evidence/request-collection state. It never changes `BillingRecord.Status`, invoice/receipt/payment state, revenue-share snapshots, `WorkItem.Status`, or worker-assignment workflow automatically.
+A `DocumentRequest` becomes `Requested` only when at least one outbound message containing that request is successfully accepted by the provider. Queueing alone does not claim the client was requested. Failed/invalidated batches do not fabricate request-send history.
 
-#### WorkItem/BillingRecord linkage and financial isolation
+#### Follow-up control
 
-- A document request is created only for one existing `WorkItem`. Because the repository has one `WorkItem` per `BillingRecord`, the billing record and service period are reached transitively and cannot drift from the work item.
-- A request is not attached directly to `WorkerAssignment`; documents belong to the job and must remain available to authorised future/current assignments according to later permission rules.
-- A request linked to a cancelled `WorkItem` or cancelled `BillingRecord` is not actionable. A raw received artifact may still be ingested without a WorkItem; linking it to a cancelled WorkItem is non-actionable and remains subject to later authorization rules. Existing collection history is retained; parent cancellation does not delete or fabricate child history.
-- Document request/item/received-document state never changes `BillingRecord.Status`, invoice/receipt/payment state, revenue-share snapshots, `WorkItem.Status`, or assignment workflow automatically in Phase 0B. Any approved workflow mapping is a later Phase 0D rule.
-- A request revision cannot alter the historical billing period, customer/service snapshot, revenue-share base, invoice allocation, worker entitlement, or payment data.
+Maintain durable Contact+Conversation follow-up control containing at least last automated send, next eligibility, stage, pause/stop state and concurrency/audit fields. Scoped promised-date/snooze holds may target one request, one batch, or Contact+Conversation.
 
-#### Replacement, version, partial receipt, duplicate, cancellation, and reopen rules
+Automation eligibility is evaluated in this precedence order:
 
-- **Template version:** editing a used template creates a new template version. Existing requests retain their original template and item snapshots.
-- **Request revision:** a replacement is a new `DocumentRequest` row with the next work-item revision and `SupersedesRequestId`. The old request becomes `Superseded` in the same transaction. No request item is edited in place after activation.
-- **Evidence carry-forward:** accepted evidence may be explicitly linked to a corresponding item in a replacement request through `DocumentRequestItemEvidence` when a human records the action. A normal replacement carries evidence within the same WorkItem; any cross-WorkItem reuse is a separate explicit classification action subject to later Phase 0C authorization/confidentiality rules. It is never copied or matched automatically.
-- **Partial receipt:** multiple accepted evidence rows may link to one item. The item remains `PartiallyReceived` until a human confirms that the requirement is complete; rejected/duplicate/superseded rows do not count.
-- **Duplicate:** duplicate detection may use artifact hash and any explicitly classified requirement context, but it never guesses WorkItem ownership or automatically reuses evidence. SHA-256 is indexed for detection but is not globally unique; a duplicate row points to its canonical raw artifact and remains auditable.
-- **Cancellation:** request cancellation is terminal and non-destructive. The cancelled request and its request items become frozen/non-actionable. Its evidence memberships and histories remain retained; each active membership is set inactive with a `RequestCancellation` link-history action and cannot progress that cancelled request. A raw `ReceivedDocument` remains immutable historical intake and may still be explicitly classified/reused elsewhere, including for another request/WorkItem, subject to authorization/confidentiality rules. Cancelling one request never deletes, rejects, quarantines, supersedes, or otherwise mutates the raw artifact or evidence memberships belonging to another request. A new request is required for further collection.
-- **Reopen:** reopening is an explicit human correction on the same non-cancelled request. It changes only the affected item/request states, records a reason/history row, and never reopens the financial or worker workflow aggregates.
-- **Not required:** an item is intentionally excluded because the requirement does not apply. It is satisfied for request completion, but the decision is reversible and audited.
-- **Waived:** an applicable requirement is intentionally excused. It is satisfied for request completion only with an actor and reason; it is reversible and audited.
+1. security/provider health block;
+2. ContactWhatsAppAddress do-not-contact / consent block;
+3. conversation Active + current authorization scope/version;
+4. request/batch validity and outstanding deterministic facts;
+5. promised-date/snooze/pause/stop holds;
+6. global Contact+Conversation cooling-off/business-time window;
+7. provider template/service-window/rate-limit rules;
+8. create fresh reviewed batch/outbox work.
 
-#### Database invariants, uniqueness, concurrency, and audit
+No later rule overrides an earlier safety/confidentiality block.
 
-Required invariants and indexes:
+After configured escalation/max automatic stage, automation stops and moves to manual attention rather than sending indefinitely.
 
-- Required foreign keys: `DocumentRequest.WorkItemId`, `DocumentRequest.DocumentRequirementTemplateId`, `DocumentRequestItem.DocumentRequestId`, and both evidence-link foreign keys. `ReceivedDocument` has no required WorkItem foreign key; an unclassified raw artifact is valid with zero evidence links. All applicable foreign keys use restrictive deletes.
-- Unique template/version and item keys: `(ServiceId, TemplateKey, Version)`, `(DocumentRequirementTemplateId, RequirementKey)`, `(WorkItemId, Revision)`, and `(DocumentRequestId, RequirementKey)`.
-- Enforce `IsDefault ⇒ IsActive` and enforce one active/default template per service with a PostgreSQL partial unique index equivalent to `UNIQUE (ServiceId) WHERE IsActive = TRUE AND IsDefault = TRUE`. Historical/inactive template versions remain valid for existing requests.
-- Enforce the request/template service-consistency invariant transactionally: the selected `DocumentRequirementTemplate.ServiceId` must equal the service reached through the request’s `WorkItem → BillingRecord → Engagement`. Apply the same check when creating or replacing a request; never rely only on a caller-supplied service identifier.
-- At most one current request per work item, enforced with a PostgreSQL partial unique index over non-terminal request statuses (`Draft`, `ReadyToSend`, `Requested`, `PartiallyReceived`, `Complete`, `Paused`).
-- Unique evidence membership: `(DocumentRequestItemId, ReceivedDocumentId)`. Every evidence link must point to an existing request item and received artifact and must record an explicit classification/reuse action; it must not be generated automatically from hash, sender, conversation, filename, or an inferred company.
-- Received-document replacement/duplicate references must be non-self-referential and acyclic. They are artifact-level references and must not infer a WorkItem. A duplicate row must reference a canonical artifact; a superseding row must reference the artifact it replaces. Any evidence links to the affected artifacts remain independently explicit and audited.
-- Positive/valid values are enforced for template version, revision, display order, byte length, SHA-256 format, and bounded text lengths. Exact limits for MIME types, file sizes, and storage references are deferred to the implementation/provider boundary.
-- A request may be `Complete` only when every required item is `Received`, `Waived`, or `NotRequired`, and the completion action is recorded. The database may enforce local row validity; the aggregate rule is enforced transactionally.
-- `Cancelled` and `Superseded` request rows, history rows, received-document rows, and evidence links are retained. No ordinary delete is allowed. Request cancellation does not change the raw received-document status or immutable intake metadata.
+#### Workflow integration
 
-Concurrency and audit rules:
+- Document collection does not auto-change WorkItem/Billing/invoice/receipt/payment/revenue-share/worker-entitlement state.
+- Assignment `WorkflowStatus` remains separate.
+- First successful outbound request creates UI state **Ready to mark Document Requested**.
+- Human chooses eligible assignment(s) and existing workflow service validates transition.
+- Human-confirmed request completion creates **Ready to mark Document Received**.
+- Human chooses eligible assignment(s); no blind transition of all assignments.
+- Multiple assignments are never silently synchronized merely because they share one WorkItem.
 
-- Current request, request item, raw received artifact, evidence link, and mutable template records use the repository’s `Record` audit fields and `long Version` concurrency token. `CreatedAt`/`CreatedBy` never change; updates advance `UpdatedAt`/`UpdatedBy` and `Version`.
-- Every status/reopen/waive/not-required/replace/link/unlink/classification/correction action appends an immutable history row containing previous/new state where applicable, action, reason where required, actor, source, correlation/request identifier where available, and UTC timestamp.
-- State-changing operations update the child/current row, affected evidence links, aggregate request status, and history rows in one database transaction. Operations racing on the same work item/current request or received artifact use optimistic version checks plus the repository’s serializable/locking pattern where needed to guarantee one current request, no lost aggregate transition, and no partially applied accepted-document correction. A conflict returns a refresh/retry result; it never silently overwrites a newer decision.
-- History rows are append-only and must not be used as editable snapshots. Provider/system actor semantics and external event identifiers are reserved for Phase 0C/0D, but the core audit contract requires them to be representable rather than relying only on the generic `system` actor.
+#### Durable inbound webhook pattern
 
-#### Existing historical workflow records
+Webhook endpoint performs minimal synchronous work:
 
-- Existing `WorkerAssignmentWorkflowHistory` and weekly-report snapshots containing `DocumentRequested` or `DocumentReceived` remain unchanged and are treated as historical workflow evidence only.
-- Phase 0B creates no synthetic `DocumentRequest`, `DocumentRequestItem`, `ReceivedDocument`, or evidence rows from those old workflow values. The repository has no reliable document/item/file mapping or historical acceptance evidence to justify a backfill.
-- Existing historical rows are not retroactively linked to a new request. A future UI may display them as legacy workflow context, but they do not satisfy a new request item.
-- The core model owns document-collection state, not `WorkflowStatus`. A later approved Phase 0D rule may map a successful first request to `DocumentRequested` and a human-confirmed complete request to `DocumentReceived`; those transitions must preserve the existing assignment workflow history and must not change financial status.
+```text
+receive raw request
+→ validate provider verification/signature on raw body
+→ derive provider-specific stable EventKey
+→ insert ProviderEventInbox if new
+→ commit
+→ return success/duplicate acknowledgement
+```
 
-#### Phase 0B unresolved questions carried to later phases
+Heavy parsing, media retrieval, storage, classification assistance and status propagation occur asynchronously after durable inbox commit.
 
-No core entity, cardinality, status, transition, invariant, WorkItem linkage, replacement rule, or historical-record treatment remains unresolved within Phase 0B. The following are intentionally deferred and must not be pulled into this phase:
+Unique `(Provider, EventKey)` (or equivalent authoritative provider scope) prevents duplicate processing. For inbound messages/media also enforce stable provider message/media identity so replay cannot create duplicate ReceivedDocument rows.
 
-- Phase 0C: PIC/contact identity, customer/firm/manager/worker participant scope, group/direct conversation ownership, batch confidentiality, provider identifiers, webhook identity, and permission implementation.
-- Phase 0C: SharePoint site/library/folder/metadata references, storage-provider failure states, temporary media handling, and external file-access rules.
-- Phase 0D: follow-up cadence, anti-spam scheduling, promised-date/snooze scope, exact workflow transition authority, retry/idempotency/outbox behaviour, provider/system audit correlation, and AI suggestion boundaries.
-- Phase 1/implementation: exact CLR/table names, migration ordering, backfill execution, provider-specific processing states, and concrete MIME/size/security limits once the external boundaries are approved.
+Invalid signatures fail before business parsing/mutation.
 
-#### Phase 0C — Contact, WhatsApp & SharePoint Boundaries
+#### Durable outbound outbox pattern
 
-**No production coding.**
+All outbound WhatsApp sends originate from a DB outbox row created transactionally with the frozen batch/message snapshot.
 
-Finalise only:
+Outbox records at least:
 
-- PIC/contact relationships
-- Group/direct conversation model and authorised scope
-- Request batching confidentiality boundary
-- SharePoint folder/metadata strategy
-- Storage abstraction boundary
-- Permission/least-privilege direction
-- External configuration prerequisites that must be verified later
+```text
+LogicalMessageKey / idempotency key
+Conversation / batch
+Exact content or template+parameters snapshot
+AuthorizationVersion / participant snapshot reference
+State
+Attempt count
+NextAttemptAt
+ProviderMessageId/reference
+Last error classification
+CorrelationId
+Version/audit
+```
 
-Deliverable: reviewed integration-boundary specification in this file.
+Initial deployment may use a PostgreSQL-backed hosted background worker inside the single app process. Work claiming must use durable row leasing/locking (`SKIP LOCKED`/lease-equivalent) so restart/concurrency cannot double-process. Architecture must allow later worker extraction without changing domain semantics.
 
-#### Phase 0D — Automation, Reliability & Final Freeze
+#### Ambiguous-send safety
 
-**No production coding.**
+Exactly-once delivery cannot be assumed from an external provider.
 
-Finalise only:
+- If a request definitely failed before provider acceptance, normal retry is permitted.
+- If timeout/network failure leaves acceptance ambiguous, do **not** blindly create/send a second logical message.
+- Reconcile with provider status/id where possible; otherwise move to manual/ambiguous-send review.
+- Provider Retry-After/rate-limit signals take precedence over local backoff.
 
-- Follow-up and anti-spam rules
-- Promised-date/snooze scope
-- Workflow integration rules
-- Failure/retry/idempotency requirements
-- Audit requirements
-- Security constraints
-- AI boundaries
-- Remaining unresolved decisions
+#### SharePoint/storage job reliability
 
-Deliverable: final Phase 0 architecture freeze and explicit approval/readiness statement for Phase 1.
+One ReceivedDocument has one logical permanent-storage operation/reference.
 
-Only after Phase 0D is reviewed and approved may Phase 1 begin.
+- Retry must resume/reconcile the same logical storage object, not create duplicate permanent files.
+- Use a simple upload path for files within the supported safe threshold and a resumable upload-session path for larger permitted files.
+- Graph currently supports resumable upload sessions; application maximum size may be lower and remains configuration.
+- Replacement/correction never overwrites the original binary as the normal path.
+
+#### Retry / dead-letter policy
+
+All durable integration work distinguishes:
+
+```text
+Pending
+Processing / leased
+RetryPending
+Succeeded
+FailedPermanent / DeadLetter
+Cancelled where applicable
+```
+
+Rules:
+
+- exponential backoff + jitter for transient failures;
+- provider Retry-After respected;
+- configurable max attempts;
+- permanent validation/auth/config errors do not spin forever;
+- dead-letter/manual retry visible in dashboard;
+- manual retry requires authorised actor/reason and appends history;
+- retry never bypasses current authorization/consent when the operation is an outbound send.
+
+#### Idempotency keys
+
+At minimum:
+
+- provider event inbox: provider-scoped EventKey unique;
+- inbound message: provider business endpoint + ProviderMessageId unique;
+- inbound media/artifact: stable provider message/media/attachment identity unique enough to prevent duplicate ReceivedDocument creation;
+- outbound logical message: immutable LogicalMessageKey unique;
+- SharePoint storage: ReceivedDocument has one active logical permanent-storage reference;
+- human commands that may be double-submitted use request/idempotency key where materially harmful.
+
+Never use SHA-256 alone as business idempotency identity.
+
+#### Audit requirements
+
+Append-only audit/history must cover:
+
+- contact/WhatsApp endpoint consent changes;
+- conversation creation/type/provider binding;
+- participant join/leave/remove and authorization-version changes;
+- Engagement-scope approvals/revocations;
+- batch preview/validation/invalidations;
+- exact outbound message snapshot and provider statuses;
+- inbound provider events/messages/media identity;
+- storage attempts/failures/reconciliation;
+- classification/evidence link/unlink/reuse;
+- accept/reject/quarantine/correction;
+- request/item status transitions;
+- promises/snoozes/pause/resume/stop/re-enable;
+- manual follow-up/cooldown override;
+- dead-letter/manual retry;
+- workflow-transition confirmation;
+- document open/download by application users;
+- AI suggestion and human disposition when AI is introduced.
+
+Use correlation IDs across webhook → inbox → media → ReceivedDocument → storage → classification and batch → outbox → provider delivery chains.
+
+#### Security constraints
+
+- Extend existing server-side `AccessScope` pattern; do not authorize from client-hidden fields or CreatedBy.
+- UI state-changing endpoints retain authentication/authorization + CSRF protections.
+- Provider webhook is not CSRF-authenticated; it requires provider verification/signature, strict body/size limits, rate limiting and replay/idempotency controls.
+- Verify webhook signature over original raw bytes with constant-time comparison before processing JSON.
+- Credentials/tokens/certificates stay server-side and out of logs.
+- Structured logs redact/minimize phone numbers, message text, filenames, payloads and document metadata; binaries are never logged.
+- File download is authorized at request time; do not issue anonymous/public SharePoint sharing links as the normal mechanism.
+- Cross-WorkItem reuse is staff-only initially and must pass target WorkItem authorization plus audited reason.
+- Participant changes block outbound communication until engagement scope is re-approved.
+- Scanner unavailable/failed means not safe, not implicitly accepted.
+- No automatic permanent deletion/retention purge is introduced until legal/business retention policy is explicitly approved.
+
+#### AI boundaries
+
+- No AI is used for authorization, consent, policy enforcement, deterministic status, financial state, or send eligibility.
+- Initial AI features remain suggestion-only with human confirmation.
+- Outbound AI wording passes the same deterministic eligibility gate as manual wording.
+- Raw files/conversations are not sent to an AI provider until Phase 17/18 explicitly approves data-processing/retention/security conditions.
+- Record enough AI provenance to evaluate errors and reproduce the operational decision context without making the model output authoritative.
+
+#### Test / CI acceptance gates for implementation
+
+Relevant later phases must add tests for:
+
+- ContactWhatsAppAddress normalization/uniqueness/consent precedence;
+- participant-change authorization invalidation;
+- Engagement-scope and cross-company batch confidentiality;
+- stale batch rejection at queue time;
+- unclassified artifact access boundaries;
+- cross-WorkItem evidence reuse authorization;
+- request activation only after provider-accepted send;
+- valid/invalid webhook signatures;
+- duplicate/replayed provider events/messages/media;
+- outbox worker concurrency/restart/idempotency;
+- ambiguous-send handling;
+- retry/backoff/dead-letter/manual retry;
+- SharePoint single-object retry/reconciliation and temporary-file cleanup;
+- role/access tampering and file-download authorization;
+- workflow human-confirmation isolation from financial/WorkItem state.
+
+CI uses deterministic provider/storage fakes and fixtures without production credentials. Live Meta/SharePoint smoke tests, when added, run only in a controlled environment with explicitly provisioned test resources.
+
+#### External configuration prerequisites / intentionally dynamic items
+
+Before relevant integration coding, verify the actual environment:
+
+- Meta Business Portfolio / WhatsApp Business Account / business phone number and Cloud API access.
+- Whether the actual Meta account/number currently supports Groups API; exact current eligibility and limits.
+- Current template, service-window, opt-in, pricing and rate-limit rules.
+- Webhook app secret/verification configuration.
+- Microsoft Entra app registration and tenant-admin consent path.
+- Dedicated SharePoint site/library IDs and ability to grant Selected app permissions.
+- App credential method and rotation plan.
+- Approved scanner/file-size/temp-spool settings.
+- Business/legal retention policy for permanent client documents and message/audit data.
+
+If an external prerequisite is unavailable, implementation stops at the approved abstraction/fake boundary rather than weakening security or inventing credentials.
+
+### Phase 0 Final Architecture Readiness
+
+**Phase 0 is approved and frozen.**
+
+No blocking core entity, authorization boundary, storage boundary, workflow boundary, automation rule, reliability pattern, security constraint, or AI authority question remains for beginning the staged implementation roadmap.
+
+The following remain intentionally dynamic and are not architecture blockers: current provider account eligibility, numeric API limits/pricing, tenant grants, exact implementation class/table names, file-size/temp TTL settings, scanner product, and legal retention duration. Those are verified/configured in their implementation phase without violating the frozen boundaries above.
+
+Phase 1 may begin only after explicit instruction and must not silently implement Phase 4/7/8/9/14+ concerns ahead of schedule.
 
 ### Phase 1 — Core Database Model
 
-Add only the structural entities/enums/migration/tests.
+Add only the Phase 0B structural entities/enums/migration/tests required for the deterministic core model.
 
-No WhatsApp API. No SharePoint API. No AI.
+No Contact/PIC implementation yet. No WhatsApp API. No SharePoint API. No background provider jobs. No AI.
 
-Split into smaller `1A/1B/...` execution units before implementation if repository inspection shows the migration/model work is too broad for one focused Luna Max run.
+Before coding, split Phase 1 into small `1A/1B/...` execution units if model + histories + invariants + migration + tests are too broad for one Luna Max run.
 
 ### Phase 2 — Document Requirement Templates
 
-Add reusable service-based document requirement templates with Required/Optional, Priority/Wave, display order, active status.
-
-Split before implementation if model, UI, validation, and tests cannot remain one small cohesive change.
+Add reusable service-based templates with Required/Optional, Priority/Wave, display order, version/default/active rules and service consistency.
 
 ### Phase 3 — Document Request Internal UI
 
-Build request/checklist UI and manual state transitions before external integrations.
-
-Split UI, application logic, and workflow integration if the diff would otherwise become broad.
+Build deterministic request/checklist UI and manual state transitions before external integrations.
 
 ### Phase 4 — Contact / PIC Model
 
-Support one PIC across multiple companies/engagements, WhatsApp consent/preferences, pause/do-not-contact.
-
-Split schema/model work from UI/management work where useful.
+Implement approved Contact, ContactWhatsAppAddress, ContactCustomerLink, consent/opt-out and management UI. No WhatsApp sending yet.
 
 ### Phase 5 — Request Batching
 
-Create `DocumentRequestBatch` logic and preview consolidated requests for the same eligible PIC/conversation.
-
-No sending yet.
-
-Split deterministic batching rules from preview UI if needed.
+Implement deterministic batch eligibility/confidentiality and preview using Contact + conversation/scope placeholders or approved data available by that phase. No provider send yet.
 
 ### Phase 6 — Request Waves / Client Workload Control
 
-Implement Start Work / Normal / Later / Optional and default 3–5 client-facing next-action items.
+Implement Start Work / Normal / Later / Optional ranking and default 3–5 client-facing next-action selection.
 
 ### Phase 7 — SharePoint Integration Foundation
 
-Implement `IDocumentStorage` + `SharePointDocumentStorage`, metadata/reference model, safe upload test path.
-
-This milestone should normally be split into smaller execution units such as abstraction/reference model first, provider integration second, and failure/retry test path third.
+Implement storage abstraction/reference model first, then SharePoint provider, then retry/reconciliation/test path as separate focused sub-phases.
 
 ### Phase 8 — WhatsApp Infrastructure
 
-Implement WhatsApp service abstraction, Meta provider, webhook verification, signature validation, message-ID deduplication, logging, retry safety.
-
-Manual/test sending only.
-
-This milestone must be split into smaller execution units before coding; do not implement the entire provider/webhook/reliability stack in one Luna Max run.
+Implement provider abstraction/config, webhook authenticity/inbox, outbound outbox/worker and provider fakes in small sub-phases. Manual/test sending only.
 
 ### Phase 9 — WhatsApp Group / Direct Conversation Management
 
-Implement conversation type, group/direct metadata, participants, authorised scope, and current Meta eligibility handling.
-
-Split data model/rules from management UI/provider-specific behaviour if needed.
+Implement conversation/participants/Engagement scope/authorization-version management and runtime provider capability handling.
 
 ### Phase 10 — Manual WhatsApp Document Request
 
-Add Preview → Send flow. Persist exact outbound snapshot and provider status. Link successful first request to `Document Requested` workflow as approved.
-
-Split message preparation/persistence from provider sending/workflow update if the change becomes broad.
+Implement Preview → revalidate → Queue → Send flow. Persist exact immutable outbound snapshot/provider status. Request becomes `Requested` only after provider acceptance. Assignment workflow remains human-confirmed.
 
 ### Phase 11 — Incoming WhatsApp Messages
 
-Handle inbound text, PDF, image, and document webhooks. Show WhatsApp timeline in Billing Control.
-
-Split webhook ingestion/persistence from timeline UI and media handling.
+Implement inbound event/message timeline and provider-event processing. Split webhook ingestion/persistence from timeline/media handling.
 
 ### Phase 12 — Incoming Document → SharePoint
 
-Download media temporarily, validate, upload to SharePoint, persist metadata/reference, remove temporary copy.
-
-This milestone must be split into smaller execution units covering safe media handling, SharePoint persistence, and failure/retry behaviour.
+Implement safe media handling, validation/scanning, one-object SharePoint persistence, retry/reconciliation and temporary cleanup in small sub-phases.
 
 ### Phase 13 — Manual Document Classification
 
-Build fast worker UI to classify Company + Document Type + Period + Request Item and confirm receipt.
+Build fast staff/authorised-worker classification UI using explicit evidence links and Phase 0C authorization rules.
 
 ### Phase 14 — Automatic Follow-Up Engine
 
-Implement scheduler at PIC/conversation/batch level, business-day/cooling-off rules, outstanding-item selection, Follow up now / Snooze / Pause / Resume / Stop.
-
-This milestone must be split into smaller execution units before coding, for example deterministic scheduling rules, persistence/state transitions, then scheduler execution/UI controls.
+Implement deterministic Contact+Conversation scheduling, holds, cooling-off, batch creation/outbox integration and operational controls in separate sub-phases.
 
 ### Phase 15 — Promised Date Handling
 
-Add promised date and scoped snooze behaviour. Ensure automated reminders respect it.
+Implement scoped promised-date/snooze behaviour and precedence rules.
 
 ### Phase 16 — Workflow Automation
 
-Integrate Document Requested / Ready for Document Received / human Confirm Complete behaviour. Do not auto-drive financial states.
+Implement **human-confirmed** assignment workflow integration for Document Requested / Document Received readiness. Do not auto-drive financial or WorkItem state.
 
 ### Phase 17 — AI Document Classification
 
-Add AI suggestions for Company + Document Type + Period + confidence. Human confirmation first.
-
-Split provider abstraction, suggestion workflow, and UI/validation if needed.
+Implement suggestion-only classification with approved provider/data controls and human confirmation.
 
 ### Phase 18 — AI Conversation Understanding
 
-Detect promised dates, not-applicable statements, and other useful conversation intents as suggestions requiring confirmation initially.
+Implement suggestion-only promise/not-applicable intent detection with human confirmation.
 
 ### Phase 19 — Smart Follow-Up Composition
 
-Use deterministic facts from Billing Control and AI only for natural-language wording.
+Use deterministic approved facts and AI only for wording. Same deterministic send gate applies.
 
 ### Phase 20 — Mature Document Collection Dashboard
 
-Add operational KPIs, PIC-centric view, filters, next-action list, failures, snoozes, classification queue.
-
-Split dashboard data/query work from UI if needed.
+Add operational KPIs, PIC/conversation view, outstanding/holds/classification/auth-review/integration-failure queues and scoped drill-down.
 
 ### Phase 21 — Audit / Reliability / Security Hardening
 
-Verify:
-
-- Webhook idempotency
-- Outbound message outbox
-- Retry policies
-- Duplicate media handling
-- SharePoint failures
-- Dead-letter visibility
-- Concurrency
-- Rate limiting
-- Permissions
-- Audit trail
-- Secrets management
-- Structured logging
-- Health checks
-- CSRF where applicable
-
-This is a milestone, not one Codex run. Split it into focused reliability/security sub-phases and review each separately.
+Verify the frozen Phase 0D controls across integration paths; split into focused reliability/security sub-phases rather than one mega-run.
 
 ### Phase 22 — Controlled Production Rollout
-
-Roll out gradually:
 
 ```text
 Stage 1 — Internal test company
@@ -1352,80 +1334,81 @@ Stage 3 — ~10 customers
 Stage 4 — Normal production
 ```
 
-Monitor complaints, reminder frequency, completion time, WhatsApp failures, SharePoint upload issues, AI classification corrections, and support load.
+Monitor reminder complaints, completion time, authorization-review blocks, provider failures, storage failures, dead letters, classification corrections, workflow overrides and support load.
 
 ---
 
 ## 15. Codex Luna Max Capacity Planning
 
-Use planning capacity only to judge whether a milestone needs splitting. Do not treat a long milestone estimate as permission to give Luna Max one very large task.
-
 Rules:
 
 - **Codex Luna Max is the only Codex model used for this project.**
 - Prefer one cohesive, reviewable execution unit at a time.
-- Any milestone that appears to require several independent changes must be split before coding.
-- External-integration, database, concurrency, security, or reliability work should be split more aggressively.
-- It is acceptable to create more sub-phases than originally planned.
+- Any milestone requiring independent schema, domain logic, integration, concurrency, security, UI and tests must be split.
+- External-integration, database, concurrency, security, migration and reliability work are split more aggressively.
 - Never combine sub-phases merely to reduce the number of Codex runs.
-
-Correct architecture, data integrity, testability, and reviewability matter more than speed.
+- ChatGPT defines/controls architecture and reviews actual diffs; Codex implements the approved small unit; GitHub remains the source of truth.
 
 ---
 
 ## 16. Testing Expectations Per Phase
 
-Every coding phase should include tests appropriate to that phase.
+Every coding phase includes tests appropriate to the change.
 
 At minimum where relevant:
 
 - .NET Release build
 - PostgreSQL integration tests
 - JavaScript tests
-- Authorization/security tests
-- Concurrency/idempotency tests
-- Migration/model consistency checks
+- authorization/security tests
+- concurrency/idempotency tests
+- migration/model consistency checks
 - GitHub Actions
 - Docker/Compose smoke where applicable
 
-Integration phases additionally need provider-specific test evidence without exposing secrets.
+Integration phases additionally use provider/storage fakes and controlled smoke evidence without exposing production secrets.
 
-Do not deploy automatically unless explicitly instructed for the rollout phase.
+Do not deploy automatically unless explicitly instructed for rollout.
 
 ---
 
 ## 17. Codex Working Rules
 
-For every implementation phase or sub-phase:
+For every implementation phase/sub-phase:
 
 1. Use **Codex Luna Max only**.
-2. Start from the latest approved SHA.
-3. Read this master plan and inspect the relevant existing repository code before changing anything.
-4. Implement **only the approved phase/sub-phase** plus directly required support code.
-5. If the requested task becomes broader than expected, stop at a safe boundary and report what should become the next sub-phase rather than expanding scope silently.
+2. Start from the latest approved SHA and pull any ChatGPT GitHub updates first.
+3. Read this master plan and relevant current repository code.
+4. Implement **only** the approved current sub-phase plus directly required support.
+5. If scope expands, stop at a safe boundary and propose the next sub-phase.
 6. Do not silently begin the next phase.
-7. Preserve all current Billing Control business logic unless the phase explicitly changes an approved operational rule.
+7. Preserve current Billing Control business logic unless explicitly changed by an approved rule.
 8. Do not modify the existing 35/25/40 revenue-share logic.
-9. Do not weaken role-based access or historical workflow rules.
+9. Do not weaken role-based access, historical workflow, audit, concurrency or financial isolation.
 10. Add migrations only when the phase explicitly requires schema changes.
-11. Report files changed, migration(s), tests, CI, and final SHA.
-12. Stop and explain when Meta/SharePoint tenant configuration prevents safe implementation rather than inventing credentials or bypassing security.
-13. Update/synchronise `master` and `codex/accounting-mvp` only after the phase/sub-phase is reviewed/approved according to the current development workflow.
+11. Report files changed, migration(s), tests, CI and final SHA.
+12. Stop when Meta/SharePoint/tenant configuration blocks safe work rather than bypassing controls.
+13. Synchronise deployment/default branches only after review/approval according to the project workflow.
 
 ---
 
 ## 18. Deferred / Verify-at-Implementation Items
 
-These items are intentionally not hard-coded into the architecture because external platform rules can change:
+These are intentionally dynamic and are not hard-coded as business invariants:
 
-- Current Meta WhatsApp Group API eligibility and participant limits
-- Current WhatsApp message/template pricing
-- Current template category/classification rules
-- Current customer-service window rules
-- Current Microsoft Graph/SharePoint permission options
-- Current AI model/provider choice and pricing
+- current Meta WhatsApp Groups API eligibility and numeric participant/account limits;
+- current WhatsApp message/template pricing;
+- current template category/classification/service-window/opt-in rules;
+- current provider rate limits;
+- current Microsoft Graph permission/endpoint details and tenant support;
+- exact SharePoint site/library resource grants;
+- exact app credential method/rotation;
+- maximum accepted file size and temporary spool TTL;
+- malware-scanner product;
+- business/legal retention duration;
+- current AI model/provider choice, pricing and data-processing terms.
 
-Verify current official platform documentation when implementing the relevant phase.
+Verify current official documentation/configuration in the relevant implementation phase.
 
 ---
 
@@ -1434,51 +1417,50 @@ Verify current official platform documentation when implementing the relevant ph
 The feature is mature when Billing Control can reliably do this:
 
 ```text
-1. A Work Item identifies required documents from a service template.
-2. Requests for one PIC across eligible companies are intelligently batched.
-3. Staff preview the next small, manageable request set.
-4. Billing Control sends to the approved WhatsApp Group or Direct conversation.
-5. Firm/manager/client/LCM MGT can monitor the authorised conversation where appropriate.
-6. Client replies and sends files in WhatsApp.
-7. Billing Control receives and audits all messages/media.
-8. Files are safely stored in SharePoint.
-9. Documents are classified and matched to company/period/request item.
-10. Follow-ups are consolidated, rate-limited, and limited to the next useful 3–5 items.
-11. Promised dates and pauses are respected.
-12. All mandatory items are confirmed complete.
-13. Workflow can move from Document Requested to Document Received with human confirmation.
-14. Dashboard shows outstanding, overdue, snoozed, complete, classification queue, and failures.
-15. AI assists classification and wording without becoming the source of truth for operational state.
-16. The entire process has a reliable audit trail and safe retry/error handling.
+1. A Work Item identifies required documents from a versioned service template.
+2. PIC/contact + conversation authorization determines which requests may be batched.
+3. Staff preview only the next manageable 3–5 items.
+4. Authorization/consent/policy is revalidated before every queued send.
+5. Billing Control sends to an eligible Group or Direct conversation through a durable outbox.
+6. Firm/manager/client/LCM MGT see only the conversation/scope they are authorised for.
+7. Inbound webhook events are signature-verified, deduplicated and durably processed.
+8. Raw received files are safely validated/scanned and stored once in SharePoint.
+9. Explicit evidence links classify artifacts to zero/one/multiple request items without duplicating the binary.
+10. Follow-ups are consolidated, rate-limited and respect promised dates/snooze/pause/stop.
+11. All mandatory request items require deterministic state plus human completeness confirmation.
+12. Assignment workflow changes remain human-confirmed and separate from financial/WorkItem state.
+13. Dashboard exposes classification, authorization review, storage/provider failure and dead-letter queues.
+14. AI assists classification/understanding/wording without becoming the source of truth.
+15. Every sensitive action has authorization, concurrency protection, audit and safe retry semantics.
 ```
 
 ---
 
 ## 20. Next Action
 
-**Phase 0B is approved. Do not start Phase 0C automatically.**
+**Phase 0 is approved and complete. Do not start Phase 1 automatically.**
 
-When explicitly instructed, begin **Phase 0C — Contact, WhatsApp & SharePoint Boundaries** only. Phase 0C remains a non-coding architecture task covering PIC/contact relationships, group/direct conversation scope, batching confidentiality, SharePoint storage/metadata boundaries, and permission/least-privilege direction.
+When explicitly instructed, prepare the small execution split for **Phase 1 — Core Database Model**, then give Codex Luna Max only the first approved implementation unit.
 
-No production code, migration, provider integration, or Phase 0C work was started in Phase 0B. After Phase 0C, ChatGPT must review the architecture result before Phase 0D begins.
+Phase 1 must implement the deterministic Phase 0B core only. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain in their later roadmap phases even though their architecture is now frozen.
 
 ---
 
 ## 21. AI Development Rules
 
-This file and the current repository are the authoritative source of truth for the project. Previous chat history or AI memory may provide useful context, but must not override the current repository or this plan.
+This file and the current repository are the authoritative source of truth. Chat history or AI memory may provide context but cannot override the current repository/plan.
 
-For every development phase or sub-phase:
+For every development phase/sub-phase:
 
-1. Use **Codex Luna Max only** for Codex work in this project.
-2. Read this master plan before making changes.
-3. Review the current repository implementation relevant to the phase/sub-phase.
-4. Keep the execution unit small and focused. If the work is too broad, split it before implementation rather than forcing a large Codex task.
-5. Work only on the current approved phase/sub-phase unless a directly required supporting change is necessary for correctness.
-6. Do not silently change architecture, business rules, database behaviour, security rules, or previously approved requirements.
-7. After Codex completes work, review the actual code changes rather than relying only on its summary.
-8. Run or review the relevant tests and check for regressions, security issues, data-integrity risks, concurrency issues, and missing requirements where applicable.
-9. Update this master plan when requirements, implementation decisions, architecture, risks, completed work, or project status change.
-10. Keep the **Current Project Status** section accurate, including the current phase/sub-phase, completed work, outstanding work, and next step.
-11. Preserve useful project history; do not rewrite the plan in a way that hides important prior decisions.
+1. ChatGPT owns architecture/design review and project control; Codex implements approved small units.
+2. Use **Codex Luna Max only** for Codex work.
+3. Read this master plan before changing code.
+4. Review current repository implementation relevant to the unit.
+5. Keep execution small/focused; split broad work first.
+6. Work only on the current approved sub-phase.
+7. Do not silently change architecture, business rules, database behaviour, security, external permissions, or financial logic.
+8. Review actual GitHub diffs, not only Codex summaries.
+9. Run/review relevant tests including regression, authorization, concurrency, idempotency and data-integrity checks.
+10. Update this master plan when requirements/implementation decisions/status/risks change.
+11. Preserve project history and previously approved decisions.
 12. Do not begin the next phase/sub-phase until the current one has been reviewed and approved.
