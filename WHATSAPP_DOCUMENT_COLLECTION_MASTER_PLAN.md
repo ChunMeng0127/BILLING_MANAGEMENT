@@ -11,7 +11,7 @@
 ## Current Project Status
 
 **Current Phase:** Phase 0A — Repository & Architecture Inventory  
-**Status:** Complete — Phase 0A findings are recorded and ready for review/approval. Do not begin Phase 0B until this result is approved.
+**Status:** Approved — Phase 0A review is complete. Phase 0B has not started and must not begin until explicitly instructed.  
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -22,22 +22,22 @@
 - Roadmap adjusted for Codex Luna Max only, with small reviewable execution units.
 - Phase 0A repository inventory completed against the current `codex/accounting-mvp` implementation, including entities, workflow/statuses, authorization, database/migration conventions, integration/job abstractions, tests/CI, conflicts, constraints, and unresolved architecture questions.
 - No production code, business logic, schema, migration, provider integration, or Phase 0B design was changed during Phase 0A.
+- ChatGPT review approved Phase 0A against commit `de9ee10a0d884978dce79cb2e6ce0fffbd8e0869`; sampled repository claims matched the current source, and no blocking omission was found for this inventory phase.
 
 ### Current Work
 
-- Review and approve the completed Phase 0A findings below.
-- Keep the authoritative remote plan and repository aligned before Phase 0B begins.
+- Phase 0A is closed and approved.
+- No implementation or Phase 0B work is currently in progress.
 
 ### Outstanding
 
-- Phase 0A — Review/approval of the completed repository and architecture inventory.
 - Phase 0B — Exact core entities, relationships, statuses, and invariants.
 - Phase 0C — PIC, WhatsApp conversation, SharePoint storage/metadata, and permission boundaries.
 - Phase 0D — Follow-up/workflow rules, failure/retry/idempotency, audit, AI boundaries, and final architecture freeze.
 
 ### Next Step
 
-Review the completed **Phase 0A** result and approve/update this file. Do not begin Phase 0B until Phase 0A is approved.
+When explicitly instructed, begin **Phase 0B — Core Data Model Freeze** only. Do not start Phase 0B automatically.
 
 ---
 
@@ -1198,11 +1198,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Start with Phase 0A only.**
+**Phase 0A is approved. Do not start Phase 0B automatically.**
 
-Do not begin implementation. Phase 0A is repository inspection and architecture inventory only. It should validate the current repository against this master plan, record confirmed facts and conflicts, and leave final design decisions for the later Phase 0 sub-phases.
+When explicitly instructed, begin **Phase 0B — Core Data Model Freeze** only. Phase 0B remains a non-coding architecture task: finalise the exact core entities, relationships/cardinalities, statuses/transitions, database invariants/uniqueness rules, and WorkItem/BillingRecord linkage. Do not cover WhatsApp/SharePoint provider implementation in Phase 0B.
 
-After Phase 0A, ChatGPT must review the actual result and update this file before Phase 0B begins.
+After Phase 0B, ChatGPT must review the actual result and update this file before Phase 0C begins.
 
 ---
 
