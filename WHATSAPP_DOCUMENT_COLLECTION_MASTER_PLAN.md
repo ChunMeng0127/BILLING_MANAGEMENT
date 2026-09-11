@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 0 — Architecture Freeze  
-**Status:** Approved — Phases 0A, 0B, 0C, and 0D are complete. Phase 1 has not started and must not begin until explicitly instructed.  
+**Current Phase:** Phase 1A — Core Document Domain Types
+**Status:** Phase 1 has started. Phase 1A is complete and ready for ChatGPT review. Phase 1B and Phase 1C have not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -26,6 +26,8 @@
 - Phase 0D automation, workflow, inbox/outbox reliability, retry/idempotency, audit, security, and AI boundaries completed and approved.
 - Phase 0 external-platform verification was refreshed on 2026-09-12: Meta Cloud API remains the WhatsApp Business Platform integration boundary; group capability remains account/eligibility dependent; Microsoft Graph supports Selected permission scopes for SharePoint/OneDrive and resumable upload sessions.
 - No production code, migration, provider integration, SharePoint integration, background worker, or Phase 1 implementation was started during Phase 0.
+- Phase 1 execution split recorded: 1A core domain types, 1B EF Core persistence/relationships/constraints/indexes/migration, and 1C PostgreSQL integration/invariant/migration tests.
+- Phase 1A core document domain types completed in `src/BillingControl/Models/DocumentCollectionDomain.cs`; no persistence mapping, migration, service, controller, provider, or Phase 1B/1C work was started.
 
 ### Current Work
 
@@ -33,17 +35,17 @@
 - Phase 0B is closed and approved.
 - Phase 0C is closed and approved.
 - Phase 0D is closed and approved.
-- No implementation work is currently in progress.
+- Phase 1A is complete and awaiting ChatGPT review; Phase 1B and Phase 1C have not started.
 
 ### Outstanding
 
-- Phase 1 onward — implementation according to the approved architecture and roadmap.
-- Before Phase 1 coding, split the milestone into small Luna Max execution units and review the exact implementation scope against this frozen architecture.
+- Phase 1B — EF Core persistence, relationships, constraints, indexes, and migration.
+- Phase 1C — PostgreSQL integration, invariant, and migration tests.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-When explicitly instructed, prepare and begin **Phase 1 — Core Database Model** only. Do not begin Phase 1 automatically.
+Review and approve **Phase 1A — Core Document Domain Types**. After explicit approval/instruction, begin **Phase 1B — EF Core persistence, relationships, constraints, indexes and migration** only. Do not start Phase 1B or Phase 1C automatically.
 
 ---
 
@@ -1243,7 +1245,15 @@ Add only the Phase 0B structural entities/enums/migration/tests required for the
 
 No Contact/PIC implementation yet. No WhatsApp API. No SharePoint API. No background provider jobs. No AI.
 
-Before coding, split Phase 1 into small `1A/1B/...` execution units if model + histories + invariants + migration + tests are too broad for one Luna Max run.
+### Phase 1 execution split
+
+Phase 1 is deliberately split into the following bounded execution units:
+
+- **1A — Core Document Domain Types:** add the approved CLR enums and `Record`-derived document-collection entities, snapshots, self-references, evidence lifecycle, batch scaffold, and append-only history types. **Complete and ready for ChatGPT review.**
+- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, and the EF migration. **Not started.**
+- **1C — PostgreSQL Tests:** add integration coverage for invariants, transitions, concurrency, cancellation, evidence correction/reuse, template consistency, default-template uniqueness, and migration application. **Not started.**
+
+Only 1A was approved for this execution. Do not start 1B or 1C automatically.
 
 ### Phase 2 — Document Requirement Templates
 
@@ -1438,11 +1448,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Do not start Phase 1 automatically.**
+**Phase 0 is approved and complete. Phase 1A is complete and ready for review. Do not start Phase 1B automatically.**
 
-When explicitly instructed, prepare the small execution split for **Phase 1 — Core Database Model**, then give Codex Luna Max only the first approved implementation unit.
+The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Review 1A before explicitly instructing the next unit.
 
-Phase 1 must implement the deterministic Phase 0B core only. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain in their later roadmap phases even though their architecture is now frozen.
+Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B and Phase 1C have not started. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
 
 ---
 
