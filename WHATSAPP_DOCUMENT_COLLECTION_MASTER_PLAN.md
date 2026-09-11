@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 1A — Core Document Domain Types
-**Status:** Phase 1 has started. Phase 1A is complete and ready for ChatGPT review. Phase 1B and Phase 1C have not started.
+**Current Phase:** Phase 1B — EF Core Persistence, Constraints and Migration
+**Status:** Phase 1A is approved/closed. Phase 1B is complete and awaiting ChatGPT review. Phase 1C has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -27,7 +27,8 @@
 - Phase 0 external-platform verification was refreshed on 2026-09-12: Meta Cloud API remains the WhatsApp Business Platform integration boundary; group capability remains account/eligibility dependent; Microsoft Graph supports Selected permission scopes for SharePoint/OneDrive and resumable upload sessions.
 - No production code, migration, provider integration, SharePoint integration, background worker, or Phase 1 implementation was started during Phase 0.
 - Phase 1 execution split recorded: 1A core domain types, 1B EF Core persistence/relationships/constraints/indexes/migration, and 1C PostgreSQL integration/invariant/migration tests.
-- Phase 1A core document domain types completed in `src/BillingControl/Models/DocumentCollectionDomain.cs`; no persistence mapping, migration, service, controller, provider, or Phase 1B/1C work was started.
+- Phase 1A core document domain types are approved/closed in `src/BillingControl/Models/DocumentCollectionDomain.cs`.
+- Phase 1B EF Core persistence is complete and awaiting review: document DbSets, explicit restrictive relationships, validation checks, unique/partial indexes, the template/service consistency trigger, concurrency mapping, history protection, and one additive migration were added. No document-collection data was backfilled.
 
 ### Current Work
 
@@ -35,17 +36,18 @@
 - Phase 0B is closed and approved.
 - Phase 0C is closed and approved.
 - Phase 0D is closed and approved.
-- Phase 1A is complete and awaiting ChatGPT review; Phase 1B and Phase 1C have not started.
+- Phase 1A is approved and closed.
+- Phase 1B is complete and awaiting ChatGPT review.
+- Phase 1C has not started.
 
 ### Outstanding
 
-- Phase 1B — EF Core persistence, relationships, constraints, indexes, and migration.
 - Phase 1C — PostgreSQL integration, invariant, and migration tests.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Review and approve **Phase 1A — Core Document Domain Types**. After explicit approval/instruction, begin **Phase 1B — EF Core persistence, relationships, constraints, indexes and migration** only. Do not start Phase 1B or Phase 1C automatically.
+Review and approve **Phase 1B — EF Core Persistence, Constraints and Migration**. After explicit approval/instruction, begin **Phase 1C — PostgreSQL Tests** only. Do not start Phase 1C automatically.
 
 ---
 
@@ -1249,11 +1251,11 @@ No Contact/PIC implementation yet. No WhatsApp API. No SharePoint API. No backgr
 
 Phase 1 is deliberately split into the following bounded execution units:
 
-- **1A — Core Document Domain Types:** add the approved CLR enums and `Record`-derived document-collection entities, snapshots, self-references, evidence lifecycle, batch scaffold, and append-only history types. **Complete and ready for ChatGPT review.**
-- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, and the EF migration. **Not started.**
+- **1A — Core Document Domain Types:** add the approved CLR enums and `Record`-derived document-collection entities, snapshots, self-references, evidence lifecycle, batch scaffold, and append-only history types. **Approved and closed.**
+- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, and the EF migration. **Complete and awaiting ChatGPT review.**
 - **1C — PostgreSQL Tests:** add integration coverage for invariants, transitions, concurrency, cancellation, evidence correction/reuse, template consistency, default-template uniqueness, and migration application. **Not started.**
 
-Only 1A was approved for this execution. Do not start 1B or 1C automatically.
+1A and 1B are complete only within their stated boundaries. Do not start 1C automatically; it requires explicit review/approval of 1B.
 
 ### Phase 2 — Document Requirement Templates
 
@@ -1448,11 +1450,11 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is complete and ready for review. Do not start Phase 1B automatically.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is complete and ready for review. Do not start Phase 1C automatically.**
 
-The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Review 1A before explicitly instructing the next unit.
+The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Review 1B before explicitly instructing the next unit.
 
-Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B and Phase 1C have not started. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
+Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B added only their EF Core persistence mapping, PostgreSQL constraints/indexes, the service/template consistency trigger, concurrency/history persistence conventions, and one additive migration. Phase 1C has not started. Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
 
 ---
 
@@ -1578,3 +1580,14 @@ Accepted-document correction remains atomic:
 - Aggregate state changes, evidence changes and histories are transactionally consistent with optimistic concurrency plus serializable/locking patterns where needed.
 - History rows are append-only.
 - Request cancellation never mutates the shared raw artifact; it affects only the cancelled request/items and its evidence memberships.
+
+### Phase 1B persistence implementation record
+
+- The Phase 1A entities are mapped through `AppDbContext` with PostgreSQL integer enum columns, the existing `Record.Version` optimistic-concurrency token, audit-field handling, and restrictive delete behavior for every document-collection foreign key.
+- The selected template/service invariant is enforced by a PostgreSQL `DEFERRABLE INITIALLY DEFERRED` constraint trigger on `DocumentRequests`. At transaction completion it joins `WorkItems → BillingRecords → Engagements` and compares the authoritative `Engagement.ServiceId` with the selected template's `ServiceId`; it covers request creation and replacement/update without trusting a caller-supplied service value.
+- `DocumentRequirementTemplate.TemplateVersion` is the physical business-version property. This intentionally avoids conflating it with the inherited `Record.Version` concurrency token; the approved `(ServiceId, TemplateKey, Version)` rule means `TemplateVersion` in the CLR/SQL model.
+- The database migration adds the approved composite uniques, positive/non-negative/value-format checks, partial unique indexes for one active/default template per service and one current request per WorkItem, non-self replacement/duplicate checks, SHA-256 detection indexing (not uniqueness), and explicit restrictive self/reference foreign keys. Replacement/duplicate acyclicity beyond direct self-reference remains an application/service responsibility.
+- The exact Phase 0B status values are persisted as integer enum columns; transition legality remains an explicit domain-service rule and is not broadened by this persistence-only phase. No request/item/artifact transition changes financial, WorkItem, or assignment state automatically.
+- Raw `ReceivedDocument` rows remain valid without evidence and have no WorkItem, BillingRecord, DocumentRequest, or DocumentRequestItem foreign key. Evidence is the only classification link and is retained through its active/inactive lifecycle.
+- The four new history entities are append-only through the existing `SaveChangesAsync` protection: ordinary modification is rejected and the existing record-deletion guard rejects deletion. Current request, item, evidence, artifact, template, and batch records remain generally mutable for their later approved domain transitions; transition-specific immutable-field enforcement belongs to the relevant domain services.
+- The migration is additive and deliberately does not backfill legacy `DocumentRequested`/`DocumentReceived` workflow rows or create synthetic requests/artifacts. Phase 1C PostgreSQL invariant/migration tests have not started.

@@ -30,6 +30,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<WorkerPaymentAllocation> WorkerPaymentAllocations => Set<WorkerPaymentAllocation>();
     public DbSet<CustomerReceipt> CustomerReceipts => Set<CustomerReceipt>();
     public DbSet<CustomerReceiptAllocation> CustomerReceiptAllocations => Set<CustomerReceiptAllocation>();
+    public DbSet<DocumentRequirementTemplate> DocumentRequirementTemplates => Set<DocumentRequirementTemplate>();
+    public DbSet<DocumentRequirementTemplateItem> DocumentRequirementTemplateItems => Set<DocumentRequirementTemplateItem>();
+    public DbSet<DocumentRequest> DocumentRequests => Set<DocumentRequest>();
+    public DbSet<DocumentRequestItem> DocumentRequestItems => Set<DocumentRequestItem>();
+    public DbSet<ReceivedDocument> ReceivedDocuments => Set<ReceivedDocument>();
+    public DbSet<DocumentRequestItemEvidence> DocumentRequestItemEvidences => Set<DocumentRequestItemEvidence>();
+    public DbSet<DocumentRequestBatch> DocumentRequestBatches => Set<DocumentRequestBatch>();
+    public DbSet<DocumentRequestBatchMember> DocumentRequestBatchMembers => Set<DocumentRequestBatchMember>();
+    public DbSet<DocumentRequestStatusHistory> DocumentRequestStatusHistories => Set<DocumentRequestStatusHistory>();
+    public DbSet<DocumentRequestItemStatusHistory> DocumentRequestItemStatusHistories => Set<DocumentRequestItemStatusHistory>();
+    public DbSet<ReceivedDocumentStatusHistory> ReceivedDocumentStatusHistories => Set<ReceivedDocumentStatusHistory>();
+    public DbSet<DocumentRequestItemEvidenceHistory> DocumentRequestItemEvidenceHistories => Set<DocumentRequestItemEvidenceHistory>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -126,6 +138,126 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<CustomerReceiptAllocation>().ToTable(t => t.HasCheckConstraint("CK_ReceiptAllocation_Amount", "\"Amount\" > 0"));
         b.Entity<WorkerPaymentAllocation>().HasIndex(x => new { x.WorkerPaymentId, x.WorkerAssignmentId }).IsUnique();
         b.Entity<WorkerPaymentAllocation>().ToTable(t => t.HasCheckConstraint("CK_PaymentAllocation", "\"Amount\" > 0"));
+
+        b.Entity<DocumentRequirementTemplate>().Property(x => x.TemplateKey).HasMaxLength(100);
+        b.Entity<DocumentRequirementTemplate>().Property(x => x.Name).HasMaxLength(160);
+        b.Entity<DocumentRequirementTemplate>().Property(x => x.Description).HasMaxLength(2000);
+        b.Entity<DocumentRequirementTemplate>().HasIndex(x => new { x.ServiceId, x.TemplateKey, x.TemplateVersion }).IsUnique();
+        b.Entity<DocumentRequirementTemplate>().HasIndex(x => x.ServiceId).IsUnique().HasFilter("\"IsActive\" = TRUE AND \"IsDefault\" = TRUE");
+        b.Entity<DocumentRequirementTemplate>().HasOne(x => x.Service).WithMany().HasForeignKey(x => x.ServiceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequirementTemplate>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_DocumentRequirementTemplate_TemplateVersion", "\"TemplateVersion\" > 0");
+            t.HasCheckConstraint("CK_DocumentRequirementTemplate_DefaultRequiresActive", "NOT \"IsDefault\" OR \"IsActive\"");
+        });
+
+        b.Entity<DocumentRequirementTemplateItem>().Property(x => x.RequirementKey).HasMaxLength(100);
+        b.Entity<DocumentRequirementTemplateItem>().Property(x => x.Name).HasMaxLength(160);
+        b.Entity<DocumentRequirementTemplateItem>().Property(x => x.Description).HasMaxLength(2000);
+        b.Entity<DocumentRequirementTemplateItem>().HasIndex(x => new { x.DocumentRequirementTemplateId, x.RequirementKey }).IsUnique();
+        b.Entity<DocumentRequirementTemplateItem>().HasOne(x => x.DocumentRequirementTemplate)
+            .WithMany(x => x.Items).HasForeignKey(x => x.DocumentRequirementTemplateId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequirementTemplateItem>().ToTable(t =>
+            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0"));
+
+        b.Entity<DocumentRequest>().HasIndex(x => new { x.WorkItemId, x.Revision }).IsUnique();
+        b.Entity<DocumentRequest>().HasIndex(x => x.WorkItemId).IsUnique()
+            .HasFilter("\"Status\" IN (0, 1, 2, 3, 4, 5)");
+        b.Entity<DocumentRequest>().HasOne(x => x.WorkItem).WithMany().HasForeignKey(x => x.WorkItemId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequest>().HasOne(x => x.DocumentRequirementTemplate).WithMany(x => x.Requests)
+            .HasForeignKey(x => x.DocumentRequirementTemplateId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequest>().HasOne(x => x.SupersedesRequest).WithMany(x => x.SupersedingRequests)
+            .HasForeignKey(x => x.SupersedesRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequest>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_DocumentRequest_Revision", "\"Revision\" > 0");
+            t.HasCheckConstraint("CK_DocumentRequest_NoSelfSupersession", "\"SupersedesRequestId\" IS NULL OR \"SupersedesRequestId\" <> \"Id\"");
+        });
+
+        b.Entity<DocumentRequestItem>().Property(x => x.RequirementKey).HasMaxLength(100);
+        b.Entity<DocumentRequestItem>().Property(x => x.RequirementName).HasMaxLength(160);
+        b.Entity<DocumentRequestItem>().Property(x => x.RequirementDescription).HasMaxLength(2000);
+        b.Entity<DocumentRequestItem>().HasIndex(x => new { x.DocumentRequestId, x.RequirementKey }).IsUnique();
+        b.Entity<DocumentRequestItem>().HasOne(x => x.DocumentRequest).WithMany(x => x.Items)
+            .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestItem>().HasOne(x => x.DocumentRequirementTemplateItem).WithMany(x => x.RequestItems)
+            .HasForeignKey(x => x.DocumentRequirementTemplateItemId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestItem>().ToTable(t =>
+            t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0"));
+
+        b.Entity<ReceivedDocument>().Property(x => x.SenderSnapshot).HasMaxLength(254);
+        b.Entity<ReceivedDocument>().Property(x => x.SourceSnapshot).HasMaxLength(254);
+        b.Entity<ReceivedDocument>().Property(x => x.OriginalFileName).HasMaxLength(512);
+        b.Entity<ReceivedDocument>().Property(x => x.MimeType).HasMaxLength(254);
+        b.Entity<ReceivedDocument>().Property(x => x.Sha256Hash).HasMaxLength(64);
+        b.Entity<ReceivedDocument>().HasIndex(x => x.Sha256Hash);
+        b.Entity<ReceivedDocument>().HasOne(x => x.SupersedesReceivedDocument).WithMany(x => x.SupersedingDocuments)
+            .HasForeignKey(x => x.SupersedesReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReceivedDocument>().HasOne(x => x.DuplicateOfReceivedDocument).WithMany(x => x.DuplicateDocuments)
+            .HasForeignKey(x => x.DuplicateOfReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ReceivedDocument>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" >= 0");
+            t.HasCheckConstraint("CK_ReceivedDocument_Sha256Hash", "\"Sha256Hash\" IS NULL OR \"Sha256Hash\" ~ '^[0-9A-Fa-f]{64}$'");
+            t.HasCheckConstraint("CK_ReceivedDocument_NoSelfSupersession", "\"SupersedesReceivedDocumentId\" IS NULL OR \"SupersedesReceivedDocumentId\" <> \"Id\"");
+            t.HasCheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
+        });
+
+        b.Entity<DocumentRequestItemEvidence>().Property(x => x.InactivationReason).HasMaxLength(2000);
+        b.Entity<DocumentRequestItemEvidence>().HasIndex(x => new { x.DocumentRequestItemId, x.ReceivedDocumentId }).IsUnique();
+        b.Entity<DocumentRequestItemEvidence>().HasOne(x => x.DocumentRequestItem).WithMany(x => x.EvidenceLinks)
+            .HasForeignKey(x => x.DocumentRequestItemId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestItemEvidence>().HasOne(x => x.ReceivedDocument).WithMany(x => x.EvidenceLinks)
+            .HasForeignKey(x => x.ReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestItemEvidence>().ToTable(t =>
+            t.HasCheckConstraint("CK_DocumentRequestItemEvidence_Lifecycle", "(\"IsActive\" AND \"InactivatedAt\" IS NULL AND \"InactivationReason\" IS NULL) OR (NOT \"IsActive\" AND \"InactivatedAt\" IS NOT NULL AND \"InactivationReason\" IS NOT NULL)"));
+
+        b.Entity<DocumentRequestBatchMember>().HasIndex(x => new { x.DocumentRequestBatchId, x.DocumentRequestId }).IsUnique();
+        b.Entity<DocumentRequestBatchMember>().HasOne(x => x.DocumentRequestBatch).WithMany(x => x.Members)
+            .HasForeignKey(x => x.DocumentRequestBatchId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestBatchMember>().HasOne(x => x.DocumentRequest).WithMany(x => x.BatchMemberships)
+            .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<DocumentRequestStatusHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<DocumentRequestStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<DocumentRequestStatusHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<DocumentRequestStatusHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<DocumentRequestStatusHistory>().Property(x => x.CorrelationId).HasMaxLength(254);
+        b.Entity<DocumentRequestStatusHistory>().HasIndex(x => new { x.DocumentRequestId, x.OccurredAt });
+        b.Entity<DocumentRequestStatusHistory>().HasOne(x => x.DocumentRequest).WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<DocumentRequestItemStatusHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<DocumentRequestItemStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<DocumentRequestItemStatusHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<DocumentRequestItemStatusHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<DocumentRequestItemStatusHistory>().Property(x => x.CorrelationId).HasMaxLength(254);
+        b.Entity<DocumentRequestItemStatusHistory>().HasIndex(x => new { x.DocumentRequestItemId, x.OccurredAt });
+        b.Entity<DocumentRequestItemStatusHistory>().HasOne(x => x.DocumentRequestItem).WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.DocumentRequestItemId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<ReceivedDocumentStatusHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<ReceivedDocumentStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<ReceivedDocumentStatusHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<ReceivedDocumentStatusHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<ReceivedDocumentStatusHistory>().Property(x => x.CorrelationId).HasMaxLength(254);
+        b.Entity<ReceivedDocumentStatusHistory>().HasIndex(x => new { x.ReceivedDocumentId, x.OccurredAt });
+        b.Entity<ReceivedDocumentStatusHistory>().HasOne(x => x.ReceivedDocument).WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.ReceivedDocumentId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<DocumentRequestItemEvidenceHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<DocumentRequestItemEvidenceHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<DocumentRequestItemEvidenceHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<DocumentRequestItemEvidenceHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<DocumentRequestItemEvidenceHistory>().Property(x => x.CorrelationId).HasMaxLength(254);
+        b.Entity<DocumentRequestItemEvidenceHistory>().HasIndex(x => new { x.DocumentRequestItemEvidenceId, x.OccurredAt });
+        b.Entity<DocumentRequestItemEvidenceHistory>().HasOne(x => x.DocumentRequestItemEvidence).WithMany(x => x.History)
+            .HasForeignKey(x => x.DocumentRequestItemEvidenceId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<DocumentRequestStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
+        b.Entity<DocumentRequestItemStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestItemStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
+        b.Entity<ReceivedDocumentStatusHistory>().ToTable(t => t.HasCheckConstraint("CK_ReceivedDocumentStatusHistory_Actor", "length(btrim(\"Actor\")) > 0"));
+        b.Entity<DocumentRequestItemEvidenceHistory>().ToTable(t => t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Actor", "length(btrim(\"Actor\")) > 0"));
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
     }
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -151,6 +283,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     InvoiceLine => ["BillingRecordId", "AllocatedAmount"],
                     WeeklyProgressReport => ["ProgressPercent", "ProgressStatus", "WorkflowStatusAtSubmission", "WorkflowVersionAtSubmission", "WorkDone", "NextAction", "IssuesOrBlockers"],
                     WeeklyProgressUpdateHistory => [],
+                    DocumentRequestStatusHistory => [],
+                    DocumentRequestItemStatusHistory => [],
+                    ReceivedDocumentStatusHistory => [],
+                    DocumentRequestItemEvidenceHistory => [],
                     WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                     WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                     CustomerReceipt => allowReceiptAllocationCorrection
