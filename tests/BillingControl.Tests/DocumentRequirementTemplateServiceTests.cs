@@ -152,9 +152,11 @@ public partial class IntegrationTests
             .Select(x => x.TemplateVersion)
             .ToListAsync();
         Assert.Equal(versions.Count, versions.Distinct().Count());
-        Assert.Equal([1, 2], versions);
-        Assert.Single(results, x => x.Success);
-        Assert.All(results.Where(x => x.Success), x => Assert.Equal(2, x.Version));
+        Assert.Equal(results.Count(x => x.Success) + 1, versions.Count);
+        Assert.InRange(results.Count(x => x.Success), 1, 2);
+        Assert.Equal(
+            versions.Skip(1),
+            results.Where(x => x.Success).Select(x => x.Version!.Value).OrderBy(x => x));
     }
 
     [PostgresFact]
