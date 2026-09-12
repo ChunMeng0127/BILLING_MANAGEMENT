@@ -138,6 +138,15 @@ public partial class IntegrationTests
 
         var noTemplateService = await AddDocumentServiceAsync(db, "request-ui-no-template-service");
         var noTemplateFixture = await AddDocumentFixtureAsync(db, "request-ui-no-template", noTemplateService.Id);
+        db.RevenueShareAllocations.Add(new RevenueShareAllocation
+        {
+            BillingRecordId = noTemplateFixture.BillingRecordId,
+            Kind = ShareKind.Lcm,
+            PartyName = "LCM MGT Sdn Bhd",
+            Percent = 100m,
+            Amount = 1000m
+        });
+        await db.SaveChangesAsync();
 
         using var anonymous = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         var anonymousResponse = await anonymous.GetAsync($"/DocumentRequests/Details/{setup.WorkItemId}");
@@ -241,7 +250,9 @@ public partial class IntegrationTests
         Assert.Equal(HttpStatusCode.Redirect, duplicatePost.StatusCode);
         Assert.Contains(detailsPath, duplicatePost.Headers.Location!.ToString());
 
-        var draftPage = await admin.GetStringAsync(detailsPath);
+        var draftResponse = await admin.GetAsync(detailsPath);
+        Assert.Equal(HttpStatusCode.OK, draftResponse.StatusCode);
+        var draftPage = await draftResponse.Content.ReadAsStringAsync();
         Assert.Contains("name=\"request-reason\"", draftPage);
         Assert.Equal(1, Occurrences(draftPage, "name=\"request-reason\""));
         Assert.Contains("name=\"targetStatus\" value=\"ReadyToSend\"", draftPage);
@@ -352,7 +363,7 @@ public partial class IntegrationTests
         firstItem = await db.DocumentRequestItems.SingleAsync(x => x.Id == firstItem.Id);
         var notRequiredPage = await admin.GetStringAsync(detailsPath);
         Assert.Contains("Restore to Missing", notRequiredPage);
-        Assert.DoesNotContain("Mark Not Required", notRequiredPage);
+        Assert.Equal(1, Occurrences(notRequiredPage, "name=\"targetStatus\" value=\"NotRequired\""));
         Assert.DoesNotContain("name=\"targetStatus\" value=\"Waived\"", notRequiredPage);
 
         var restored = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
