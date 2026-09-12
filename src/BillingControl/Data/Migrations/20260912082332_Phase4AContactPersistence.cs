@@ -193,6 +193,16 @@ namespace BillingControl.Data.Migrations
                     ContactWhatsAppAddressId = table.Column<int>(type: "integer", nullable: false),
                     PreviousConsentState = table.Column<int>(type: "integer", nullable: true),
                     NewConsentState = table.Column<int>(type: "integer", nullable: false),
+                    PreviousConsentRecordedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    NewConsentRecordedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PreviousConsentSource = table.Column<string>(type: "character varying(254)", maxLength: 254, nullable: true),
+                    NewConsentSource = table.Column<string>(type: "character varying(254)", maxLength: 254, nullable: true),
+                    PreviousConsentEvidenceReference = table.Column<string>(type: "character varying(254)", maxLength: 254, nullable: true),
+                    NewConsentEvidenceReference = table.Column<string>(type: "character varying(254)", maxLength: 254, nullable: true),
+                    PreviousLastOptOutAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    NewLastOptOutAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PreviousLastOptOutReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
+                    NewLastOptOutReason = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true),
                     PreviousIsActive = table.Column<bool>(type: "boolean", nullable: true),
                     NewIsActive = table.Column<bool>(type: "boolean", nullable: false),
                     PreviousIsPrimary = table.Column<bool>(type: "boolean", nullable: true),
@@ -214,6 +224,13 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_ContactWhatsAppAddressHistories", x => x.Id);
                     table.CheckConstraint("CK_ContactWhatsAppAddressHistory_ConsentState", "(\"PreviousConsentState\" IS NULL OR \"PreviousConsentState\" IN (0, 1, 2)) AND \"NewConsentState\" IN (0, 1, 2)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_NewDoNotWhatsAppConsent", "\"NewConsentState\" <> 2 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND \"NewLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewLastOptOutReason\", ''))) > 0)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_NewOptedInConsent", "\"NewConsentState\" <> 1 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"NewConsentEvidenceReference\", ''))) > 0)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_NewUnknownConsent", "\"NewConsentState\" <> 0 OR (\"NewConsentRecordedAt\" IS NULL AND \"NewConsentSource\" IS NULL AND \"NewConsentEvidenceReference\" IS NULL)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousCreationSnapshot", "\"PreviousConsentState\" IS NOT NULL OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL AND \"PreviousLastOptOutAt\" IS NULL AND \"PreviousLastOptOutReason\" IS NULL)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousDoNotWhatsAppConsent", "\"PreviousConsentState\" <> 2 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND \"PreviousLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousLastOptOutReason\", ''))) > 0)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousOptedInConsent", "\"PreviousConsentState\" <> 1 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"PreviousConsentEvidenceReference\", ''))) > 0)");
+                    table.CheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousUnknownConsent", "\"PreviousConsentState\" <> 0 OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL)");
                     table.CheckConstraint("CK_ContactWhatsAppAddressHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
                     table.ForeignKey(
                         name: "FK_ContactWhatsAppAddressHistories_ContactWhatsAppAddresses_Co~",

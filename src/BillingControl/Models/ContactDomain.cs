@@ -92,6 +92,16 @@ public class ContactWhatsAppAddressHistory : Record
     public ContactWhatsAppAddress ContactWhatsAppAddress { get; set; } = null!;
     public ContactWhatsAppConsentState? PreviousConsentState { get; set; }
     public ContactWhatsAppConsentState NewConsentState { get; set; }
+    public DateTime? PreviousConsentRecordedAt { get; set; }
+    public DateTime? NewConsentRecordedAt { get; set; }
+    public string? PreviousConsentSource { get; set; }
+    public string? NewConsentSource { get; set; }
+    public string? PreviousConsentEvidenceReference { get; set; }
+    public string? NewConsentEvidenceReference { get; set; }
+    public DateTime? PreviousLastOptOutAt { get; set; }
+    public DateTime? NewLastOptOutAt { get; set; }
+    public string? PreviousLastOptOutReason { get; set; }
+    public string? NewLastOptOutReason { get; set; }
     public bool? PreviousIsActive { get; set; }
     public bool NewIsActive { get; set; }
     public bool? PreviousIsPrimary { get; set; }

@@ -411,6 +411,198 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task ContactAddressHistorySnapshotsConsentEvidenceAcrossTransitions()
+    {
+        await using var db = await Fresh();
+        var contact = await AddContactAsync(db, "consent-history-contact");
+        var optedInAAt = new DateTime(2026, 9, 12, 3, 0, 0, DateTimeKind.Utc);
+        var optOutAt = new DateTime(2026, 9, 12, 4, 0, 0, DateTimeKind.Utc);
+        var optedInBAt = new DateTime(2026, 9, 12, 5, 0, 0, DateTimeKind.Utc);
+        var address = await AddContactAddressAsync(
+            db,
+            contact.Id,
+            "+60912345678",
+            consentState: ContactWhatsAppConsentState.OptedIn,
+            consentRecordedAt: optedInAAt,
+            consentSource: "source-A",
+            consentEvidenceReference: "evidence-A");
+
+        var creationHistory = new ContactWhatsAppAddressHistory
+        {
+            ContactWhatsAppAddressId = address.Id,
+            PreviousConsentState = null,
+            NewConsentState = ContactWhatsAppConsentState.OptedIn,
+            NewConsentRecordedAt = optedInAAt,
+            NewConsentSource = "source-A",
+            NewConsentEvidenceReference = "evidence-A",
+            PreviousIsActive = null,
+            NewIsActive = true,
+            PreviousIsPrimary = null,
+            NewIsPrimary = false,
+            Action = "Created",
+            Actor = "tester",
+            Source = "integration",
+            OccurredAt = optedInAAt
+        };
+        db.ContactWhatsAppAddressHistories.Add(creationHistory);
+        await db.SaveChangesAsync();
+
+        ContactWhatsAppAddressHistory optOutHistory;
+        await using (var optOut = Db())
+        {
+            var row = await optOut.ContactWhatsAppAddresses.SingleAsync(x => x.Id == address.Id);
+            row.ConsentState = ContactWhatsAppConsentState.DoNotWhatsApp;
+            row.ConsentRecordedAt = optOutAt;
+            row.ConsentSource = "source-opt-out";
+            row.ConsentEvidenceReference = null;
+            row.LastOptOutAt = optOutAt;
+            row.LastOptOutReason = "Client opted out";
+
+            optOutHistory = new ContactWhatsAppAddressHistory
+            {
+                ContactWhatsAppAddressId = address.Id,
+                PreviousConsentState = ContactWhatsAppConsentState.OptedIn,
+                PreviousConsentRecordedAt = optedInAAt,
+                PreviousConsentSource = "source-A",
+                PreviousConsentEvidenceReference = "evidence-A",
+                NewConsentState = ContactWhatsAppConsentState.DoNotWhatsApp,
+                NewConsentRecordedAt = optOutAt,
+                NewConsentSource = "source-opt-out",
+                NewLastOptOutAt = optOutAt,
+                NewLastOptOutReason = "Client opted out",
+                PreviousIsActive = true,
+                NewIsActive = true,
+                PreviousIsPrimary = false,
+                NewIsPrimary = false,
+                Action = "ConsentChanged",
+                Actor = "tester",
+                Source = "integration",
+                OccurredAt = optOutAt
+            };
+            optOut.ContactWhatsAppAddressHistories.Add(optOutHistory);
+            await optOut.SaveChangesAsync();
+        }
+
+        ContactWhatsAppAddressHistory reOptInHistory;
+        await using (var reOptIn = Db())
+        {
+            var row = await reOptIn.ContactWhatsAppAddresses.SingleAsync(x => x.Id == address.Id);
+            row.ConsentState = ContactWhatsAppConsentState.OptedIn;
+            row.ConsentRecordedAt = optedInBAt;
+            row.ConsentSource = "source-B";
+            row.ConsentEvidenceReference = "evidence-B";
+
+            reOptInHistory = new ContactWhatsAppAddressHistory
+            {
+                ContactWhatsAppAddressId = address.Id,
+                PreviousConsentState = ContactWhatsAppConsentState.DoNotWhatsApp,
+                PreviousConsentRecordedAt = optOutAt,
+                PreviousConsentSource = "source-opt-out",
+                PreviousLastOptOutAt = optOutAt,
+                PreviousLastOptOutReason = "Client opted out",
+                NewConsentState = ContactWhatsAppConsentState.OptedIn,
+                NewConsentRecordedAt = optedInBAt,
+                NewConsentSource = "source-B",
+                NewConsentEvidenceReference = "evidence-B",
+                NewLastOptOutAt = optOutAt,
+                NewLastOptOutReason = "Client opted out",
+                PreviousIsActive = true,
+                NewIsActive = true,
+                PreviousIsPrimary = false,
+                NewIsPrimary = false,
+                Action = "ConsentChanged",
+                Actor = "tester",
+                Source = "integration",
+                OccurredAt = optedInBAt
+            };
+            reOptIn.ContactWhatsAppAddressHistories.Add(reOptInHistory);
+            await reOptIn.SaveChangesAsync();
+        }
+
+        var histories = await db.ContactWhatsAppAddressHistories.AsNoTracking()
+            .Where(x => x.ContactWhatsAppAddressId == address.Id)
+            .OrderBy(x => x.Id)
+            .ToListAsync();
+        Assert.Equal(3, histories.Count);
+        var savedCreation = histories.Single(x => x.Id == creationHistory.Id);
+        Assert.Equal(optedInAAt, savedCreation.NewConsentRecordedAt);
+        Assert.Equal("source-A", savedCreation.NewConsentSource);
+        Assert.Equal("evidence-A", savedCreation.NewConsentEvidenceReference);
+
+        var savedOptOut = histories.Single(x => x.Id == optOutHistory.Id);
+        Assert.Equal(ContactWhatsAppConsentState.OptedIn, savedOptOut.PreviousConsentState);
+        Assert.Equal("evidence-A", savedOptOut.PreviousConsentEvidenceReference);
+        Assert.Equal(ContactWhatsAppConsentState.DoNotWhatsApp, savedOptOut.NewConsentState);
+        Assert.Equal(optOutAt, savedOptOut.NewConsentRecordedAt);
+        Assert.Equal("source-opt-out", savedOptOut.NewConsentSource);
+        Assert.Equal(optOutAt, savedOptOut.NewLastOptOutAt);
+        Assert.Equal("Client opted out", savedOptOut.NewLastOptOutReason);
+
+        var savedReOptIn = histories.Single(x => x.Id == reOptInHistory.Id);
+        Assert.Equal(ContactWhatsAppConsentState.DoNotWhatsApp, savedReOptIn.PreviousConsentState);
+        Assert.Equal(optOutAt, savedReOptIn.PreviousLastOptOutAt);
+        Assert.Equal("Client opted out", savedReOptIn.PreviousLastOptOutReason);
+        Assert.Equal(ContactWhatsAppConsentState.OptedIn, savedReOptIn.NewConsentState);
+        Assert.Equal(optedInBAt, savedReOptIn.NewConsentRecordedAt);
+        Assert.Equal("source-B", savedReOptIn.NewConsentSource);
+        Assert.Equal("evidence-B", savedReOptIn.NewConsentEvidenceReference);
+        Assert.Equal(optOutAt, savedReOptIn.NewLastOptOutAt);
+        Assert.Equal("Client opted out", savedReOptIn.NewLastOptOutReason);
+
+        var current = await db.ContactWhatsAppAddresses.AsNoTracking().SingleAsync(x => x.Id == address.Id);
+        Assert.Equal(ContactWhatsAppConsentState.OptedIn, current.ConsentState);
+        Assert.Equal("evidence-B", current.ConsentEvidenceReference);
+        Assert.Equal(optOutAt, current.LastOptOutAt);
+        Assert.Equal("Client opted out", current.LastOptOutReason);
+
+        async Task AssertInvalidHistoryAsync(Action<ContactWhatsAppAddressHistory> configure)
+        {
+            await using var invalid = Db();
+            var history = new ContactWhatsAppAddressHistory
+            {
+                ContactWhatsAppAddressId = address.Id,
+                NewConsentState = ContactWhatsAppConsentState.Unknown,
+                NewIsActive = true,
+                NewIsPrimary = false,
+                Action = "Invalid",
+                Actor = "tester",
+                Source = "integration",
+                OccurredAt = DateTime.UtcNow
+            };
+            configure(history);
+            invalid.ContactWhatsAppAddressHistories.Add(history);
+            await AssertDocumentPersistenceFailure(() => invalid.SaveChangesAsync());
+        }
+
+        await AssertInvalidHistoryAsync(history =>
+        {
+            history.NewConsentState = ContactWhatsAppConsentState.OptedIn;
+            history.NewConsentRecordedAt = optedInAAt;
+            history.NewConsentSource = "missing-evidence";
+        });
+        await AssertInvalidHistoryAsync(history =>
+        {
+            history.NewConsentState = ContactWhatsAppConsentState.DoNotWhatsApp;
+            history.NewConsentRecordedAt = optOutAt;
+            history.NewConsentSource = "missing-opt-out-facts";
+        });
+        await AssertInvalidHistoryAsync(history =>
+        {
+            history.PreviousConsentState = ContactWhatsAppConsentState.OptedIn;
+            history.PreviousConsentRecordedAt = optedInAAt;
+            history.PreviousConsentSource = "source-A";
+        });
+        await AssertInvalidHistoryAsync(history => history.PreviousConsentSource = "state-is-null");
+
+        await using (var immutable = Db())
+        {
+            var history = await immutable.ContactWhatsAppAddressHistories.SingleAsync(x => x.Id == reOptInHistory.Id);
+            history.NewConsentEvidenceReference = "tampered-evidence";
+            await Assert.ThrowsAsync<InvalidOperationException>(() => immutable.SaveChangesAsync());
+        }
+    }
+
+    [PostgresFact]
     public async Task ContactAndLinkIdentityFieldsAndPhysicalDeletesAreProtected()
     {
         await using var db = await Fresh();

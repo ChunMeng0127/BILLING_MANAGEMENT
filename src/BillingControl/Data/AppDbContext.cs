@@ -354,6 +354,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
 
         b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.PreviousProviderWaId).HasMaxLength(254);
         b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.NewProviderWaId).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.PreviousConsentSource).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.NewConsentSource).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.PreviousConsentEvidenceReference).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.NewConsentEvidenceReference).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.PreviousLastOptOutReason).HasMaxLength(2000);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.NewLastOptOutReason).HasMaxLength(2000);
         b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Action).HasMaxLength(80);
         b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Reason).HasMaxLength(2000);
         b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Actor).HasMaxLength(254);
@@ -364,6 +370,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<ContactWhatsAppAddressHistory>().ToTable(t =>
         {
             t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_ConsentState", "(\"PreviousConsentState\" IS NULL OR \"PreviousConsentState\" IN (0, 1, 2)) AND \"NewConsentState\" IN (0, 1, 2)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewUnknownConsent", "\"NewConsentState\" <> 0 OR (\"NewConsentRecordedAt\" IS NULL AND \"NewConsentSource\" IS NULL AND \"NewConsentEvidenceReference\" IS NULL)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewOptedInConsent", "\"NewConsentState\" <> 1 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"NewConsentEvidenceReference\", ''))) > 0)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewDoNotWhatsAppConsent", "\"NewConsentState\" <> 2 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND \"NewLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewLastOptOutReason\", ''))) > 0)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousUnknownConsent", "\"PreviousConsentState\" <> 0 OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousOptedInConsent", "\"PreviousConsentState\" <> 1 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"PreviousConsentEvidenceReference\", ''))) > 0)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousDoNotWhatsAppConsent", "\"PreviousConsentState\" <> 2 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND \"PreviousLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousLastOptOutReason\", ''))) > 0)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousCreationSnapshot", "\"PreviousConsentState\" IS NOT NULL OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL AND \"PreviousLastOptOutAt\" IS NULL AND \"PreviousLastOptOutReason\" IS NULL)");
             t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
         });
 

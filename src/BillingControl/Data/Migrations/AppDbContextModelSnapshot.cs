@@ -698,6 +698,17 @@ namespace BillingControl.Data.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
 
+                    b.Property<string>("NewConsentEvidenceReference")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<DateTime?>("NewConsentRecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NewConsentSource")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
                     b.Property<int>("NewConsentState")
                         .HasColumnType("integer");
 
@@ -707,12 +718,30 @@ namespace BillingControl.Data.Migrations
                     b.Property<bool>("NewIsPrimary")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("NewLastOptOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NewLastOptOutReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.Property<string>("NewProviderWaId")
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
 
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousConsentEvidenceReference")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<DateTime?>("PreviousConsentRecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousConsentSource")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
 
                     b.Property<int?>("PreviousConsentState")
                         .HasColumnType("integer");
@@ -722,6 +751,13 @@ namespace BillingControl.Data.Migrations
 
                     b.Property<bool?>("PreviousIsPrimary")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("PreviousLastOptOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousLastOptOutReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<string>("PreviousProviderWaId")
                         .HasMaxLength(254)
@@ -755,6 +791,20 @@ namespace BillingControl.Data.Migrations
                     b.ToTable("ContactWhatsAppAddressHistories", t =>
                         {
                             t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_ConsentState", "(\"PreviousConsentState\" IS NULL OR \"PreviousConsentState\" IN (0, 1, 2)) AND \"NewConsentState\" IN (0, 1, 2)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewDoNotWhatsAppConsent", "\"NewConsentState\" <> 2 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND \"NewLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewLastOptOutReason\", ''))) > 0)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewOptedInConsent", "\"NewConsentState\" <> 1 OR (\"NewConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"NewConsentEvidenceReference\", ''))) > 0)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_NewUnknownConsent", "\"NewConsentState\" <> 0 OR (\"NewConsentRecordedAt\" IS NULL AND \"NewConsentSource\" IS NULL AND \"NewConsentEvidenceReference\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousCreationSnapshot", "\"PreviousConsentState\" IS NOT NULL OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL AND \"PreviousLastOptOutAt\" IS NULL AND \"PreviousLastOptOutReason\" IS NULL)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousDoNotWhatsAppConsent", "\"PreviousConsentState\" <> 2 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND \"PreviousLastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousLastOptOutReason\", ''))) > 0)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousOptedInConsent", "\"PreviousConsentState\" <> 1 OR (\"PreviousConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"PreviousConsentEvidenceReference\", ''))) > 0)");
+
+                            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_PreviousUnknownConsent", "\"PreviousConsentState\" <> 0 OR (\"PreviousConsentRecordedAt\" IS NULL AND \"PreviousConsentSource\" IS NULL AND \"PreviousConsentEvidenceReference\" IS NULL)");
 
                             t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
                         });
