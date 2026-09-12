@@ -169,7 +169,10 @@ public partial class IntegrationTests
         Assert.Contains("Provider-owned, read-only", detailsWithFirstAddress);
         Assert.DoesNotContain("name=\"ProviderWaId\"", detailsWithFirstAddress);
         var formattedPhoneSearch = Uri.EscapeDataString("+60 (12) 345-6789");
-        Assert.Contains("+60123456789", await admin.GetStringAsync($"/Contacts?search={formattedPhoneSearch}"));
+        var phoneSearchUrl = $"/Contacts?search={formattedPhoneSearch}";
+        var phoneSearch = await admin.GetStringAsync(phoneSearchUrl);
+        var echoedSearch = Regex.Match(phoneSearch, "id=\"Search\"[^>]*value=\"([^\"]*)\"").Groups[1].Value;
+        Assert.True(phoneSearch.Contains("+60123456789"), $"Formatted phone search failed. url={phoneSearchUrl}; echoed={echoedSearch}; noResults={phoneSearch.Contains("No contacts found")}");
 
         var secondAddressResponse = await PostWithToken(admin, $"/Contacts/Details/{contactId}", "/Contacts/AddAddress", new()
         {
