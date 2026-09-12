@@ -154,7 +154,7 @@ public partial class IntegrationTests
 
         var editPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Id"] = payrollItemId.ToString(), ["Name"] = "Payroll register",
+            ["TemplateId"] = secondId.ToString(), ["Id"] = payrollItemId.ToString(), ["RequirementKey"] = "payroll", ["Name"] = "Payroll register",
             ["Description"] = "Edited payroll register", ["IsRequired"] = "true", ["Wave"] = DocumentRequirementWave.StartWork.ToString(),
             ["DisplayOrder"] = "1", ["IsActive"] = "true"
         });

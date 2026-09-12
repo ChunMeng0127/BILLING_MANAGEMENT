@@ -144,7 +144,7 @@ else
 <td><span class="fw-semibold">@item.RequirementKey</span><small class="d-block hint">Key is immutable after creation</small></td>
 <td colspan="5">
 <form asp-action="EditItem" method="post" class="template-item-edit-form">
-<input type="hidden" name="TemplateId" value="@Model.Id" /><input type="hidden" name="Id" value="@item.Id" />
+<input type="hidden" name="TemplateId" value="@Model.Id" /><input type="hidden" name="Id" value="@item.Id" /><input type="hidden" name="RequirementKey" value="@item.RequirementKey" />
 <div class="form-grid compact">
 <input name="Name" class="form-control" maxlength="160" required value="@name" aria-label="@item.RequirementKey name" />
 <input name="Description" class="form-control" maxlength="2000" value="@description" aria-label="@item.RequirementKey description" />
