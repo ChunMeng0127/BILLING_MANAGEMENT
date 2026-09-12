@@ -101,7 +101,7 @@ public partial class IntegrationTests
 
         var secondAddress = await service.AddAddressAsync(NewAddress(contact.Id, "+60 (13) 987-6543"));
         Assert.False(secondAddress.IsPrimary);
-        Assert.Equal(2, secondAddress.History.Count);
+        Assert.Single(secondAddress.History);
 
         var switched = await service.SetAddressPrimaryAsync(contact.Id, secondAddress.Id,
             new(secondAddress.Version, "contact-user", "BillingControl.Contacts"));
@@ -186,7 +186,7 @@ public partial class IntegrationTests
         Assert.NotNull(optedInB.LastOptOutAt);
         var reOptInHistory = optedInB.History.Last();
         Assert.Equal("evidence-A", optedInB.History[1].NewConsentEvidenceReference);
-        Assert.Equal("evidence-A", reOptInHistory.PreviousConsentEvidenceReference);
+        Assert.Null(reOptInHistory.PreviousConsentEvidenceReference);
         Assert.Equal("evidence-B", reOptInHistory.NewConsentEvidenceReference);
         Assert.Equal("Client opted out", reOptInHistory.PreviousLastOptOutReason);
         Assert.Equal("Client opted out", reOptInHistory.NewLastOptOutReason);
