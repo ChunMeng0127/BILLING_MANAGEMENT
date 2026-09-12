@@ -121,6 +121,58 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task TemplateService_ReadsFamiliesFiltersAndRetainsInactiveHistory()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-read-models");
+        var otherServiceMaster = await AddDocumentServiceAsync(db, "template-service-read-models-other");
+        var service = new DocumentRequirementTemplateService(db);
+
+        var alpha = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            "alpha-checklist",
+            "Alpha checklist",
+            null,
+            [
+                new("one", "One", null, true, DocumentRequirementWave.StartWork, 0),
+                new("two", "Two", null, false, DocumentRequirementWave.Normal, 1),
+                new("three", "Three", null, false, DocumentRequirementWave.Later, 2)
+            ]));
+        var alphaV2 = await service.CreateNewVersionAsync(alpha.Id);
+        await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            "beta-checklist",
+            "Beta checklist",
+            null,
+            [new("beta", "Beta", null, true, DocumentRequirementWave.Normal, 0)]));
+        await service.CreateFirstVersionAsync(new(
+            otherServiceMaster.Id,
+            "alpha-checklist",
+            "Other service checklist",
+            null,
+            [new("other", "Other", null, true, DocumentRequirementWave.Normal, 0)]));
+
+        await service.SetTemplateActiveAsync(alpha.Id, false);
+        var alphaItemIds = alphaV2.Items.Select(x => x.Id).ToArray();
+        await service.ReorderItemsAsync(alphaV2.Id, [alphaItemIds[2], alphaItemIds[0], alphaItemIds[1]]);
+        await service.ReorderItemsAsync(alphaV2.Id, [alphaItemIds[1], alphaItemIds[2], alphaItemIds[0]]);
+
+        var serviceModels = await service.GetTemplatesAsync(serviceMaster.Id);
+        Assert.Equal(["alpha-checklist", "alpha-checklist", "beta-checklist"], serviceModels.Select(x => x.TemplateKey).ToArray());
+        Assert.Equal([1, 2], serviceModels.Where(x => x.TemplateKey == "alpha-checklist").Select(x => x.TemplateVersion).ToArray());
+        Assert.False(serviceModels.Single(x => x.Id == alpha.Id).IsActive);
+        Assert.True(serviceModels.Single(x => x.Id == alphaV2.Id).IsActive);
+        Assert.Equal([alphaItemIds[1], alphaItemIds[2], alphaItemIds[0]],
+            serviceModels.Single(x => x.Id == alphaV2.Id).Items.Select(x => x.Id).ToArray());
+
+        var filteredFamily = await service.GetTemplatesAsync(serviceMaster.Id, "alpha-checklist");
+        Assert.Equal([alpha.Id, alphaV2.Id], filteredFamily.Select(x => x.Id).ToArray());
+        var otherServiceFamily = await service.GetTemplatesAsync(otherServiceMaster.Id, "alpha-checklist");
+        Assert.Single(otherServiceFamily);
+        Assert.Equal("Other service checklist", otherServiceFamily[0].Name);
+    }
+
+    [PostgresFact]
     public async Task TemplateService_ConcurrentVersionAllocationDoesNotDuplicateVersions()
     {
         await using var db = await Fresh();

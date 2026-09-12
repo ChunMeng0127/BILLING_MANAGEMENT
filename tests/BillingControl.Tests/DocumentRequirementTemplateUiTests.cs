@@ -127,8 +127,86 @@ public partial class IntegrationTests
         db.ChangeTracker.Clear();
         var firstId = await db.DocumentRequirementTemplates.Where(x => x.TemplateKey == "monthly-checklist").Select(x => x.Id).SingleAsync();
         var secondId = await db.DocumentRequirementTemplates.Where(x => x.TemplateKey == "annual-checklist").Select(x => x.Id).SingleAsync();
+        var firstItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == firstId).Select(x => x.Id).SingleAsync();
+        var secondItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId).Select(x => x.Id).SingleAsync();
         var firstBefore = await db.DocumentRequirementTemplates.AsNoTracking().SingleAsync(x => x.Id == firstId);
         Assert.Equal(1, firstBefore.TemplateVersion);
+
+        var addPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["RequirementKey"] = "payroll", ["Name"] = "Payroll report",
+            ["Description"] = "Monthly payroll", ["IsRequired"] = "false", ["Wave"] = DocumentRequirementWave.Normal.ToString(),
+            ["DisplayOrder"] = "1", ["IsActive"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, addPayroll.StatusCode);
+        db.ChangeTracker.Clear();
+        var payrollItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId && x.RequirementKey == "payroll").Select(x => x.Id).SingleAsync();
+
+        var addTax = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["RequirementKey"] = "tax", ["Name"] = "Tax report",
+            ["Description"] = "Annual tax report", ["IsRequired"] = "false", ["Wave"] = DocumentRequirementWave.Later.ToString(),
+            ["DisplayOrder"] = "2", ["IsActive"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, addTax.StatusCode);
+        db.ChangeTracker.Clear();
+        var taxItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId && x.RequirementKey == "tax").Select(x => x.Id).SingleAsync();
+
+        var editPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = payrollItemId.ToString(), ["Name"] = "Payroll register",
+            ["Description"] = "Edited payroll register", ["IsRequired"] = "true", ["Wave"] = DocumentRequirementWave.StartWork.ToString(),
+            ["DisplayOrder"] = "1", ["IsActive"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, editPayroll.StatusCode);
+
+        var deactivatePayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = payrollItemId.ToString(), ["isActive"] = "false"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, deactivatePayroll.StatusCode);
+        var activatePayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = payrollItemId.ToString(), ["isActive"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, activatePayroll.StatusCode);
+
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/MoveItem", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = taxItemId.ToString(), ["direction"] = "up"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/MoveItem", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = taxItemId.ToString(), ["direction"] = "up"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/MoveItem", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = payrollItemId.ToString(), ["direction"] = "up"
+        })).StatusCode);
+
+        db.ChangeTracker.Clear();
+        var orderedItemIds = await db.DocumentRequirementTemplateItems
+            .Where(x => x.DocumentRequirementTemplateId == secondId)
+            .OrderBy(x => x.DisplayOrder)
+            .Select(x => x.Id)
+            .ToListAsync();
+        Assert.Equal([taxItemId, payrollItemId, secondItemId], orderedItemIds);
+        Assert.Equal("Payroll register", await db.DocumentRequirementTemplateItems.Where(x => x.Id == payrollItemId).Select(x => x.Name).SingleAsync());
+
+        Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = firstItemId.ToString(), ["Name"] = "Forged", ["Wave"] = DocumentRequirementWave.Normal.ToString(), ["DisplayOrder"] = "0", ["IsActive"] = "true"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = firstItemId.ToString(), ["isActive"] = "false"
+        })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/MoveItem", new()
+        {
+            ["templateId"] = secondId.ToString(), ["itemId"] = firstItemId.ToString(), ["direction"] = "up"
+        })).StatusCode);
+        Assert.Equal("Bank statement", await db.DocumentRequirementTemplateItems.Where(x => x.Id == firstItemId).Select(x => x.Name).SingleAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/DocumentRequirementTemplates/Edit/999999")).StatusCode);
 
         var setDefault = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetDefault", new() { ["id"] = secondId.ToString() });
         Assert.Equal(HttpStatusCode.Redirect, setDefault.StatusCode);
@@ -150,6 +228,23 @@ public partial class IntegrationTests
         Assert.Equal([1, 2], versions.Select(x => x.TemplateVersion).ToArray());
         Assert.Equal("Annual checklist", versions[0].Name);
         Assert.Equal("Annual checklist", versions[1].Name);
+        var secondVersionId = versions.Single(x => x.TemplateVersion == 2).Id;
+        Assert.Equal(3, await db.DocumentRequirementTemplateItems.CountAsync(x => x.DocumentRequirementTemplateId == secondVersionId));
+
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetDefault", new() { ["id"] = secondVersionId.ToString() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetActive", new() { ["id"] = secondId.ToString(), ["isActive"] = "false" })).StatusCode);
+        db.ChangeTracker.Clear();
+        Assert.False(await db.DocumentRequirementTemplates.Where(x => x.Id == secondId).Select(x => x.IsActive).SingleAsync());
+        Assert.True(await db.DocumentRequirementTemplates.Where(x => x.Id == secondVersionId).Select(x => x.IsDefault).SingleAsync());
+
+        var serviceFiltered = await admin.GetStringAsync($"/DocumentRequirementTemplates?ServiceId={serviceId}");
+        Assert.Contains("monthly-checklist", serviceFiltered);
+        Assert.Contains("annual-checklist", serviceFiltered);
+        var keyFiltered = await admin.GetStringAsync("/DocumentRequirementTemplates?TemplateKey=annual-checklist");
+        Assert.Contains("annual-checklist", keyFiltered);
+        Assert.DoesNotContain("monthly-checklist", keyFiltered);
+        Assert.Contains("Inactive", keyFiltered);
+        Assert.True(keyFiltered.IndexOf(">v1</a>", StringComparison.Ordinal) < keyFiltered.IndexOf(">v2</a>", StringComparison.Ordinal));
 
         var fixture = await AddDocumentFixtureAsync(db, "template-ui-used", serviceId);
         await AddDocumentRequestAsync(db, fixture.WorkItemId, firstId);
@@ -159,6 +254,14 @@ public partial class IntegrationTests
             WorkItems = await db.WorkItems.CountAsync(),
             WorkerAssignments = await db.WorkerAssignments.CountAsync()
         };
+        var deactivateUsed = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{firstId}", "/DocumentRequirementTemplates/SetActive", new() { ["id"] = firstId.ToString(), ["isActive"] = "false" });
+        Assert.Equal(HttpStatusCode.Redirect, deactivateUsed.StatusCode);
+        db.ChangeTracker.Clear();
+        Assert.False(await db.DocumentRequirementTemplates.Where(x => x.Id == firstId).Select(x => x.IsActive).SingleAsync());
+        var activateUsed = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{firstId}", "/DocumentRequirementTemplates/SetActive", new() { ["id"] = firstId.ToString(), ["isActive"] = "true" });
+        Assert.Equal(HttpStatusCode.Redirect, activateUsed.StatusCode);
+        db.ChangeTracker.Clear();
+        Assert.True(await db.DocumentRequirementTemplates.Where(x => x.Id == firstId).Select(x => x.IsActive).SingleAsync());
         var usedPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{firstId}");
         Assert.Contains("This version has been used and its checklist definition is immutable. Create a new version to make changes.", usedPage);
         Assert.DoesNotContain("name=\"Name\"", usedPage);
