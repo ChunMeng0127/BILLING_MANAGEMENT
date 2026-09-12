@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 1B — EF Core Persistence, Constraints and Migration
-**Status:** Phase 1A is approved/closed. The Phase 1B final persistence correction is complete and awaiting ChatGPT review. Phase 1C has not started.
+**Current Phase:** Phase 1C — PostgreSQL Persistence / Invariant Tests
+**Status:** Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C PostgreSQL persistence/invariant tests are in progress. Phase 2 has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -28,7 +28,7 @@
 - No production code, migration, provider integration, SharePoint integration, background worker, or Phase 1 implementation was started during Phase 0.
 - Phase 1 execution split recorded: 1A core domain types, 1B EF Core persistence/relationships/constraints/indexes/migration, and 1C PostgreSQL integration/invariant/migration tests.
 - Phase 1A core document domain types are approved/closed in `src/BillingControl/Models/DocumentCollectionDomain.cs`.
-- Phase 1B EF Core persistence and final correction is complete and awaiting review: document DbSets, explicit restrictive relationships, immutable-field allowlists, used-template protection, enum/value checks, lineage constraints, referenced-row template/service consistency triggers, received-document duplicate/replacement guards, concurrency mapping, history protection, and one additive migration are present. No document-collection data was backfilled.
+- Phase 1B EF Core persistence and final correction was approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`: document DbSets, explicit restrictive relationships, immutable-field allowlists, used-template protection, enum/value checks, lineage constraints, referenced-row template/service consistency triggers, received-document duplicate/replacement guards, concurrency mapping, history protection, and one additive migration are present. No document-collection data was backfilled.
 
 ### Current Work
 
@@ -37,17 +37,18 @@
 - Phase 0C is closed and approved.
 - Phase 0D is closed and approved.
 - Phase 1A is approved and closed.
-- Phase 1B final persistence correction is complete and awaiting ChatGPT review.
-- Phase 1C has not started.
+- Phase 1B is approved and closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`.
+- Phase 1C PostgreSQL persistence/invariant tests are in progress; local execution is skip-only because no isolated PostgreSQL connection is configured.
+- Phase 2 has not started.
 
 ### Outstanding
 
-- Phase 1C — PostgreSQL integration, invariant, and migration tests.
+- Phase 1C — PostgreSQL integration, invariant, and migration tests must execute successfully in GitHub Actions before review closure.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Review and approve **Phase 1B — EF Core Persistence, Constraints and Migration final correction**. After explicit approval/instruction, begin **Phase 1C — PostgreSQL Tests** only. Do not start Phase 1C automatically.
+Complete the GitHub Actions PostgreSQL execution for **Phase 1C — PostgreSQL Persistence / Invariant Tests**, then review Phase 1C. Do not start Phase 2 automatically.
 
 ---
 
@@ -1254,8 +1255,8 @@ No Contact/PIC implementation yet. No WhatsApp API. No SharePoint API. No backgr
 Phase 1 is deliberately split into the following bounded execution units:
 
 - **1A — Core Document Domain Types:** add the approved CLR enums and `Record`-derived document-collection entities, snapshots, self-references, evidence lifecycle, batch scaffold, and append-only history types. **Approved and closed.**
-- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, immutable-field/template guards, lineage checks, and the EF migration. **Final persistence correction complete and awaiting ChatGPT review.**
-- **1C — PostgreSQL Tests:** add integration coverage for invariants, transitions, concurrency, cancellation, evidence correction/reuse, template consistency, default-template uniqueness, and migration application. **Not started.**
+- **1B — EF Core Persistence:** add `AppDbContext` entity discovery/relationships, restrictive foreign keys, PostgreSQL constraints/indexes, service/template consistency enforcement, immutable-field/template guards, lineage checks, and the EF migration. **Approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`.**
+- **1C — PostgreSQL Tests:** add integration coverage for persistence invariants, migration application, template/service consistency, request and artifact lineage, evidence/history rules, and optimistic concurrency. **In progress; GitHub Actions execution is required before review closure.**
 
 1A and 1B are complete only within their stated boundaries. Do not start 1C automatically; it requires explicit review/approval of 1B.
 
