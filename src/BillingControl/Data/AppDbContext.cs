@@ -150,6 +150,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_DocumentRequirementTemplate_TemplateVersion", "\"TemplateVersion\" > 0");
             t.HasCheckConstraint("CK_DocumentRequirementTemplate_DefaultRequiresActive", "NOT \"IsDefault\" OR \"IsActive\"");
+            t.HasCheckConstraint("CK_DocumentRequirementTemplate_Text", "length(btrim(\"TemplateKey\")) > 0 AND length(btrim(\"Name\")) > 0");
         });
 
         b.Entity<DocumentRequirementTemplateItem>().Property(x => x.RequirementKey).HasMaxLength(100);
@@ -162,6 +163,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         {
             t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
             t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
+            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Text", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"Name\")) > 0");
         });
 
         b.Entity<DocumentRequest>().HasIndex(x => new { x.WorkItemId, x.Revision }).IsUnique();
@@ -194,6 +196,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
             t.HasCheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
             t.HasCheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_DocumentRequestItem_SnapshotText", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"RequirementName\")) > 0");
         });
 
         b.Entity<ReceivedDocument>().Property(x => x.SenderSnapshot).HasMaxLength(254);
@@ -216,6 +219,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             t.HasCheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
             t.HasCheckConstraint("CK_ReceivedDocument_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
             t.HasCheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
+            t.HasCheckConstraint("CK_ReceivedDocument_CanonicalRequiresDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"Status\" = 4");
         });
 
         b.Entity<DocumentRequestItemEvidence>().Property(x => x.InactivationReason).HasMaxLength(2000);
@@ -299,6 +303,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                 if (e.Entity is InvoiceLine && allowInvoiceLineDeletion) continue;
                 throw new InvalidOperationException("Use cancellation or deactivate records instead of deleting them.");
             }
+            var duplicateClassificationLinkChanged = false;
+            if (e.Entity is ReceivedDocument && (e.State == EntityState.Added || e.State == EntityState.Modified))
+                duplicateClassificationLinkChanged = await ValidateReceivedDocumentChangeAsync(e, cancellationToken);
             if (e.State == EntityState.Added && e.Entity is DocumentRequirementTemplateItem addedTemplateItem &&
                 usedTemplateIds.Contains(TemplateIdFor(addedTemplateItem)))
                 throw new InvalidOperationException("A used document requirement template cannot receive new checklist items; create a new template version.");
@@ -308,7 +315,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                 if (e.Entity is DocumentRequirementTemplate template && usedTemplateIds.Contains(template.Id))
                     allowed = ["IsActive", "IsDefault"];
                 else if (e.Entity is DocumentRequirementTemplateItem && IsUsedTemplateItem(e, usedTemplateIds))
-                    allowed = ["IsActive"];
+                    allowed = [];
                 else
                 {
                     allowed = e.Entity switch
@@ -325,7 +332,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         WeeklyProgressUpdateHistory => [],
                         DocumentRequest => ["Status"],
                         DocumentRequestItem => ["Status"],
-                        ReceivedDocument => ["Status"],
+                        ReceivedDocument => duplicateClassificationLinkChanged
+                            ? ["Status", "DuplicateOfReceivedDocumentId"]
+                            : ["Status"],
                         DocumentRequestItemEvidence => ["IsActive", "InactivatedAt", "InactivationReason"],
                         DocumentRequestBatchMember => ["IsActive"],
                         DocumentRequestStatusHistory => [],
@@ -348,6 +357,62 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             e.Entity.UpdatedAt = DateTime.UtcNow; e.Entity.UpdatedBy = actor; e.Entity.Version++;
         }
         return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<bool> ValidateReceivedDocumentChangeAsync(EntityEntry<Record> entry, CancellationToken cancellationToken)
+    {
+        var document = (ReceivedDocument)entry.Entity;
+        var currentCanonicalId = document.DuplicateOfReceivedDocumentId;
+
+        if (entry.State == EntityState.Added)
+        {
+            if (currentCanonicalId is not null || document.Status == ReceivedDocumentStatus.Duplicate)
+                throw new InvalidOperationException("A duplicate document must be classified from a persisted PendingReview artifact; save the raw intake artifact first.");
+            return false;
+        }
+
+        var originalStatus = (ReceivedDocumentStatus)entry.Property(nameof(ReceivedDocument.Status)).OriginalValue!;
+        var originalCanonicalId = entry.Property(nameof(ReceivedDocument.DuplicateOfReceivedDocumentId)).OriginalValue is int id
+            ? id
+            : (int?)null;
+        var canonicalLinkChanged = originalCanonicalId != currentCanonicalId;
+
+        if (originalStatus == ReceivedDocumentStatus.Duplicate && document.Status != ReceivedDocumentStatus.Duplicate)
+            throw new InvalidOperationException("A duplicate received document is terminal and cannot leave Duplicate status.");
+
+        if (document.Status == ReceivedDocumentStatus.Duplicate && currentCanonicalId is null)
+            throw new InvalidOperationException("A duplicate received document must identify its canonical received document.");
+
+        if (currentCanonicalId is not null && document.Status != ReceivedDocumentStatus.Duplicate)
+            throw new InvalidOperationException("DuplicateOfReceivedDocumentId may only be assigned to a Duplicate document.");
+
+        if (canonicalLinkChanged &&
+            (originalStatus != ReceivedDocumentStatus.PendingReview ||
+             document.Status != ReceivedDocumentStatus.Duplicate ||
+             originalCanonicalId is not null ||
+             currentCanonicalId is null))
+            throw new InvalidOperationException("DuplicateOfReceivedDocumentId may be assigned only once during PendingReview to Duplicate classification.");
+
+        if (currentCanonicalId is not int canonicalId) return canonicalLinkChanged;
+        if (canonicalId == document.Id)
+            throw new InvalidOperationException("A received document cannot be its own duplicate canonical document.");
+
+        var trackedCanonical = ChangeTracker.Entries<ReceivedDocument>()
+            .FirstOrDefault(x => x.Entity.Id == canonicalId);
+        if (trackedCanonical is not null)
+        {
+            if (trackedCanonical.State == EntityState.Deleted || trackedCanonical.Entity.DuplicateOfReceivedDocumentId is not null)
+                throw new InvalidOperationException("A duplicate must point directly to a canonical received document, not to another duplicate.");
+        }
+        else if (await ReceivedDocuments.AsNoTracking()
+                     .Where(x => x.Id == canonicalId)
+                     .Select(x => x.DuplicateOfReceivedDocumentId)
+                     .SingleOrDefaultAsync(cancellationToken) is not null)
+        {
+            throw new InvalidOperationException("A duplicate must point directly to a canonical received document, not to another duplicate.");
+        }
+
+        return canonicalLinkChanged;
     }
 
     private async Task<HashSet<int>> LoadUsedTemplateIdsAsync(CancellationToken cancellationToken)

@@ -669,6 +669,8 @@ namespace BillingControl.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
 
+                            t.HasCheckConstraint("CK_DocumentRequestItem_SnapshotText", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"RequirementName\")) > 0");
+
                             t.HasCheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
 
                             t.HasCheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
@@ -1023,6 +1025,8 @@ namespace BillingControl.Data.Migrations
                             t.HasCheckConstraint("CK_DocumentRequirementTemplate_DefaultRequiresActive", "NOT \"IsDefault\" OR \"IsActive\"");
 
                             t.HasCheckConstraint("CK_DocumentRequirementTemplate_TemplateVersion", "\"TemplateVersion\" > 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequirementTemplate_Text", "length(btrim(\"TemplateKey\")) > 0 AND length(btrim(\"Name\")) > 0");
                         });
                 });
 
@@ -1091,6 +1095,8 @@ namespace BillingControl.Data.Migrations
                     b.ToTable("DocumentRequirementTemplateItems", t =>
                         {
                             t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+
+                            t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Text", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"Name\")) > 0");
 
                             t.HasCheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                         });
@@ -1450,6 +1456,8 @@ namespace BillingControl.Data.Migrations
                     b.ToTable("ReceivedDocuments", t =>
                         {
                             t.HasCheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" > 0");
+
+                            t.HasCheckConstraint("CK_ReceivedDocument_CanonicalRequiresDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"Status\" = 4");
 
                             t.HasCheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
 

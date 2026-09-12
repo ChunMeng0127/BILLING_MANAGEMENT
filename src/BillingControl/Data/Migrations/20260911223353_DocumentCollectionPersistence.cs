@@ -53,6 +53,7 @@ namespace BillingControl.Data.Migrations
                     table.PrimaryKey("PK_DocumentRequirementTemplates", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequirementTemplate_DefaultRequiresActive", "NOT \"IsDefault\" OR \"IsActive\"");
                     table.CheckConstraint("CK_DocumentRequirementTemplate_TemplateVersion", "\"TemplateVersion\" > 0");
+                    table.CheckConstraint("CK_DocumentRequirementTemplate_Text", "length(btrim(\"TemplateKey\")) > 0 AND length(btrim(\"Name\")) > 0");
                     table.ForeignKey(
                         name: "FK_DocumentRequirementTemplates_Services_ServiceId",
                         column: x => x.ServiceId,
@@ -87,6 +88,7 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_ReceivedDocuments", x => x.Id);
                     table.CheckConstraint("CK_ReceivedDocument_ByteLength", "\"ByteLength\" IS NULL OR \"ByteLength\" > 0");
+                    table.CheckConstraint("CK_ReceivedDocument_CanonicalRequiresDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"Status\" = 4");
                     table.CheckConstraint("CK_ReceivedDocument_DuplicateRequiresCanonical", "\"Status\" <> 4 OR \"DuplicateOfReceivedDocumentId\" IS NOT NULL");
                     table.CheckConstraint("CK_ReceivedDocument_NoSelfDuplicate", "\"DuplicateOfReceivedDocumentId\" IS NULL OR \"DuplicateOfReceivedDocumentId\" <> \"Id\"");
                     table.CheckConstraint("CK_ReceivedDocument_NoSelfSupersession", "\"SupersedesReceivedDocumentId\" IS NULL OR \"SupersedesReceivedDocumentId\" <> \"Id\"");
@@ -173,6 +175,7 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_DocumentRequirementTemplateItems", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequirementTemplateItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+                    table.CheckConstraint("CK_DocumentRequirementTemplateItem_Text", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"Name\")) > 0");
                     table.CheckConstraint("CK_DocumentRequirementTemplateItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                     table.ForeignKey(
                         name: "FK_DocumentRequirementTemplateItems_DocumentRequirementTemplat~",
@@ -307,6 +310,7 @@ namespace BillingControl.Data.Migrations
                 {
                     table.PrimaryKey("PK_DocumentRequestItems", x => x.Id);
                     table.CheckConstraint("CK_DocumentRequestItem_DisplayOrder", "\"DisplayOrder\" >= 0");
+                    table.CheckConstraint("CK_DocumentRequestItem_SnapshotText", "length(btrim(\"RequirementKey\")) > 0 AND length(btrim(\"RequirementName\")) > 0");
                     table.CheckConstraint("CK_DocumentRequestItem_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5)");
                     table.CheckConstraint("CK_DocumentRequestItem_Wave", "\"Wave\" IN (0, 1, 2, 3)");
                     table.ForeignKey(
@@ -737,6 +741,7 @@ namespace BillingControl.Data.Migrations
                         OR NEW."IsRequired" IS DISTINCT FROM OLD."IsRequired"
                         OR NEW."Wave" IS DISTINCT FROM OLD."Wave"
                         OR NEW."DisplayOrder" IS DISTINCT FROM OLD."DisplayOrder"
+                        OR NEW."IsActive" IS DISTINCT FROM OLD."IsActive"
                     ) THEN
                         RAISE EXCEPTION 'A checklist item of a template used by a request is immutable; create a new template version'
                             USING ERRCODE = '55000';
@@ -789,6 +794,132 @@ namespace BillingControl.Data.Migrations
                 DEFERRABLE INITIALLY DEFERRED
                 FOR EACH ROW
                 EXECUTE FUNCTION "billing_validate_document_request_lineage"();
+
+                CREATE FUNCTION "billing_validate_received_document_relationships"()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                BEGIN
+                    IF TG_OP = 'INSERT' THEN
+                        IF NEW."DuplicateOfReceivedDocumentId" IS NOT NULL OR NEW."Status" = 4 THEN
+                            RAISE EXCEPTION 'A duplicate received document must be classified from a persisted PendingReview artifact'
+                                USING ERRCODE = '23514';
+                        END IF;
+                        RETURN NEW;
+                    END IF;
+
+                    IF NEW."ReceivedAt" IS DISTINCT FROM OLD."ReceivedAt"
+                       OR NEW."SenderSnapshot" IS DISTINCT FROM OLD."SenderSnapshot"
+                       OR NEW."SourceSnapshot" IS DISTINCT FROM OLD."SourceSnapshot"
+                       OR NEW."OriginalFileName" IS DISTINCT FROM OLD."OriginalFileName"
+                       OR NEW."MimeType" IS DISTINCT FROM OLD."MimeType"
+                       OR NEW."ByteLength" IS DISTINCT FROM OLD."ByteLength"
+                       OR NEW."Sha256Hash" IS DISTINCT FROM OLD."Sha256Hash" THEN
+                        RAISE EXCEPTION 'Original received-document intake metadata is immutable'
+                            USING ERRCODE = '55000';
+                    END IF;
+
+                    IF NEW."SupersedesReceivedDocumentId" IS DISTINCT FROM OLD."SupersedesReceivedDocumentId" THEN
+                        RAISE EXCEPTION 'Received-document replacement lineage is immutable after creation'
+                            USING ERRCODE = '55000';
+                    END IF;
+
+                    IF OLD."Status" = 4 AND NEW."Status" IS DISTINCT FROM OLD."Status" THEN
+                        RAISE EXCEPTION 'A duplicate received document is terminal'
+                            USING ERRCODE = '55000';
+                    END IF;
+
+                    IF NEW."Status" = 4 AND OLD."Status" IS DISTINCT FROM NEW."Status"
+                       AND (OLD."Status" <> 0 OR OLD."DuplicateOfReceivedDocumentId" IS NOT NULL
+                            OR NEW."DuplicateOfReceivedDocumentId" IS NULL) THEN
+                        RAISE EXCEPTION 'Duplicate classification must be a PendingReview to Duplicate transition with a new canonical link'
+                            USING ERRCODE = '23514';
+                    END IF;
+
+                    IF NEW."DuplicateOfReceivedDocumentId" IS DISTINCT FROM OLD."DuplicateOfReceivedDocumentId"
+                       AND (OLD."Status" <> 0 OR NEW."Status" <> 4
+                            OR OLD."DuplicateOfReceivedDocumentId" IS NOT NULL
+                            OR NEW."DuplicateOfReceivedDocumentId" IS NULL) THEN
+                        RAISE EXCEPTION 'DuplicateOfReceivedDocumentId may be assigned only once during PendingReview to Duplicate classification'
+                            USING ERRCODE = '23514';
+                    END IF;
+
+                    IF NEW."DuplicateOfReceivedDocumentId" IS NOT NULL THEN
+                        IF NEW."Status" <> 4 THEN
+                            RAISE EXCEPTION 'A duplicate canonical link requires Duplicate status'
+                                USING ERRCODE = '23514';
+                        END IF;
+                        IF NEW."DuplicateOfReceivedDocumentId" = NEW."Id" THEN
+                            RAISE EXCEPTION 'A received document cannot be its own duplicate canonical document'
+                                USING ERRCODE = '23514';
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "ReceivedDocuments" canonical
+                            WHERE canonical."Id" = NEW."DuplicateOfReceivedDocumentId"
+                              AND canonical."DuplicateOfReceivedDocumentId" IS NOT NULL
+                        ) THEN
+                            RAISE EXCEPTION 'A duplicate must point directly to a canonical received document'
+                                USING ERRCODE = '23514';
+                        END IF;
+                        IF EXISTS
+                        (
+                            SELECT 1
+                            FROM "ReceivedDocuments" duplicate
+                            WHERE duplicate."DuplicateOfReceivedDocumentId" = NEW."Id"
+                        ) THEN
+                            RAISE EXCEPTION 'A received document with duplicate artifacts cannot itself become a duplicate'
+                                USING ERRCODE = '23514';
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE TRIGGER "TR_ReceivedDocuments_Relationships"
+                BEFORE INSERT OR UPDATE ON "ReceivedDocuments"
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_received_document_relationships"();
+
+                CREATE FUNCTION "billing_validate_received_document_supersession_acyclic"()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $$
+                BEGIN
+                    IF NEW."SupersedesReceivedDocumentId" IS NULL THEN
+                        RETURN NEW;
+                    END IF;
+
+                    IF EXISTS
+                    (
+                        WITH RECURSIVE chain("Id", "SupersedesReceivedDocumentId", path) AS
+                        (
+                            SELECT d."Id", d."SupersedesReceivedDocumentId", ARRAY[d."Id"]::integer[]
+                            FROM "ReceivedDocuments" d
+                            WHERE d."Id" = NEW."SupersedesReceivedDocumentId"
+                            UNION ALL
+                            SELECT d."Id", d."SupersedesReceivedDocumentId", c.path || d."Id"
+                            FROM "ReceivedDocuments" d
+                            JOIN chain c ON d."Id" = c."SupersedesReceivedDocumentId"
+                            WHERE NOT d."Id" = ANY(c.path)
+                        )
+                        SELECT 1
+                        FROM chain
+                        WHERE "Id" = NEW."Id"
+                    ) THEN
+                        RAISE EXCEPTION 'Received-document replacement references must be acyclic'
+                            USING ERRCODE = '23514';
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$;
+
+                CREATE CONSTRAINT TRIGGER "TR_ReceivedDocuments_SupersessionAcyclic"
+                AFTER INSERT OR UPDATE ON "ReceivedDocuments"
+                DEFERRABLE INITIALLY DEFERRED
+                FOR EACH ROW
+                EXECUTE FUNCTION "billing_validate_received_document_supersession_acyclic"();
                 """);
         }
 
@@ -796,6 +927,8 @@ namespace BillingControl.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""
+                DROP TRIGGER IF EXISTS "TR_ReceivedDocuments_SupersessionAcyclic" ON "ReceivedDocuments";
+                DROP TRIGGER IF EXISTS "TR_ReceivedDocuments_Relationships" ON "ReceivedDocuments";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequests_SupersessionLineage" ON "DocumentRequests";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplateItems_UsedDefinitionImmutable" ON "DocumentRequirementTemplateItems";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplates_UsedDefinitionImmutable" ON "DocumentRequirementTemplates";
@@ -804,12 +937,13 @@ namespace BillingControl.Data.Migrations
                 DROP TRIGGER IF EXISTS "TR_Engagements_TemplateServiceConsistency" ON "Engagements";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequirementTemplates_TemplateServiceConsistency" ON "DocumentRequirementTemplates";
                 DROP TRIGGER IF EXISTS "TR_DocumentRequests_TemplateServiceConsistency" ON "DocumentRequests";
+                DROP FUNCTION IF EXISTS "billing_validate_received_document_supersession_acyclic"();
+                DROP FUNCTION IF EXISTS "billing_validate_received_document_relationships"();
                 DROP FUNCTION IF EXISTS "billing_validate_document_request_lineage"();
                 DROP FUNCTION IF EXISTS "billing_prevent_used_document_requirement_template_item_change"();
                 DROP FUNCTION IF EXISTS "billing_prevent_used_document_requirement_template_change"();
                 DROP FUNCTION IF EXISTS "billing_validate_document_request_template_service"();
                 """);
-
             migrationBuilder.DropTable(
                 name: "DocumentRequestBatchMembers");
 
