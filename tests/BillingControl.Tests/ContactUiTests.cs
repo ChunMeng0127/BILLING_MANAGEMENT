@@ -317,6 +317,9 @@ public partial class IntegrationTests
         });
         Assert.Equal(HttpStatusCode.Redirect, reOptIn.StatusCode);
 
+        var consentDetailsBeforeReset = await admin.GetStringAsync($"/Contacts/Details/{contactId}");
+        Assert.Contains("Reset consent to Unknown", consentDetailsBeforeReset);
+
         var reset = await PostWithToken(admin, $"/Contacts/Details/{contactId}", "/Contacts/RecordConsent", new()
         {
             ["ContactId"] = contactId.ToString(),
@@ -333,7 +336,6 @@ public partial class IntegrationTests
         Assert.Contains("Client opted out", consentDetails);
         Assert.Contains("Opted In", consentDetails);
         Assert.Contains("Do Not WhatsApp", consentDetails);
-        Assert.Contains("Reset consent to Unknown", consentDetails);
         using (var verify = Db())
         {
             var address = await verify.ContactWhatsAppAddresses.AsNoTracking().SingleAsync(x => x.Id == secondAddressId);
