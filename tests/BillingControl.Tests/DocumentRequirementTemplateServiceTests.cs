@@ -64,6 +64,14 @@ public partial class IntegrationTests
         var serviceMaster = await AddDocumentServiceAsync(db, "template-service-validation");
         var service = new DocumentRequirementTemplateService(db);
 
+        var invalidWaveError = await Assert.ThrowsAsync<BusinessException>(() => service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("invalid-wave"),
+            "Invalid request priority",
+            null,
+            [new("invalid-wave", "Bank statement", null, true, (DocumentRequirementWave)999, 0)])));
+        Assert.Equal("Select a valid request priority.", invalidWaveError.Message);
+
         await Assert.ThrowsAsync<BusinessException>(() => service.CreateFirstVersionAsync(new(
             serviceMaster.Id,
             DocumentToken("duplicate-requirements"),

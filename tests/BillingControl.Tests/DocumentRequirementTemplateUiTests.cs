@@ -125,12 +125,6 @@ public partial class IntegrationTests
         Assert.Equal(HttpStatusCode.OK, invalidResponse.StatusCode);
         Assert.Contains("The Name field is required.", await invalidResponse.Content.ReadAsStringAsync());
 
-        var invalidWave = CreateFields(serviceId, "Invalid priority");
-        invalidWave["Items[0].Wave"] = "999";
-        var invalidWaveResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", invalidWave, "/DocumentRequirementTemplates/Create");
-        Assert.Equal(HttpStatusCode.OK, invalidWaveResponse.StatusCode);
-        Assert.Contains("Select a valid request priority.", await invalidWaveResponse.Content.ReadAsStringAsync());
-
         var firstResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "Monthly checklist", isDefault: true));
         Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
         var firstLocation = firstResponse.Headers.Location!.ToString();
