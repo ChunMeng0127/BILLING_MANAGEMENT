@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 3B — Internal Document Request/checklist UI
-**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is complete and awaiting ChatGPT review; implementation CI run `34679837938` passed. Phase 3C and Phase 4 have not started.
+**Current Phase:** Phase 3C — Phase 3 Integration / Regression and Review Closure
+**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C technical regression/review is complete; Phase 3 remains pending final manual user UI acceptance, deferred until the user can access the system. Phase 2 manual UI acceptance remains pending. Phase 4 has not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -36,7 +36,8 @@
 - Phase 2C technical regression/review closure is complete. Additional high-value coverage verifies family/version filtering and ordering, inactive historical visibility, repeated item reorder/edit/activation flows, used-template lifecycle operations, foreign-ID rejection, authorization/antiforgery, and financial/workflow isolation. Manual user UI acceptance is intentionally deferred until the user can access the application.
 - Phase 3 execution split recorded: 3A document request application/internal workflow service, 3B internal document request/checklist UI, and 3C Phase 3 integration/regression and manual acceptance.
 - Phase 3A document request application/internal workflow service is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. It adds provider-neutral request creation, active-template snapshotting, WorkItem revision allocation, pre-provider request/item transitions, append-only status histories, untracked read models, and PostgreSQL locking/concurrency handling without schema changes or financial/workflow side effects.
-- Phase 3B internal document request/checklist UI is complete and awaiting ChatGPT review. It adds staff-only request creation/details routes, compact WorkItem integration, service-backed request/item actions, ordered histories and focused PostgreSQL MVC regression coverage without a migration or provider/evidence integration. Implementation CI run `34679837938` passed the PostgreSQL 17, Docker image, and production Compose HTTPS checks.
+- Phase 3B internal document request/checklist UI is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. It adds staff-only request creation/details routes, compact WorkItem integration, service-backed request/item actions, ordered histories and focused PostgreSQL MVC regression coverage without a migration or provider/evidence integration.
+- Phase 3C technical regression/review closure is complete. CI run `34680785647` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 3 remains pending final manual user UI acceptance; no new Phase 3 feature or migration was introduced.
 
 ### Current Work
 
@@ -53,17 +54,18 @@
 - Phase 2C technical regression/review closure is complete; Phase 2 remains pending final manual user UI acceptance.
 - The user explicitly authorized continuing Phase 3 development before the outstanding Phase 2 manual UI acceptance.
 - Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.
-- Phase 3B is complete and awaiting ChatGPT review; implementation CI run `34679837938` passed. Phase 3C and Phase 4 have not started.
+- Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.
+- Phase 3C technical regression/review is complete; Phase 3 manual UI acceptance remains pending until the user can access the system. Phase 4 has not started.
 
 ### Outstanding
 
 - Final manual user UI acceptance for Phase 2 remains outstanding and will be completed when the user can access the application. Phase 2 is not yet marked fully approved/closed.
-- ChatGPT review of Phase 3B remains outstanding before Phase 3C may begin.
+- Phase 3 technical regression/review is complete; final manual Phase 3 UI acceptance remains outstanding until the user can access the system.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Review Phase 3B separately. Complete final manual user UI acceptance for Phase 2 when the user can access the application; do not mark Phase 2 fully closed or start Phase 3C automatically.
+Complete final manual user UI acceptance for Phase 2 and Phase 3 when the user can access the application; do not mark either phase fully closed by technical checks alone, and do not start Phase 4 automatically.
 
 ---
 
@@ -1298,8 +1300,8 @@ Build deterministic request/checklist UI and manual state transitions before ext
 Phase 3 is deliberately split into the following bounded execution units:
 
 - **3A — Document Request application/service layer:** create Draft requests from active service templates, snapshot active checklist items, allocate WorkItem revisions transactionally, support only the approved pre-provider request/item transitions, append status histories, and expose untracked read models. **Approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.**
-- **3B — Internal Document Request/checklist UI:** wire the 3A service into staff-authorized MVC pages for request creation, checklist administration, and the approved pre-provider transitions. **Complete and awaiting ChatGPT review; implementation CI run `34679837938` passed.**
-- **3C — Phase 3 integration/regression and manual acceptance:** add focused PostgreSQL/MVC regression coverage and complete the relevant technical/manual review. **Not started.**
+- **3B — Internal Document Request/checklist UI:** wire the 3A service into staff-authorized MVC pages for request creation, checklist administration, and the approved pre-provider transitions. **Approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.**
+- **3C — Phase 3 integration/regression and manual acceptance:** add focused PostgreSQL/MVC regression coverage and complete the relevant technical/manual review. **Technical regression/review complete; final manual Phase 3 UI acceptance remains pending until the user can access the system.**
 
 Phase 3A deliberately does not set `Requested`, `PartiallyReceived`, `Complete`, or `Superseded`, create received artifacts/evidence/batches/outbox rows, send through a provider, or change WorkItem, WorkerAssignment, BillingRecord, invoice, payment, or revenue-share state. Those operations remain deferred to the later provider/evidence/workflow phases.
 
@@ -1488,7 +1490,7 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is complete and awaiting ChatGPT review; Phase 3C and Phase 4 have not started.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C technical regression/review is complete, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4 has not started.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Phase 1A, 1B and 1C are approved/closed; Phase 1 is complete.
 
@@ -1525,7 +1527,8 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `src/BillingControl/Models/DocumentRequestViewModels.cs`, `Views/DocumentRequests/Create.cshtml`, `Views/DocumentRequests/Details.cshtml`, and `Views/Shared/_DocumentRequestPanel.cshtml` provide the compact WorkItem panel, active-template/default selection, ordered checklist, approved Phase 3A request/item actions, reason fields, request/item histories, and historical revision links. Non-staff WorkItem pages do not load or render document-request data.
 - `Controllers/WorkController.cs` loads the document panel only for Admin/InternalUser. `Services/Finance.cs` extends the existing label helper for document request/item statuses. No `Program.cs` registration change or migration was needed.
 - `tests/BillingControl.Tests/DocumentRequestUiTests.cs` covers anonymous/external-role denial, Admin/InternalUser access, WorkItem data isolation, template/default and no-template states, Draft creation and duplicate protection, exact request/checklist action rendering, read-only provider/evidence states, antiforgery, malformed/foreign IDs, stale request/item versions, foreign item rejection, ordered histories/revisions, GET non-mutation, and BillingRecord/WorkItem/WorkerAssignment isolation.
-- Phase 3B is complete and awaiting ChatGPT review. No Phase 3A defect was found. Implementation CI run `34679837938` passed the PostgreSQL 17 test path, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Local Release build, full .NET test command (19 passed and 58 skipped without `BILLING_TEST_CONNECTION`), 12 JavaScript tests, and EF pending-model check also passed. Phase 3C and Phase 4 have not started; Phase 2 manual user UI acceptance remains pending. No migration or provider/evidence/send work was introduced.
+- Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. No Phase 3A/3B defect was found.
+- Phase 3C technical regression/review closure is complete. `tests/BillingControl.Tests/DocumentRequestUiTests.cs` now covers the cancelled-revision → new-template-version MVC flow, current-vs-historical WorkItem presentation, historical read-only access, forged provider-driven state rejection through MVC, repeated checklist audit ordering, malformed IDs, and provider/evidence/financial/workflow isolation. Request action labels were polished to use the approved `Pause` and `Cancel` verbs. CI run `34680785647` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Local Release build, full .NET test command (19 passed and 58 skipped without `BILLING_TEST_CONNECTION`), 12 JavaScript tests, and EF pending-model check also passed. Phase 3 remains pending final manual user UI acceptance; Phase 2 manual user UI acceptance remains pending; Phase 4 has not started. No migration or provider/evidence/send work was introduced.
 - Phase 3A validation was completed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` executed the PostgreSQL 17 suite with 0 failures and 0 skips and passed the Docker image and production Compose HTTPS smoke checks.
 
 ---
