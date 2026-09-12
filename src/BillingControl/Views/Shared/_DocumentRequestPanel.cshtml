@@ -1,0 +1,76 @@
+@model DocumentRequestPanelViewModel
+@using BillingControl.Services
+@{
+    var current = Model.CurrentRequest;
+    var historical = Model.Revisions.Where(x => current is null || x.Id != current.Id).OrderBy(x => x.Revision).ToArray();
+}
+<section class="panel form-panel wide" id="document-collection">
+    <div class="panel-heading">
+        <div>
+            <h2>Document collection</h2>
+            <p class="hint">Internal checklist for the authoritative @Model.ServiceName service.</p>
+        </div>
+        @if (current is not null)
+        {
+            <a class="btn btn-outline-secondary" href="/DocumentRequests/Details/@current.Id">Open full request →</a>
+        }
+    </div>
+
+    @if (current is null)
+    {
+        <h3>No active document request</h3>
+        @if (Model.AvailableTemplates.Count > 0)
+        {
+            <p>Eligible active templates:</p>
+            <ul class="compact-list">
+                @foreach (var template in Model.AvailableTemplates)
+                {
+                    <li>
+                        <strong>@template.Name</strong>
+                        <span class="hint">@template.TemplateKey · v@template.TemplateVersion</span>
+                        @if (template.IsDefault)
+                        {
+                            <span class="badge status-completed">Default</span>
+                        }
+                    </li>
+                }
+            </ul>
+            <a class="btn btn-primary" href="/DocumentRequests/Create?workItemId=@Model.WorkItemId">Create document request</a>
+        }
+        else
+        {
+            <p class="hint">No eligible active document templates are available for this service.</p>
+            <a href="/DocumentRequirementTemplates?serviceId=@Model.ServiceId">Review Document Templates →</a>
+        }
+    }
+    else
+    {
+        var requiredCount = current.Items.Count(x => x.IsRequired);
+        var optionalCount = current.Items.Count(x => !x.IsRequired);
+        var stateSummary = current.Items
+            .GroupBy(x => x.Status)
+            .OrderBy(x => x.Key)
+            .Select(x => $"{x.Count()} {Finance.Label(x.Key)}")
+            .ToArray();
+        <div class="request-summary">
+            <p><strong>Revision @current.Revision</strong> · @current.TemplateName · @current.TemplateKey v@current.TemplateVersion · <span class="badge status-active">@Finance.Label(current.Status)</span></p>
+            <p class="hint">Checklist: @requiredCount required · @optionalCount optional@(stateSummary.Length > 0 ? " · " + string.Join(" · ", stateSummary) : "")</p>
+        </div>
+    }
+
+    @if (historical.Length > 0)
+    {
+        <details class="mt-3">
+            <summary>Previous request revisions (@historical.Length)</summary>
+            <ul class="compact-list mt-2">
+                @foreach (var revision in historical)
+                {
+                    <li>
+                        <a href="/DocumentRequests/Details/@revision.Id">Revision @revision.Revision</a>
+                        <span class="hint">@revision.TemplateKey v@revision.TemplateVersion · @Finance.Label(revision.Status)</span>
+                    </li>
+                }
+            </ul>
+        </details>
+    }
+</section>

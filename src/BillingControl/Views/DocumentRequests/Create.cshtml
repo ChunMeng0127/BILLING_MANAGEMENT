@@ -1,0 +1,44 @@
+@model DocumentRequestCreateViewModel
+@{
+    ViewData["Title"] = "Create document request";
+}
+<a class="back-link" href="/Work/Details/@Model.WorkItem.WorkItemId">← Work item</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">DOCUMENT COLLECTION</p>
+        <h1>Create document request</h1>
+        <p>@Model.WorkItem.CustomerName · @Model.WorkItem.ServiceName · @Model.WorkItem.PeriodStart.ToString("dd MMM yyyy") — @Model.WorkItem.PeriodEnd.ToString("dd MMM yyyy")</p>
+    </div>
+</div>
+
+<section class="panel form-panel wide">
+    <h2>Choose the active service template</h2>
+    <p class="hint">The selected template is copied into a Draft request revision. The service is authoritative from this WorkItem's billing relationship.</p>
+    <div asp-validation-summary="All" class="text-danger"></div>
+
+    @if (Model.Templates.Count == 0)
+    {
+        <p>No eligible active template is available for <strong>@Model.WorkItem.ServiceName</strong>.</p>
+        <a href="/DocumentRequirementTemplates?serviceId=@Model.WorkItem.ServiceId">Review Document Templates →</a>
+    }
+    else
+    {
+        <form method="post" action="/DocumentRequests/Create">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="WorkItemId" value="@Model.WorkItemId" />
+            <label class="form-label" for="DocumentRequirementTemplateId">Document template</label>
+            <select id="DocumentRequirementTemplateId" name="DocumentRequirementTemplateId" class="form-select" required>
+                <option value="">Select a template</option>
+                @foreach (var template in Model.Templates)
+                {
+                    var selected = Model.DocumentRequirementTemplateId == template.Id;
+                    <option value="@template.Id" selected="@(selected ? "selected" : null)">@template.Name · @template.TemplateKey v@template.TemplateVersion@(template.IsDefault ? " · Default" : "")</option>
+                }
+            </select>
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">Create Draft request</button>
+                <a class="btn btn-outline-secondary" href="/Work/Details/@Model.WorkItem.WorkItemId">Cancel</a>
+            </div>
+        </form>
+    }
+</section>

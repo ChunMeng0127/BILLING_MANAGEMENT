@@ -1,0 +1,189 @@
+@model DocumentRequestDetailsViewModel
+@using BillingControl.Services
+@{
+    var request = Model.Request;
+    ViewData["Title"] = $"Document request R{request.Revision:D2}";
+    var requestActions = request.Status switch
+    {
+        DocumentRequestStatus.Draft => new[] { DocumentRequestStatus.ReadyToSend, DocumentRequestStatus.Paused, DocumentRequestStatus.Cancelled },
+        DocumentRequestStatus.ReadyToSend => new[] { DocumentRequestStatus.Paused, DocumentRequestStatus.Cancelled },
+        DocumentRequestStatus.Paused => new[] { DocumentRequestStatus.Draft, DocumentRequestStatus.ReadyToSend, DocumentRequestStatus.Cancelled },
+        _ => Array.Empty<DocumentRequestStatus>()
+    };
+    var checklistActionsEnabled = request.Status is DocumentRequestStatus.Draft or DocumentRequestStatus.ReadyToSend or DocumentRequestStatus.Paused;
+    string RequestActionLabel(DocumentRequestStatus target) => (request.Status, target) switch
+    {
+        (DocumentRequestStatus.Draft, DocumentRequestStatus.ReadyToSend) => "Mark Ready to Send",
+        (DocumentRequestStatus.Paused, DocumentRequestStatus.Draft) => "Resume to Draft",
+        (DocumentRequestStatus.Paused, DocumentRequestStatus.ReadyToSend) => "Resume to Ready to Send",
+        _ => Finance.Label(target)
+    };
+}
+<a class="back-link" href="/Work/Details/@Model.WorkItem.WorkItemId">← Work item</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">DOCUMENT COLLECTION · REVISION @request.Revision</p>
+        <h1>@Model.WorkItem.CustomerName</h1>
+        <p>@Model.WorkItem.ServiceName · @Model.WorkItem.PeriodStart.ToString("dd MMM yyyy") — @Model.WorkItem.PeriodEnd.ToString("dd MMM yyyy")</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/Work/Details/@Model.WorkItem.WorkItemId">View WorkItem</a>
+</div>
+
+<section class="panel form-panel wide">
+    <div class="panel-heading">
+        <div>
+            <h2>Document request</h2>
+            <p class="hint">Revision @request.Revision · Template @request.TemplateName · @request.TemplateKey v@request.TemplateVersion</p>
+        </div>
+        <span class="badge status-active">@Finance.Label(request.Status)</span>
+    </div>
+    <p>Request version <strong>@request.Version</strong> · @request.Items.Count checklist item@(request.Items.Count == 1 ? "" : "s")</p>
+
+    @if (requestActions.Length > 0)
+    {
+        <form method="post" action="/DocumentRequests/Transition" class="request-actions">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="requestId" value="@request.Id" />
+            <input type="hidden" name="expectedVersion" value="@request.Version" />
+            <label class="form-label" for="request-reason">Reason for this request action</label>
+            <textarea id="request-reason" name="reason" class="form-control" rows="2" maxlength="2000" required></textarea>
+            <div class="form-actions">
+                @foreach (var target in requestActions)
+                {
+                    <button class="btn @(target == DocumentRequestStatus.Cancelled ? "btn-outline-danger" : "btn-outline-primary")" type="submit" name="targetStatus" value="@target">@RequestActionLabel(target)</button>
+                }
+            </div>
+        </form>
+    }
+    else if (request.Status == DocumentRequestStatus.Requested)
+    {
+        <p class="hint">Requested will become available only after a future outbound provider send is accepted.</p>
+    }
+    else if (request.Status == DocumentRequestStatus.Cancelled)
+    {
+        <p class="hint">This cancelled request is read-only. Create a later revision if a new request is needed.</p>
+    }
+    else if (request.Status is DocumentRequestStatus.PartiallyReceived or DocumentRequestStatus.Complete or DocumentRequestStatus.Superseded)
+    {
+        <p class="hint">No Phase 3B actions are available for this request state.</p>
+    }
+</section>
+
+<section class="panel form-panel wide">
+    <div class="panel-heading">
+        <div>
+            <h2>Checklist</h2>
+            <p class="hint">The checklist is an ordered snapshot of the selected template.</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table data-grid">
+            <thead><tr><th>Requirement</th><th>Type</th><th>Wave</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+            @foreach (var item in request.Items)
+            {
+                <tr>
+                    <td><strong>@item.RequirementName</strong><br /><span class="hint">@item.RequirementKey</span>@if (!string.IsNullOrWhiteSpace(item.RequirementDescription)) { <br /><span class="hint">@item.RequirementDescription</span> }</td>
+                    <td>@(item.IsRequired ? "Required" : "Optional")</td>
+                    <td>@Finance.Label(item.Wave)</td>
+                    <td><span class="badge status-active">@Finance.Label(item.Status)</span></td>
+                    <td>
+                    @if (checklistActionsEnabled && item.Status == DocumentRequestItemStatus.Missing)
+                    {
+                        <form method="post" action="/DocumentRequests/TransitionItem" class="item-action-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="requestId" value="@request.Id" />
+                            <input type="hidden" name="itemId" value="@item.Id" />
+                            <input type="hidden" name="expectedVersion" value="@item.Version" />
+                            <label class="visually-hidden" for="reason-@item.Id">Reason for @item.RequirementName</label>
+                            <input id="reason-@item.Id" name="reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason" />
+                            <div class="form-actions">
+                                <button class="btn btn-sm btn-outline-secondary" type="submit" name="targetStatus" value="@DocumentRequestItemStatus.NotRequired">Mark Not Required</button>
+                                <button class="btn btn-sm btn-outline-secondary" type="submit" name="targetStatus" value="@DocumentRequestItemStatus.Waived">Waive</button>
+                            </div>
+                        </form>
+                    }
+                    else if (checklistActionsEnabled && (item.Status is DocumentRequestItemStatus.NotRequired or DocumentRequestItemStatus.Waived))
+                    {
+                        <form method="post" action="/DocumentRequests/TransitionItem" class="item-action-form">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="requestId" value="@request.Id" />
+                            <input type="hidden" name="itemId" value="@item.Id" />
+                            <input type="hidden" name="expectedVersion" value="@item.Version" />
+                            <label class="visually-hidden" for="reason-@item.Id">Reason for @item.RequirementName</label>
+                            <input id="reason-@item.Id" name="reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason" />
+                            <button class="btn btn-sm btn-outline-secondary" type="submit" name="targetStatus" value="@DocumentRequestItemStatus.Missing">Restore to Missing</button>
+                        </form>
+                    }
+                    else if (item.Status is DocumentRequestItemStatus.Requested or DocumentRequestItemStatus.PartiallyReceived or DocumentRequestItemStatus.Received)
+                    {
+                        <span class="hint">Received states depend on future document evidence/classification.</span>
+                    }
+                    else
+                    {
+                        <span class="hint">No action</span>
+                    }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel form-panel wide">
+    <h2>Request history</h2>
+    <div class="table-responsive">
+        <table class="table data-grid">
+            <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>Actor / source</th></tr></thead>
+            <tbody>
+            @foreach (var history in request.StatusHistory)
+            {
+                <tr><td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td><td>@(history.PreviousStatus is null ? "Created" : $"{Finance.Label(history.PreviousStatus.Value)} → {Finance.Label(history.NewStatus)}")<br /><span class="hint">@history.Action</span></td><td>@history.Reason</td><td>@history.Actor<br /><span class="hint">@history.Source</span></td></tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="panel form-panel wide">
+    <h2>Checklist item history</h2>
+    @foreach (var item in request.Items)
+    {
+        <details class="mb-3">
+            <summary>@item.RequirementName · @Finance.Label(item.Status)</summary>
+            <div class="table-responsive mt-2">
+                <table class="table data-grid">
+                    <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                    <tbody>
+                    @foreach (var history in item.StatusHistory)
+                    {
+                        <tr><td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td><td>@(history.PreviousStatus is null ? "Created" : $"{Finance.Label(history.PreviousStatus.Value)} → {Finance.Label(history.NewStatus)}")<br /><span class="hint">@history.Action</span></td><td>@history.Reason</td><td>@history.Actor<br /><span class="hint">@history.Source</span></td></tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</section>
+
+<section class="panel form-panel wide">
+    <h2>WorkItem request revisions</h2>
+    <p class="hint">Cancelled and Superseded revisions remain viewable for audit history.</p>
+    <ul class="compact-list">
+    @foreach (var revision in Model.Revisions.OrderBy(x => x.Revision))
+    {
+        <li>
+            @if (revision.Id == request.Id)
+            {
+                <strong>Revision @revision.Revision (current page)</strong>
+            }
+            else
+            {
+                <a href="/DocumentRequests/Details/@revision.Id">Revision @revision.Revision</a>
+            }
+            <span class="hint">@revision.TemplateName · @revision.TemplateKey v@revision.TemplateVersion · @Finance.Label(revision.Status)</span>
+        </li>
+    }
+    </ul>
+</section>

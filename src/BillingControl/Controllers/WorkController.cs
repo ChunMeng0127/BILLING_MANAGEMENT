@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BillingControl.Controllers;
 
-public class WorkController(AppDbContext db, BillingService billing, AccessScope access) : AppController
+public class WorkController(AppDbContext db, BillingService billing, AccessScope access, DocumentRequestService documentRequests) : AppController
 {
     [Authorize(Roles = AppRoles.WorkReaders)]
     public async Task<IActionResult> Index()
@@ -29,6 +29,7 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         var worker = a.IsWorker;
         var item = await access.WorkItems(a)
             .Include(x => x.BillingRecord).ThenInclude(x => x.Shares.Where(_ => staff))
+            .Include(x => x.BillingRecord).ThenInclude(x => x.Engagement).ThenInclude(x => x.Service)
             .Include(x => x.Assignments.Where(y => staff || (worker && !y.IsCancelled && !y.IsHidden && y.WorkerId == a.WorkerId)))
             .ThenInclude(x => x.Allocations)
             .ThenInclude(x => x.WorkerPayment)
@@ -39,6 +40,21 @@ public class WorkController(AppDbContext db, BillingService billing, AccessScope
         if (item == null) return NotFound();
         ViewBag.Access = a;
         ViewBag.Workers = staff ? await db.Workers.Where(x => x.IsActive).OrderBy(x => x.Name).ToListAsync() : [];
+        if (staff)
+        {
+            var current = await documentRequests.GetCurrentForWorkItemAsync(item.Id);
+            var revisions = await documentRequests.GetRevisionsForWorkItemAsync(item.Id);
+            var templates = current is null
+                ? await documentRequests.GetAvailableTemplatesForWorkItemAsync(item.Id)
+                : [];
+            ViewBag.DocumentRequestPanel = new DocumentRequestPanelViewModel(
+                item.Id,
+                item.BillingRecord.Engagement.ServiceId,
+                item.BillingRecord.Engagement.Service.Name,
+                current,
+                revisions,
+                templates);
+        }
         return View(item);
     }
 
