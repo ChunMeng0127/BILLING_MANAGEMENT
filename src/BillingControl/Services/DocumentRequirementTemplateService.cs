@@ -8,7 +8,7 @@ using Npgsql;
 namespace BillingControl.Services;
 
 public sealed record DocumentRequirementTemplateItemInput(
-    string RequirementKey,
+    string? RequirementKey,
     string Name,
     string? Description,
     bool IsRequired,
@@ -18,7 +18,7 @@ public sealed record DocumentRequirementTemplateItemInput(
 
 public sealed record DocumentRequirementTemplateCreateInput(
     int ServiceId,
-    string TemplateKey,
+    string? TemplateKey,
     string Name,
     string? Description,
     IReadOnlyList<DocumentRequirementTemplateItemInput> Items,
@@ -71,14 +71,21 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         CancellationToken cancellationToken = default)
     {
         var normalized = NormalizeCreateInput(input);
-        ValidateItems(normalized.Items);
+        ValidateItemValues(normalized.Items);
         ValidateOperationalState(normalized.IsActive, normalized.IsDefault, normalized.Items);
 
         return await InSerializableTransactionAsync(async () =>
         {
             await LockServiceAsync(normalized.ServiceId, cancellationToken);
+            var templateKey = await ResolveTemplateKeyAsync(
+                normalized.ServiceId,
+                normalized.TemplateKey,
+                normalized.Name,
+                cancellationToken);
+            var items = AllocateRequirementKeys(normalized.Items);
+            ValidateItems(items);
             var alreadyExists = await db.DocumentRequirementTemplates.AnyAsync(
-                x => x.ServiceId == normalized.ServiceId && x.TemplateKey == normalized.TemplateKey,
+                x => x.ServiceId == normalized.ServiceId && x.TemplateKey == templateKey,
                 cancellationToken);
             Finance.Require(!alreadyExists,
                 "A template with this key already exists for the selected service. Create a new template version instead.");
@@ -86,14 +93,14 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             var template = new DocumentRequirementTemplate
             {
                 ServiceId = normalized.ServiceId,
-                TemplateKey = normalized.TemplateKey,
+                TemplateKey = templateKey,
                 TemplateVersion = 1,
                 Name = normalized.Name,
                 Description = normalized.Description,
                 IsActive = normalized.IsActive,
                 IsDefault = false
             };
-            template.Items = normalized.Items.Select(ToEntity).ToList();
+            template.Items = items.Select(ToEntity).ToList();
             db.DocumentRequirementTemplates.Add(template);
             await db.SaveChangesAsync(cancellationToken);
 
@@ -188,12 +195,28 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
 
         return await InSerializableTransactionAsync(async () =>
         {
+            var serviceId = await GetTemplateServiceIdAsync(templateId, cancellationToken);
+            await LockServiceAsync(serviceId, cancellationToken);
             var template = await GetTrackedTemplateWithItemsAsync(templateId, cancellationToken);
             await EnsureUnusedAsync(template.Id, cancellationToken);
-            Finance.Require(!template.Items.Any(x => string.Equals(x.RequirementKey, normalized.RequirementKey, StringComparison.OrdinalIgnoreCase)),
+            var requirementKey = normalized.RequirementKey is null
+                ? DocumentChecklistKeyGenerator.AllocateUnique(
+                    DocumentChecklistKeyGenerator.Slugify(normalized.Name, "requirement"),
+                    template.Items.Select(x => x.RequirementKey))
+                : NormalizeRequired(normalized.RequirementKey, "Requirement key", 100);
+            Finance.Require(!template.Items.Any(x => string.Equals(x.RequirementKey, requirementKey, StringComparison.OrdinalIgnoreCase)),
                 "The requirement key is already used by this template version.");
+            var nextDisplayOrder = template.Items.Count == 0
+                ? 0
+                : template.Items.Max(x => x.DisplayOrder) == int.MaxValue
+                    ? throw new BusinessException("No further requirement order can be allocated.")
+                    : template.Items.Max(x => x.DisplayOrder) + 1;
 
-            var item = ToEntity(normalized);
+            var item = ToEntity(normalized with
+            {
+                RequirementKey = requirementKey,
+                DisplayOrder = nextDisplayOrder
+            });
             template.Items.Add(item);
             await db.SaveChangesAsync(cancellationToken);
             return ToReadModel(item);
@@ -222,7 +245,6 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             item.Description = normalized.Description;
             item.IsRequired = normalized.IsRequired;
             item.Wave = normalized.Wave;
-            item.DisplayOrder = normalized.DisplayOrder;
             item.IsActive = normalized.IsActive;
             await db.SaveChangesAsync(cancellationToken);
             return ToReadModel(item);
@@ -452,19 +474,25 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         var items = input.Items ?? throw new BusinessException("Template items are required.");
         return input with
         {
-            TemplateKey = NormalizeRequired(input.TemplateKey, "Template key", 100),
+            TemplateKey = NormalizeOptional(input.TemplateKey, "Template key", 100),
             Name = NormalizeRequired(input.Name, "Template name", 160),
             Description = NormalizeOptional(input.Description, "Template description", 2000),
-            Items = items.Select(NormalizeItemInput).ToArray()
+            Items = items
+                .Select(NormalizeItemInput)
+                .Select((item, index) => item with { DisplayOrder = index })
+                .ToArray()
         };
     }
 
-    private static DocumentRequirementTemplateItemInput NormalizeItemInput(DocumentRequirementTemplateItemInput input) => input with
+    private static DocumentRequirementTemplateItemInput NormalizeItemInput(DocumentRequirementTemplateItemInput input)
     {
-        RequirementKey = NormalizeRequired(input.RequirementKey, "Requirement key", 100),
-        Name = NormalizeRequired(input.Name, "Requirement name", 160),
-        Description = NormalizeOptional(input.Description, "Requirement description", 2000)
-    };
+        return input with
+        {
+            RequirementKey = NormalizeOptional(input.RequirementKey, "Requirement key", 100),
+            Name = NormalizeRequired(input.Name, "Requirement name", 160),
+            Description = NormalizeOptional(input.Description, "Requirement description", 2000)
+        };
+    }
 
     private static DocumentRequirementTemplateItemUpdateInput NormalizeItemUpdateInput(DocumentRequirementTemplateItemUpdateInput input) => input with
     {
@@ -488,13 +516,20 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         return normalized;
     }
 
+    private static void ValidateItemValues(IReadOnlyList<DocumentRequirementTemplateItemInput> items)
+    {
+        foreach (var item in items)
+            ValidateItem(item);
+    }
+
     private static void ValidateItems(IReadOnlyList<DocumentRequirementTemplateItemInput> items)
     {
         var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in items)
         {
             ValidateItem(item);
-            Finance.Require(keys.Add(item.RequirementKey), "Requirement keys must be unique within a template version.");
+            Finance.Require(item.RequirementKey is not null, "A requirement key could not be generated.");
+            Finance.Require(keys.Add(item.RequirementKey!), "Requirement keys must be unique within a template version.");
         }
     }
 
@@ -535,7 +570,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
 
     private static DocumentRequirementTemplateItem ToEntity(DocumentRequirementTemplateItemInput input) => new()
     {
-        RequirementKey = input.RequirementKey,
+        RequirementKey = input.RequirementKey!,
         Name = input.Name,
         Description = input.Description,
         IsRequired = input.IsRequired,
@@ -543,6 +578,50 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         DisplayOrder = input.DisplayOrder,
         IsActive = input.IsActive
     };
+
+    private async Task<string> ResolveTemplateKeyAsync(
+        int serviceId,
+        string? requestedKey,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedKey))
+            return NormalizeRequired(requestedKey, "Template key", 100);
+
+        var existingKeys = await db.DocumentRequirementTemplates
+            .Where(x => x.ServiceId == serviceId)
+            .Select(x => x.TemplateKey)
+            .ToListAsync(cancellationToken);
+        return DocumentChecklistKeyGenerator.AllocateUnique(
+            DocumentChecklistKeyGenerator.Slugify(name, "checklist"),
+            existingKeys);
+    }
+
+    private static IReadOnlyList<DocumentRequirementTemplateItemInput> AllocateRequirementKeys(
+        IReadOnlyList<DocumentRequirementTemplateItemInput> items)
+    {
+        var usedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<DocumentRequirementTemplateItemInput>(items.Count);
+        foreach (var item in items)
+        {
+            var key = item.RequirementKey is null
+                ? DocumentChecklistKeyGenerator.AllocateUnique(
+                    DocumentChecklistKeyGenerator.Slugify(item.Name, "requirement"),
+                    usedKeys)
+                : NormalizeRequired(item.RequirementKey, "Requirement key", 100);
+            Finance.Require(usedKeys.Add(key), "Requirement keys must be unique within a template version.");
+            result.Add(item with { RequirementKey = key });
+        }
+
+        return result;
+    }
+
+    private async Task<int> GetTemplateServiceIdAsync(int templateId, CancellationToken cancellationToken) =>
+        await db.DocumentRequirementTemplates
+            .Where(x => x.Id == templateId)
+            .Select(x => (int?)x.ServiceId)
+            .SingleOrDefaultAsync(cancellationToken)
+        ?? throw new BusinessException("The document requirement template was not found.");
 
     private static DocumentRequirementTemplateItemReadModel ToReadModel(DocumentRequirementTemplateItem item) => new(
         item.Id,

@@ -6,7 +6,6 @@ namespace BillingControl.Models;
 public sealed class DocumentRequirementTemplateIndexViewModel
 {
     public int? ServiceId { get; set; }
-    [StringLength(100)] public string? TemplateKey { get; set; }
     public IReadOnlyList<DocumentRequirementTemplateServiceOption> Services { get; init; } = [];
     public IReadOnlyList<DocumentRequirementTemplateListItemViewModel> Templates { get; init; } = [];
 }
@@ -29,9 +28,6 @@ public sealed class DocumentRequirementTemplateCreateViewModel
 {
     [Range(1, int.MaxValue, ErrorMessage = "Select a service.")]
     public int ServiceId { get; set; }
-
-    [Required, StringLength(100)]
-    public string TemplateKey { get; set; } = "";
 
     [Required, StringLength(160)]
     public string Name { get; set; } = "";
@@ -76,9 +72,6 @@ public sealed class DocumentRequirementTemplateItemForm
     public int Id { get; set; }
     public int TemplateId { get; set; }
 
-    [Required, StringLength(100)]
-    public string RequirementKey { get; set; } = "";
-
     [Required, StringLength(160)]
     public string Name { get; set; } = "";
 
@@ -87,10 +80,6 @@ public sealed class DocumentRequirementTemplateItemForm
 
     public bool IsRequired { get; set; }
     public DocumentRequirementWave Wave { get; set; } = DocumentRequirementWave.Normal;
-
-    [Range(0, int.MaxValue)]
-    public int DisplayOrder { get; set; }
-
     public bool IsActive { get; set; } = true;
 }
 

@@ -1,78 +1,75 @@
 @model DocumentRequirementTemplateIndexViewModel
 @using BillingControl.Services
 @{
-    ViewData["Title"] = "Document templates";
+    ViewData["Title"] = "Document Checklists";
     var groups = Model.Templates.GroupBy(x => new { x.ServiceId, x.ServiceName, x.TemplateKey });
 }
+
 <div class="page-heading">
-<div>
-<p class="eyebrow">DOCUMENT COLLECTION</p>
-<h1>Document templates</h1>
-<p>Reusable, versioned checklists for staff-managed service document requests.</p>
-</div>
-<a class="btn btn-primary" href="/DocumentRequirementTemplates/Create">+ New template</a>
+    <div>
+        <p class="eyebrow">DOCUMENT COLLECTION</p>
+        <h1>Document Checklists</h1>
+        <p>Reusable, versioned checklists for staff-managed service document requests.</p>
+    </div>
+    <a class="btn btn-primary" href="/DocumentRequirementTemplates/Create">+ New checklist</a>
 </div>
 
-<form class="report-filters" method="get">
-<div>
-<label for="ServiceId">Service</label>
-<select id="ServiceId" name="ServiceId" class="form-select">
-<option value="">All services</option>
-@foreach (var service in Model.Services)
-{
-    <option value="@service.Id" selected="@(Model.ServiceId == service.Id ? "selected" : null)">@service.Name@(service.IsActive ? "" : " (inactive)")</option>
-}
-</select>
-</div>
-<div>
-<label for="TemplateKey">Template key</label>
-<input id="TemplateKey" name="TemplateKey" value="@Model.TemplateKey" class="form-control" maxlength="100" placeholder="e.g. monthly-bookkeeping" />
-</div>
-<button class="btn btn-outline-secondary">Apply filters</button>
-<a href="/DocumentRequirementTemplates">Reset</a>
+<form class="report-filters" method="get" action="/DocumentRequirementTemplates">
+    <div>
+        <label for="ServiceId">Service</label>
+        <select id="ServiceId" name="ServiceId" class="form-select">
+            <option value="">All services</option>
+            @foreach (var service in Model.Services)
+            {
+                <option value="@service.Id" selected="@(Model.ServiceId == service.Id ? "selected" : null)">@service.Name@(service.IsActive ? "" : " (inactive)")</option>
+            }
+        </select>
+    </div>
+    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
+    <a href="/DocumentRequirementTemplates">Reset</a>
 </form>
 
 @if (!Model.Templates.Any())
 {
-<div class="panel empty-state p-4">
-<h2>No document templates found</h2>
-<p>Create the first version for a service, or clear the filters to view all template history.</p>
-<a class="btn btn-primary" href="/DocumentRequirementTemplates/Create">Create a template</a>
-</div>
+    <div class="panel empty-state p-4">
+        <h2>No document checklists found</h2>
+        <p>Create the first checklist for a service, or clear the service filter to view all checklist history.</p>
+        <a class="btn btn-primary" href="/DocumentRequirementTemplates/Create">Create a checklist</a>
+    </div>
 }
 else
 {
-@foreach (var group in groups)
-{
-<div class="panel">
-<div class="panel-heading">
-<div>
-<h2>@group.Key.ServiceName <span class="text-muted">· @group.Key.TemplateKey</span></h2>
-<p>@group.Count() version@(group.Count() == 1 ? "" : "s") · history is retained</p>
-</div>
-<a href="/DocumentRequirementTemplates/Create?serviceId=@group.Key.ServiceId">New family</a>
-</div>
-<div class="table-responsive">
-<table class="table data-grid">
-<thead><tr><th>Version</th><th>Name</th><th>Status</th><th>Usage</th><th>Requirements</th><th data-nosort>Actions</th></tr></thead>
-<tbody>
-@foreach (var template in group.OrderBy(x => x.TemplateVersion))
-{
-<tr>
-<td class="fw-semibold"><a href="/DocumentRequirementTemplates/Edit/@template.Id">v@template.TemplateVersion</a></td>
-<td>@template.Name<br /><span class="hint">@template.TemplateKey</span></td>
-<td>
-@if (template.IsDefault) { <span class="badge status-completed">Default</span> }
-@if (template.IsActive) { <span class="badge status-active">Active</span> } else { <span class="badge status-inactive">Inactive</span> }
-</td>
-<td>@if (template.IsUsed) { <span class="badge status-muted">Used · immutable</span> } else { <span class="badge status-readytobill">Unused · editable</span> }</td>
-<td>@template.ItemCount</td>
-<td><a href="/DocumentRequirementTemplates/Edit/@template.Id">View / edit</a></td>
-</tr>
-}
-</tbody>
-</table>
-</div>
-</div>
-}
+    @foreach (var group in groups)
+    {
+        var familyName = group.OrderBy(x => x.TemplateVersion).First().Name;
+        <div class="panel">
+            <div class="panel-heading">
+                <div>
+                    <h2>@group.Key.ServiceName <span class="text-muted">· @familyName</span></h2>
+                    <p>@group.Count() version@(group.Count() == 1 ? "" : "s") · prior versions remain available for history</p>
+                </div>
+                <a href="/DocumentRequirementTemplates/Create?serviceId=@group.Key.ServiceId">New checklist</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table data-grid">
+                    <thead><tr><th>Service</th><th>Checklist name</th><th>Version</th><th>Default</th><th>Active</th><th>Used</th><th>Requirements</th><th data-nosort>Actions</th></tr></thead>
+                    <tbody>
+                    @foreach (var checklist in group.OrderBy(x => x.TemplateVersion))
+                    {
+                        <tr>
+                            <td>@checklist.ServiceName</td>
+                            <td class="fw-semibold">@checklist.Name</td>
+                            <td><a href="/DocumentRequirementTemplates/Edit/@checklist.Id">Version @checklist.TemplateVersion</a></td>
+                            <td>@(checklist.IsDefault ? "Yes" : "—")</td>
+                            <td><span class="badge @(checklist.IsActive ? "status-active" : "status-inactive")">@(checklist.IsActive ? "Active" : "Inactive")</span></td>
+                            <td>@(checklist.IsUsed ? "Used" : "Unused")</td>
+                            <td>@checklist.ItemCount</td>
+                            <td><a href="/DocumentRequirementTemplates/Edit/@checklist.Id">View / edit</a></td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 }

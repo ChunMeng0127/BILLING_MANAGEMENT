@@ -51,7 +51,7 @@ public partial class IntegrationTests
         var updatedItem = await service.UpdateItemAsync(second.Items[0].Id,
             new("Bank statement / PDF", "Updated description", true, DocumentRequirementWave.Normal, 2));
         Assert.Equal("bank-statement", updatedItem.RequirementKey);
-        Assert.Equal(2, updatedItem.DisplayOrder);
+        Assert.Equal(second.Items[0].DisplayOrder, updatedItem.DisplayOrder);
 
         var reordered = await service.ReorderItemsAsync(second.Id, [second.Items[1].Id, second.Items[0].Id]);
         Assert.Equal([second.Items[1].Id, second.Items[0].Id], reordered.Items.Select(x => x.Id).ToArray());
@@ -209,6 +209,101 @@ public partial class IntegrationTests
         Assert.Equal(
             versions.Skip(1),
             results.Where(x => x.Success).Select(x => x.Version!.Value).OrderBy(x => x));
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_GeneratesStableKeysAndAppendsRequirementsWithoutChangingOrder()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-generated-keys");
+        var service = new DocumentRequirementTemplateService(db);
+
+        var first = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            null,
+            "Yearly Bookkeeping - Standard Documents",
+            "Reusable yearly checklist",
+            [
+                new(null, "Bank Statements", "All accounts", true, DocumentRequirementWave.StartWork, 99),
+                new(null, "Bank Statements", "Duplicate name", false, DocumentRequirementWave.Normal, 42)
+            ]));
+
+        Assert.Equal("yearly-bookkeeping-standard-documents", first.TemplateKey);
+        Assert.Equal(["bank-statements", "bank-statements-2"], first.Items.Select(x => x.RequirementKey).ToArray());
+        Assert.Equal([0, 1], first.Items.Select(x => x.DisplayOrder).ToArray());
+
+        var added = await service.AddItemAsync(first.Id,
+            new(null, "Bank Statements", "Appended duplicate", false, DocumentRequirementWave.Later, 999));
+        Assert.Equal("bank-statements-3", added.RequirementKey);
+        Assert.Equal(2, added.DisplayOrder);
+
+        var changedItem = await service.UpdateItemAsync(first.Items[0].Id,
+            new("Bank Statements - Revised", "Updated", true, DocumentRequirementWave.Normal, 999));
+        Assert.Equal("bank-statements", changedItem.RequirementKey);
+        Assert.Equal(0, changedItem.DisplayOrder);
+
+        var second = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            null,
+            "Yearly Bookkeeping - Standard Documents",
+            null,
+            [new(null, "Bank Statements", null, true, DocumentRequirementWave.Normal, 12)]));
+        Assert.Equal("yearly-bookkeeping-standard-documents-2", second.TemplateKey);
+
+        var otherServiceMaster = await AddDocumentServiceAsync(db, "template-service-generated-keys-other");
+        var otherService = await service.CreateFirstVersionAsync(new(
+            otherServiceMaster.Id,
+            null,
+            "Yearly Bookkeeping - Standard Documents",
+            null,
+            [new(null, "Bank Statements", null, true, DocumentRequirementWave.Normal, 12)]));
+        Assert.Equal("yearly-bookkeeping-standard-documents", otherService.TemplateKey);
+
+        var renamed = await service.UpdateUnusedVersionAsync(first.Id, new("Renamed checklist", null));
+        Assert.Equal("yearly-bookkeeping-standard-documents", renamed.TemplateKey);
+        var cloned = await service.CreateNewVersionAsync(first.Id);
+        Assert.Equal(first.TemplateKey, cloned.TemplateKey);
+        Assert.Equal(
+            (await service.GetAsync(first.Id))!.Items.Select(x => x.RequirementKey),
+            cloned.Items.Select(x => x.RequirementKey));
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_ConcurrentChecklistCreationAllocatesDistinctGeneratedKeys()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-generated-concurrency");
+
+        var attempts = Enumerable.Range(0, 2).Select(async _ =>
+        {
+            await using var context = Db();
+            try
+            {
+                var created = await new DocumentRequirementTemplateService(context).CreateFirstVersionAsync(new(
+                    serviceMaster.Id,
+                    null,
+                    "Concurrent Checklist",
+                    null,
+                    [new(null, "Bank Statements", null, true, DocumentRequirementWave.Normal, 0)]));
+                return (Success: true, Key: (string?)created.TemplateKey);
+            }
+            catch (BusinessException)
+            {
+                return (Success: false, Key: (string?)null);
+            }
+        }).ToArray();
+
+        var results = await Task.WhenAll(attempts);
+        var keys = await db.DocumentRequirementTemplates
+            .Where(x => x.ServiceId == serviceMaster.Id)
+            .Select(x => x.TemplateKey)
+            .ToListAsync();
+
+        Assert.Equal(keys.Count, keys.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(results.Count(x => x.Success), keys.Count);
+        Assert.Contains("concurrent-checklist", keys);
+        if (results.Count(x => x.Success) == 2)
+            Assert.Contains("concurrent-checklist-2", keys);
     }
 
     [PostgresFact]

@@ -12,10 +12,9 @@ public sealed class DocumentRequirementTemplatesController(
     AppDbContext db,
     DocumentRequirementTemplateService templates) : AppController
 {
-    public async Task<IActionResult> Index(int? serviceId, string? templateKey)
+    public async Task<IActionResult> Index(int? serviceId)
     {
-        var normalizedTemplateKey = string.IsNullOrWhiteSpace(templateKey) ? null : templateKey;
-        var readModels = await templates.GetTemplatesAsync(serviceId, normalizedTemplateKey);
+        var readModels = await templates.GetTemplatesAsync(serviceId);
         var serviceIds = readModels.Select(x => x.ServiceId).Distinct().ToArray();
         var serviceNames = await db.Services.AsNoTracking()
             .Where(x => serviceIds.Contains(x.Id))
@@ -24,7 +23,6 @@ public sealed class DocumentRequirementTemplatesController(
         return View(new DocumentRequirementTemplateIndexViewModel
         {
             ServiceId = serviceId,
-            TemplateKey = templateKey,
             Services = await ServiceOptionsAsync(),
             Templates = readModels.Select(x => new DocumentRequirementTemplateListItemViewModel(
                 x.Id,
@@ -46,7 +44,7 @@ public sealed class DocumentRequirementTemplatesController(
         ViewBag.Services = await ServiceOptionsAsync();
         return View(new DocumentRequirementTemplateCreateViewModel
         {
-            Items = [new() { Wave = DocumentRequirementWave.Normal, DisplayOrder = 0, IsActive = true }]
+            Items = [new() { Wave = DocumentRequirementWave.Normal, IsActive = true }]
         });
     }
 
@@ -65,13 +63,13 @@ public sealed class DocumentRequirementTemplatesController(
         {
             var created = await templates.CreateFirstVersionAsync(new(
                 form.ServiceId,
-                form.TemplateKey,
+                null,
                 form.Name,
                 form.Description,
                 form.Items.Select(ToServiceInput).ToArray(),
                 form.IsActive,
                 form.IsDefault));
-            TempData["Success"] = $"Template {created.TemplateKey} version {created.TemplateVersion} created.";
+            TempData["Success"] = $"Document checklist created. Version {created.TemplateVersion} is ready.";
             return RedirectToAction(nameof(Edit), new { id = created.Id });
         }
         catch (BusinessException ex)
@@ -95,7 +93,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.UpdateUnusedVersionAsync(form.Id, new(form.Name, form.Description));
-            TempData["Success"] = "Template definition saved.";
+            TempData["Success"] = "Checklist details saved.";
             return RedirectToAction(nameof(Edit), new { id = form.Id });
         }
         catch (BusinessException ex)
@@ -136,7 +134,7 @@ public sealed class DocumentRequirementTemplatesController(
 
         try
         {
-            await templates.UpdateItemAsync(form.Id, new(form.Name, form.Description, form.IsRequired, form.Wave, form.DisplayOrder, form.IsActive));
+            await templates.UpdateItemAsync(form.Id, new(form.Name, form.Description, form.IsRequired, form.Wave, 0, form.IsActive));
             TempData["Success"] = "Requirement saved.";
             return RedirectToAction(nameof(Edit), new { id = form.TemplateId });
         }
@@ -166,7 +164,7 @@ public sealed class DocumentRequirementTemplatesController(
     {
         var template = await templates.GetAsync(templateId);
         if (template is null) return NotFound();
-        if (template.IsUsed) { TempData["Error"] = "This template version is used and its checklist definition is immutable."; return RedirectToAction(nameof(Edit), new { id = templateId }); }
+        if (template.IsUsed) { TempData["Error"] = "This checklist version has already been used and its details are immutable."; return RedirectToAction(nameof(Edit), new { id = templateId }); }
 
         var items = template.Items.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id).Select(x => x.Id).ToList();
         var index = items.IndexOf(itemId);
@@ -178,7 +176,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.ReorderItemsAsync(templateId, items);
-            TempData["Success"] = "Requirement order updated.";
+            TempData["Success"] = "Checklist order updated.";
         }
         catch (BusinessException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Edit), new { id = templateId });
@@ -190,7 +188,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             var created = await templates.CreateNewVersionAsync(id);
-            TempData["Success"] = $"Version {created.TemplateVersion} created from {created.TemplateKey}; the stable key and requirements were copied, and the prior version was not changed.";
+            TempData["Success"] = $"Checklist version {created.TemplateVersion} created; stable keys and requirements were copied, and the prior version was not changed.";
             return RedirectToAction(nameof(Edit), new { id = created.Id });
         }
         catch (BusinessException ex)
@@ -206,7 +204,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.SetTemplateActiveAsync(id, isActive);
-            TempData["Success"] = isActive ? "Template activated." : "Template deactivated.";
+            TempData["Success"] = isActive ? "Checklist activated." : "Checklist deactivated.";
         }
         catch (BusinessException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Edit), new { id });
@@ -218,7 +216,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.SetDefaultAsync(id);
-            TempData["Success"] = "Template set as the service default.";
+            TempData["Success"] = "Default checklist updated for this service.";
         }
         catch (BusinessException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Edit), new { id });
@@ -246,7 +244,6 @@ public sealed class DocumentRequirementTemplatesController(
         {
             TemplateId = template.Id,
             Wave = DocumentRequirementWave.Normal,
-            DisplayOrder = template.Items.Count,
             IsActive = true
         };
         return View("Edit", new DocumentRequirementTemplateDetailViewModel
@@ -289,12 +286,12 @@ public sealed class DocumentRequirementTemplatesController(
     }
 
     private static DocumentRequirementTemplateItemInput ToServiceInput(DocumentRequirementTemplateItemForm item) => new(
-        item.RequirementKey,
+        null,
         item.Name,
         item.Description,
         item.IsRequired,
         item.Wave,
-        item.DisplayOrder,
+        0,
         item.IsActive);
 
 }

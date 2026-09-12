@@ -1,171 +1,176 @@
 @model DocumentRequirementTemplateDetailViewModel
 @using BillingControl.Services
 @{
-    ViewData["Title"] = $"{Model.TemplateKey} · v{Model.TemplateVersion}";
+    ViewData["Title"] = $"{Model.Definition.Name} · Version {Model.TemplateVersion}";
     var activeItemCount = Model.Items.Count(x => x.IsActive);
 }
 
-<a class="back-link" href="/DocumentRequirementTemplates">← Document templates</a>
+<a class="back-link" href="/DocumentRequirementTemplates">← Document Checklists</a>
 <div class="page-heading">
-<div>
-<p class="eyebrow">DOCUMENT TEMPLATE</p>
-<h1>@Model.TemplateKey <span class="text-muted">· v@Model.TemplateVersion</span></h1>
-<p>@Model.ServiceName · @Model.TemplateKey is a versioned checklist. Version numbers are allocated automatically.</p>
-</div>
-<div class="form-actions">
-<form asp-action="CreateVersion" method="post">
-<input type="hidden" name="id" value="@Model.Id" />
-<button class="btn btn-primary">Create new version</button>
-</form>
-</div>
+    <div>
+        <p class="eyebrow">DOCUMENT CHECKLIST</p>
+        <h1>@Model.Definition.Name <span class="text-muted">· Version @Model.TemplateVersion</span></h1>
+        <p>@Model.ServiceName · reusable checklist for document requests. Version numbers and internal identifiers are managed automatically.</p>
+    </div>
+    <div class="form-actions">
+        <form asp-action="CreateVersion" method="post">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button class="btn btn-primary">Create new version</button>
+        </form>
+    </div>
 </div>
 
-<div class="d-flex flex-wrap gap-2 mb-3" aria-label="Template status">
-@if (Model.IsDefault) { <span class="badge status-completed">Default</span> }
-@if (Model.IsActive) { <span class="badge status-active">Active</span> } else { <span class="badge status-inactive">Inactive</span> }
-@if (Model.IsUsed) { <span class="badge status-muted">Used · immutable</span> } else { <span class="badge status-readytobill">Unused · editable</span> }
+<div class="d-flex flex-wrap gap-2 mb-3" aria-label="Checklist status">
+    @if (Model.IsDefault) { <span class="badge status-completed">Default checklist</span> }
+    @if (Model.IsActive) { <span class="badge status-active">Active</span> } else { <span class="badge status-inactive">Inactive</span> }
+    @if (Model.IsUsed) { <span class="badge status-muted">Used · details locked</span> } else { <span class="badge status-readytobill">Unused · editable</span> }
 </div>
 
 @if (Model.IsUsed)
 {
-<div class="alert alert-info" role="status">This version has been used and its checklist definition is immutable. Create a new version to make changes.</div>
+    <div class="alert alert-info" role="status">This checklist version has already been used in a document request. Its requirements can no longer be changed. Create a new version to make changes.</div>
 }
 
 <div asp-validation-summary="All" class="text-danger mb-3"></div>
 
 <div class="panel form-panel wide mb-4">
-<div class="panel-heading"><div><h2>Template definition</h2><p>Service and template identity are fixed for this version.</p></div></div>
-<div class="form-grid">
-<div><label class="form-label">Service</label><input class="form-control" value="@Model.ServiceName" readonly /></div>
-<div><label class="form-label">Template key</label><input class="form-control" value="@Model.TemplateKey" readonly /></div>
-<div><label class="form-label">Version</label><input class="form-control" value="@Model.TemplateVersion" readonly /></div>
-</div>
-@if (Model.IsUsed)
-{
-<div class="form-grid mt-3">
-<div><label class="form-label">Name</label><input class="form-control" value="@Model.Definition.Name" readonly /></div>
-<div><label class="form-label">Description</label><textarea class="form-control" rows="2" readonly>@Model.Definition.Description</textarea></div>
-</div>
-}
-else
-{
-<form asp-action="EditDefinition" method="post">
-<input type="hidden" name="Id" value="@Model.Definition.Id" />
-<div class="form-grid mt-3">
-<div><label class="form-label" for="definition-name">Name</label><input id="definition-name" name="Name" class="form-control" maxlength="160" required value="@Model.Definition.Name" /></div>
-<div><label class="form-label" for="definition-description">Description</label><textarea id="definition-description" name="Description" class="form-control" rows="2" maxlength="2000">@Model.Definition.Description</textarea></div>
-</div>
-<div class="form-actions"><button class="btn btn-outline-primary">Save definition</button></div>
-</form>
-}
+    <div class="panel-heading"><div><h2>Checklist details</h2><p>The selected service and version are fixed. The checklist name and description are reusable staff-facing information.</p></div></div>
+    <div class="form-grid">
+        <div><label class="form-label">Service</label><input class="form-control" value="@Model.ServiceName" readonly /></div>
+        <div><label class="form-label">Version</label><input class="form-control" value="@Model.TemplateVersion" readonly /></div>
+    </div>
+    @if (Model.IsUsed)
+    {
+        <div class="form-grid mt-3">
+            <div><label class="form-label">Checklist name</label><input class="form-control" value="@Model.Definition.Name" readonly /></div>
+            <div><label class="form-label">Checklist description</label><textarea class="form-control" rows="2" readonly>@Model.Definition.Description</textarea></div>
+        </div>
+    }
+    else
+    {
+        <form asp-action="EditDefinition" method="post">
+            <input type="hidden" name="Id" value="@Model.Definition.Id" />
+            <div class="form-grid mt-3">
+                <div>
+                    <label class="form-label" for="definition-name">Checklist name</label>
+                    <input id="definition-name" name="Name" class="form-control" maxlength="160" required value="@Model.Definition.Name" placeholder="Standard Yearly Bookkeeping Documents" />
+                </div>
+                <div>
+                    <label class="form-label" for="definition-description">Checklist description <span class="hint">(optional)</span></label>
+                    <textarea id="definition-description" name="Description" class="form-control" rows="2" maxlength="2000" placeholder="Standard documents normally required from clients for yearly bookkeeping.">@Model.Definition.Description</textarea>
+                </div>
+            </div>
+            <p class="hint">This checklist can be reused for customers using the selected service. Changing the name does not change its stable internal identity.</p>
+            <div class="form-actions"><button class="btn btn-outline-primary">Save checklist details</button></div>
+        </form>
+    }
 </div>
 
 <div class="panel form-panel wide mb-4">
-<div class="panel-heading"><div><h2>Template lifecycle</h2><p>Lifecycle flags are separate from the immutable checklist definition.</p></div></div>
-<div class="form-actions">
-<form asp-action="SetActive" method="post">
-<input type="hidden" name="id" value="@Model.Id" />
-<input type="hidden" name="isActive" value="@(!Model.IsActive ? "true" : "false")" />
-<button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-primary")">@(Model.IsActive ? "Deactivate" : "Activate")</button>
-</form>
-@if (Model.IsActive && !Model.IsDefault && activeItemCount > 0)
-{
-<form asp-action="SetDefault" method="post">
-<input type="hidden" name="id" value="@Model.Id" />
-<button class="btn btn-outline-primary">Set as service default</button>
-</form>
-}
-else if (!Model.IsDefault && !Model.IsActive)
-{
-<span class="hint">Activate this version before setting it as the service default.</span>
-}
-else if (!Model.IsDefault && activeItemCount == 0)
-{
-<span class="hint">Add or activate a requirement before setting this version as the service default.</span>
-}
-else if (Model.IsDefault)
-{
-<span class="hint">This is the current service default. Set another active version as default before deactivating it.</span>
-}
-</div>
+    <div class="panel-heading"><div><h2>Checklist status</h2><p>Active and default status are separate from the checklist details.</p></div></div>
+    <div class="form-actions">
+        <form asp-action="SetActive" method="post">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <input type="hidden" name="isActive" value="@(!Model.IsActive ? "true" : "false")" />
+            <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-primary")">@(Model.IsActive ? "Deactivate checklist" : "Activate checklist")</button>
+        </form>
+        @if (Model.IsActive && !Model.IsDefault && activeItemCount > 0)
+        {
+            <form asp-action="SetDefault" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <button class="btn btn-outline-primary">Use as default checklist for this service</button>
+            </form>
+        }
+        else if (!Model.IsDefault && !Model.IsActive)
+        {
+            <span class="hint">Activate this checklist before using it as the service default.</span>
+        }
+        else if (!Model.IsDefault && activeItemCount == 0)
+        {
+            <span class="hint">Add or activate a document before using this checklist as the service default.</span>
+        }
+        else if (Model.IsDefault)
+        {
+            <span class="hint">This is the current default checklist. Use another active version as default before deactivating it.</span>
+        }
+    </div>
+    <p class="hint mt-3 mb-0">This checklist will be selected first when creating a document request for this service. It does not send WhatsApp messages or contact clients automatically.</p>
 </div>
 
 <div class="panel form-panel wide">
-<div class="panel-heading"><div><h2>Requirements</h2><p>@Model.Items.Count requirement@(Model.Items.Count == 1 ? "" : "s") · @activeItemCount active</p></div></div>
-@if (!Model.IsUsed)
-{
-<form asp-action="AddItem" method="post" class="mb-4">
-<input type="hidden" name="TemplateId" value="@Model.Id" />
-<h3 class="section-title">Add requirement</h3>
-<div class="table-responsive">
-<table class="table data-grid template-items-table">
-<thead><tr><th>Requirement key</th><th>Name</th><th>Description</th><th>Required?</th><th>Wave</th><th>Order</th><th>Active?</th><th></th></tr></thead>
-<tbody><tr>
-<td><input name="RequirementKey" class="form-control" maxlength="100" required value="@Model.NewItem.RequirementKey" /></td>
-<td><input name="Name" class="form-control" maxlength="160" required value="@Model.NewItem.Name" /></td>
-<td><input name="Description" class="form-control" maxlength="2000" value="@Model.NewItem.Description" /></td>
-<td class="text-center"><input name="IsRequired" value="true" type="checkbox" class="form-check-input" @(Model.NewItem.IsRequired ? "checked" : null) /></td>
-<td><select name="Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave" selected="@(Model.NewItem.Wave == wave ? "selected" : null)">@Finance.Label(wave)</option> }</select></td>
-<td><input name="DisplayOrder" class="form-control" type="number" min="0" value="@Model.NewItem.DisplayOrder" /></td>
-<td class="text-center"><input name="IsActive" value="true" type="checkbox" class="form-check-input" @(Model.NewItem.IsActive ? "checked" : null) /></td>
-<td><button class="btn btn-outline-primary">Add</button></td>
-</tr></tbody>
-</table>
-</div>
-</form>
-}
+    <div class="panel-heading"><div><h2>Checklist items</h2><p>@Model.Items.Count document@(Model.Items.Count == 1 ? "" : "s") · @activeItemCount active</p></div></div>
+    <p class="hint">Request priority controls when the item should be requested. Required controls whether the item is mandatory.</p>
+    <p class="hint">Start Work — needed to begin the job · Normal — normal follow-up · Later — can be requested later · Optional — lower priority or if applicable.</p>
+    @if (!Model.IsUsed)
+    {
+        <form asp-action="AddItem" method="post" class="mb-4">
+            <input type="hidden" name="TemplateId" value="@Model.Id" />
+            <h3 class="section-title">Add document / requirement</h3>
+            <div class="table-responsive">
+                <table class="table data-grid template-items-table">
+                    <thead><tr><th>Document / requirement</th><th>Description</th><th>Required?</th><th>Request priority</th><th>Active?</th><th></th></tr></thead>
+                    <tbody><tr>
+                        <td><input name="Name" class="form-control" maxlength="160" required placeholder="Bank Statements" /></td>
+                        <td><input name="Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
+                        <td class="text-center"><input name="IsRequired" value="true" type="checkbox" class="form-check-input" @(Model.NewItem.IsRequired ? "checked" : null) /></td>
+                        <td><select name="Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave" selected="@(Model.NewItem.Wave == wave ? "selected" : null)">@Finance.Label(wave)</option> }</select></td>
+                        <td class="text-center"><input name="IsActive" value="true" type="checkbox" class="form-check-input" @(Model.NewItem.IsActive ? "checked" : null) /></td>
+                        <td><button class="btn btn-outline-primary">Add</button></td>
+                    </tr></tbody>
+                </table>
+            </div>
+        </form>
+    }
 
-<div class="table-responsive">
-<table class="table data-grid template-items-table">
-<thead><tr><th>Order</th><th>Requirement key</th><th>Name</th><th>Description</th><th>Required?</th><th>Wave</th><th>Active</th><th data-nosort>Actions</th></tr></thead>
-<tbody>
-@foreach (var item in Model.Items.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id))
-{
-    var edit = Model.EditingItem?.Id == item.Id ? Model.EditingItem : null;
-    var name = edit?.Name ?? item.Name;
-    var description = edit?.Description ?? item.Description;
-    var isRequired = edit?.IsRequired ?? item.IsRequired;
-    var waveValue = edit?.Wave ?? item.Wave;
-    var displayOrder = edit?.DisplayOrder ?? item.DisplayOrder;
-    var isActive = edit?.IsActive ?? item.IsActive;
-<tr>
-@if (Model.IsUsed)
-{
-<td>@item.DisplayOrder</td><td><span class="fw-semibold">@item.RequirementKey</span></td><td>@item.Name</td><td>@item.Description</td><td>@(item.IsRequired ? "Required" : "Optional")</td><td>@Finance.Label(item.Wave)</td><td>@(item.IsActive ? "Active" : "Inactive")</td><td><span class="hint">Read-only</span></td>
-}
-else
-{
-<td>
-<div class="d-flex gap-1">
-<form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="up" /><button class="btn btn-sm btn-outline-secondary" title="Move up" aria-label="Move @item.RequirementKey up">↑</button></form>
-<form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="down" /><button class="btn btn-sm btn-outline-secondary" title="Move down" aria-label="Move @item.RequirementKey down">↓</button></form>
-</div>
-</td>
-<td><span class="fw-semibold">@item.RequirementKey</span><small class="d-block hint">Key is immutable after creation</small></td>
-<td colspan="5">
-<form asp-action="EditItem" method="post" class="template-item-edit-form">
-<input type="hidden" name="TemplateId" value="@Model.Id" /><input type="hidden" name="Id" value="@item.Id" /><input type="hidden" name="RequirementKey" value="@item.RequirementKey" />
-<div class="form-grid compact">
-<input name="Name" class="form-control" maxlength="160" required value="@name" aria-label="@item.RequirementKey name" />
-<input name="Description" class="form-control" maxlength="2000" value="@description" aria-label="@item.RequirementKey description" />
-<label class="form-check"><input name="IsRequired" value="true" type="checkbox" class="form-check-input" @(isRequired ? "checked" : null) /><span class="form-check-label">Required</span></label>
-<select name="Wave" class="form-select" aria-label="@item.RequirementKey wave">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave" selected="@(waveValue == wave ? "selected" : null)">@Finance.Label(wave)</option> }</select>
-<input name="DisplayOrder" class="form-control" type="number" min="0" value="@displayOrder" aria-label="@item.RequirementKey display order" />
-<label class="form-check"><input name="IsActive" value="true" type="checkbox" class="form-check-input" @(isActive ? "checked" : null) /><span class="form-check-label">Active</span></label>
-<button class="btn btn-sm btn-outline-primary">Save</button>
-</div>
-</form>
-</td>
-<td>
-<form asp-action="SetItemActive" method="post">
-<input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="isActive" value="@(!item.IsActive ? "true" : "false")" />
-<button class="btn btn-sm btn-outline-secondary">@(item.IsActive ? "Deactivate" : "Activate")</button>
-</form>
-</td>
-}
-</tr>
-}
-</tbody>
-</table>
-</div>
+    <div class="table-responsive">
+        <table class="table data-grid template-items-table">
+            <thead><tr><th data-nosort>Move</th><th>Document / requirement</th><th>Description</th><th>Required?</th><th>Request priority</th><th>Active</th><th data-nosort>Actions</th></tr></thead>
+            <tbody>
+            @foreach (var item in Model.Items.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id))
+            {
+                var edit = Model.EditingItem?.Id == item.Id ? Model.EditingItem : null;
+                var name = edit?.Name ?? item.Name;
+                var description = edit?.Description ?? item.Description;
+                var isRequired = edit?.IsRequired ?? item.IsRequired;
+                var waveValue = edit?.Wave ?? item.Wave;
+                var isActive = edit?.IsActive ?? item.IsActive;
+                <tr>
+                @if (Model.IsUsed)
+                {
+                    <td><span class="hint">Read-only</span></td>
+                    <td>@item.Name</td>
+                    <td>@(item.Description ?? "—")</td>
+                    <td>@(item.IsRequired ? "Required" : "Optional")</td>
+                    <td>@Finance.Label(item.Wave)</td>
+                    <td>@(item.IsActive ? "Active" : "Inactive")</td>
+                    <td><span class="hint">Used version</span></td>
+                }
+                else
+                {
+                    <td>
+                        <div class="d-flex gap-1">
+                            <form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="up" /><button class="btn btn-sm btn-outline-secondary" title="Move up" aria-label="Move @item.Name up">↑</button></form>
+                            <form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="down" /><button class="btn btn-sm btn-outline-secondary" title="Move down" aria-label="Move @item.Name down">↓</button></form>
+                        </div>
+                    </td>
+                    <td colspan="5">
+                        <form asp-action="EditItem" method="post" class="template-item-edit-form">
+                            <input type="hidden" name="TemplateId" value="@Model.Id" /><input type="hidden" name="Id" value="@item.Id" />
+                            <div class="form-grid compact">
+                                <div><label class="form-label" for="item-name-@item.Id">Document / requirement</label><input id="item-name-@item.Id" name="Name" class="form-control" maxlength="160" required value="@name" placeholder="Bank Statements" /></div>
+                                <div><label class="form-label" for="item-description-@item.Id">Description</label><input id="item-description-@item.Id" name="Description" class="form-control" maxlength="2000" value="@description" placeholder="Full financial year, all bank accounts" /></div>
+                                <label class="form-check"><input name="IsRequired" value="true" type="checkbox" class="form-check-input" @(isRequired ? "checked" : null) /><span class="form-check-label">Required</span></label>
+                                <div><label class="form-label" for="item-wave-@item.Id">Request priority</label><select id="item-wave-@item.Id" name="Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave" selected="@(waveValue == wave ? "selected" : null)">@Finance.Label(wave)</option> }</select></div>
+                                <label class="form-check"><input name="IsActive" value="true" type="checkbox" class="form-check-input" @(isActive ? "checked" : null) /><span class="form-check-label">Active</span></label>
+                                <button class="btn btn-sm btn-outline-primary align-self-end">Save item</button>
+                            </div>
+                        </form>
+                    </td>
+                    <td><span class="hint">Use Save item to update</span></td>
+                }
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
 </div>
