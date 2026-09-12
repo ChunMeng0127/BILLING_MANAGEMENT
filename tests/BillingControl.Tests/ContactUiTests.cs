@@ -168,7 +168,8 @@ public partial class IntegrationTests
         Assert.Contains("Unknown", detailsWithFirstAddress);
         Assert.Contains("Provider-owned, read-only", detailsWithFirstAddress);
         Assert.DoesNotContain("name=\"ProviderWaId\"", detailsWithFirstAddress);
-        Assert.Contains("+60123456789", await admin.GetStringAsync("/Contacts?search=%2B60%2012-345%206789"));
+        var formattedPhoneSearch = Uri.EscapeDataString("+60 (12) 345-6789");
+        Assert.Contains("+60123456789", await admin.GetStringAsync($"/Contacts?search={formattedPhoneSearch}"));
 
         var secondAddressResponse = await PostWithToken(admin, $"/Contacts/Details/{contactId}", "/Contacts/AddAddress", new()
         {
