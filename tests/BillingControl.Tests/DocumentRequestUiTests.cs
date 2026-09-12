@@ -56,6 +56,15 @@ public partial class IntegrationTests
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var service = await AddDocumentServiceAsync(context, $"{prefix}-service");
             var fixture = await AddDocumentFixtureAsync(context, prefix, service.Id);
+            context.RevenueShareAllocations.Add(new RevenueShareAllocation
+            {
+                BillingRecordId = fixture.BillingRecordId,
+                Kind = ShareKind.Lcm,
+                PartyName = "LCM MGT Sdn Bhd",
+                Percent = 100m,
+                Amount = 1000m
+            });
+            await context.SaveChangesAsync();
             var template = await AddRequestTemplateAsync(context, service.Id, $"{prefix}-template", isDefault: true);
             var engagement = await context.Engagements.AsNoTracking().SingleAsync(x => x.Id == fixture.EngagementId);
             var worker = new Worker { Name = DocumentToken($"{prefix}-worker") };
