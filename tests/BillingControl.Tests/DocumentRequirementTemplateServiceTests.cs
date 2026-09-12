@@ -1,0 +1,185 @@
+using BillingControl.Data;
+using BillingControl.Models;
+using BillingControl.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace BillingControl.Tests;
+
+public partial class IntegrationTests
+{
+    [PostgresFact]
+    public async Task TemplateService_CreatesFirstVersionAndClonesDefinition()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-create");
+        var service = new DocumentRequirementTemplateService(db);
+        var key = DocumentToken("template-key");
+
+        var first = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            key,
+            "Monthly checklist",
+            "Initial checklist",
+            [
+                new("bank-statement", "Bank statement", "Latest statement", true, DocumentRequirementWave.StartWork, 0),
+                new("payroll", "Payroll report", null, false, DocumentRequirementWave.Later, 1)
+            ],
+            IsActive: true,
+            IsDefault: true));
+
+        Assert.Equal(1, first.TemplateVersion);
+        Assert.True(first.IsActive);
+        Assert.True(first.IsDefault);
+        Assert.False(first.IsUsed);
+        Assert.Equal(["bank-statement", "payroll"], first.Items.Select(x => x.RequirementKey).ToArray());
+
+        var second = await service.CreateNewVersionAsync(first.Id);
+
+        Assert.Equal(2, second.TemplateVersion);
+        Assert.False(second.IsDefault);
+        Assert.True(second.IsActive);
+        Assert.Equal(first.Name, second.Name);
+        Assert.Equal(first.Description, second.Description);
+        Assert.Equal(first.Items.Select(x => (x.RequirementKey, x.Name, x.Description, x.IsRequired, x.Wave, x.DisplayOrder, x.IsActive)),
+            second.Items.Select(x => (x.RequirementKey, x.Name, x.Description, x.IsRequired, x.Wave, x.DisplayOrder, x.IsActive)));
+
+        var updated = await service.UpdateUnusedVersionAsync(second.Id, new("Monthly checklist v2", "Edited before use"));
+        Assert.Equal("Monthly checklist v2", updated.Name);
+        Assert.Equal("Edited before use", updated.Description);
+        Assert.Equal("Monthly checklist", (await service.GetAsync(first.Id))!.Name);
+
+        var updatedItem = await service.UpdateItemAsync(second.Items[0].Id,
+            new("Bank statement / PDF", "Updated description", true, DocumentRequirementWave.Normal, 2));
+        Assert.Equal("bank-statement", updatedItem.RequirementKey);
+        Assert.Equal(2, updatedItem.DisplayOrder);
+
+        var reordered = await service.ReorderItemsAsync(second.Id, [second.Items[1].Id, second.Items[0].Id]);
+        Assert.Equal([second.Items[1].Id, second.Items[0].Id], reordered.Items.Select(x => x.Id).ToArray());
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_ValidatesKeysAndRejectsUsedVersionEdits()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-validation");
+        var service = new DocumentRequirementTemplateService(db);
+
+        await Assert.ThrowsAsync<BusinessException>(() => service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("duplicate-requirements"),
+            "Duplicate requirements",
+            null,
+            [
+                new("same", "First", null, true, DocumentRequirementWave.Normal, 0),
+                new(" SAME ", "Second", null, false, DocumentRequirementWave.Normal, 1)
+            ])));
+
+        var created = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("used-template"),
+            "Used template",
+            null,
+            [new("bank-statement", "Bank statement", null, true, DocumentRequirementWave.Normal, 0)]));
+        await Assert.ThrowsAsync<BusinessException>(() => service.AddItemAsync(created.Id,
+            new("bank-statement", "Duplicate key", null, false, DocumentRequirementWave.Later, 1)));
+
+        var fixture = await AddDocumentFixtureAsync(db, "template-service-used", serviceMaster.Id);
+        await AddDocumentRequestAsync(db, fixture.WorkItemId, created.Id);
+
+        await Assert.ThrowsAsync<BusinessException>(() => service.UpdateUnusedVersionAsync(created.Id, new("Should fail", null)));
+        await Assert.ThrowsAsync<BusinessException>(() => service.SetItemActiveAsync(created.Items[0].Id, false));
+        await Assert.ThrowsAsync<BusinessException>(() => service.AddItemAsync(created.Id,
+            new("new-item", "New item", null, false, DocumentRequirementWave.Later, 1)));
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_DefaultSwitchAndActivationRulesAreExplicit()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-defaults");
+        var service = new DocumentRequirementTemplateService(db);
+        var first = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("default-template"),
+            "Default v1",
+            null,
+            [new("bank-statement", "Bank statement", null, true, DocumentRequirementWave.Normal, 0)],
+            IsActive: true,
+            IsDefault: true));
+        var second = await service.CreateNewVersionAsync(first.Id);
+
+        var switched = await service.SetDefaultAsync(second.Id);
+        Assert.True(switched.IsDefault);
+        Assert.False((await service.GetAsync(first.Id))!.IsDefault);
+        Assert.Equal(1, (await service.GetTemplatesAsync(serviceMaster.Id)).Count(x => x.IsActive && x.IsDefault));
+
+        await Assert.ThrowsAsync<BusinessException>(() => service.SetTemplateActiveAsync(second.Id, false));
+        await service.SetTemplateActiveAsync(first.Id, false);
+        await Assert.ThrowsAsync<BusinessException>(() => service.SetDefaultAsync(first.Id));
+        Assert.False((await service.GetAsync(first.Id))!.IsActive);
+        Assert.True((await service.GetAsync(second.Id))!.IsDefault);
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_ConcurrentVersionAllocationDoesNotDuplicateVersions()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-concurrency");
+        var seed = await new DocumentRequirementTemplateService(db).CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("concurrent-template"),
+            "Concurrent template",
+            null,
+            [new("bank-statement", "Bank statement", null, true, DocumentRequirementWave.Normal, 0)]));
+
+        var attempts = Enumerable.Range(0, 2).Select(async _ =>
+        {
+            await using var context = Db();
+            try
+            {
+                return (Success: true, Version: (int?)((await new DocumentRequirementTemplateService(context).CreateNewVersionAsync(seed.Id)).TemplateVersion));
+            }
+            catch (BusinessException)
+            {
+                return (Success: false, Version: (int?)null);
+            }
+        }).ToArray();
+        var results = await Task.WhenAll(attempts);
+
+        var versions = await db.DocumentRequirementTemplates
+            .Where(x => x.ServiceId == serviceMaster.Id && x.TemplateKey == seed.TemplateKey)
+            .OrderBy(x => x.TemplateVersion)
+            .Select(x => x.TemplateVersion)
+            .ToListAsync();
+        Assert.Equal(versions.Count, versions.Distinct().Count());
+        Assert.Equal([1, 2], versions);
+        Assert.Single(results, x => x.Success);
+        Assert.All(results.Where(x => x.Success), x => Assert.Equal(2, x.Version));
+    }
+
+    [PostgresFact]
+    public async Task TemplateService_DoesNotChangeFinancialOrWorkflowState()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-boundary");
+        var before = new
+        {
+            BillingRecords = await db.BillingRecords.CountAsync(),
+            WorkItems = await db.WorkItems.CountAsync(),
+            WorkerAssignments = await db.WorkerAssignments.CountAsync()
+        };
+        var service = new DocumentRequirementTemplateService(db);
+        var template = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("boundary-template"),
+            "Boundary template",
+            null,
+            [new("bank-statement", "Bank statement", null, true, DocumentRequirementWave.Normal, 0)]));
+        await service.CreateNewVersionAsync(template.Id);
+        await service.SetTemplateActiveAsync(template.Id, false);
+
+        Assert.Equal(before.BillingRecords, await db.BillingRecords.CountAsync());
+        Assert.Equal(before.WorkItems, await db.WorkItems.CountAsync());
+        Assert.Equal(before.WorkerAssignments, await db.WorkerAssignments.CountAsync());
+    }
+}

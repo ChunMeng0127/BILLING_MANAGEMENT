@@ -33,6 +33,7 @@ builder.Services.AddControllersWithViews(o => o.Filters.Add(new AutoValidateAnti
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<BillingScheduleService>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<DocumentRequirementTemplateService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<BusinessClock>();
