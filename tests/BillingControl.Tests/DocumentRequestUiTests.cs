@@ -258,6 +258,10 @@ public partial class IntegrationTests
         Assert.Contains("name=\"targetStatus\" value=\"ReadyToSend\"", draftPage);
         Assert.Contains("name=\"targetStatus\" value=\"Paused\"", draftPage);
         Assert.Contains("name=\"targetStatus\" value=\"Cancelled\"", draftPage);
+        Assert.Contains(">Pause</button>", draftPage);
+        Assert.Contains(">Cancel</button>", draftPage);
+        Assert.DoesNotContain(">Paused</button>", draftPage);
+        Assert.DoesNotContain(">Cancelled</button>", draftPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"Requested\"", draftPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"PartiallyReceived\"", draftPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"Complete\"", draftPage);
@@ -284,6 +288,8 @@ public partial class IntegrationTests
         var readyPage = await admin.GetStringAsync(detailsPath);
         Assert.Contains("name=\"targetStatus\" value=\"Paused\"", readyPage);
         Assert.Contains("name=\"targetStatus\" value=\"Cancelled\"", readyPage);
+        Assert.Contains(">Pause</button>", readyPage);
+        Assert.Contains(">Cancel</button>", readyPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"ReadyToSend\"", readyPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"Draft\"", readyPage);
 
@@ -349,6 +355,43 @@ public partial class IntegrationTests
         Assert.DoesNotContain("name=\"targetStatus\" value=\"PartiallyReceived\"", draftPage);
         Assert.DoesNotContain("name=\"targetStatus\" value=\"Received\"", draftPage);
 
+        var requestHistoryBeforeForgedProviderState = await db.DocumentRequestStatusHistories
+            .CountAsync(x => x.DocumentRequestId == request.Id);
+        var forgedRequestState = await PostWithToken(admin, detailsPath, "/DocumentRequests/Transition", new()
+        {
+            ["requestId"] = request.Id.ToString(),
+            ["expectedVersion"] = request.Version.ToString(),
+            ["targetStatus"] = DocumentRequestStatus.Requested.ToString(),
+            ["reason"] = "Forged provider acceptance"
+        }, detailsPath);
+        Assert.Equal(HttpStatusCode.Redirect, forgedRequestState.StatusCode);
+        var forgedRequestPage = await admin.GetStringAsync(detailsPath);
+        Assert.Contains("Provider/evidence-driven states remain deferred", forgedRequestPage);
+        db.ChangeTracker.Clear();
+        request = await db.DocumentRequests.SingleAsync(x => x.Id == request.Id);
+        Assert.Equal(DocumentRequestStatus.Draft, request.Status);
+        Assert.Equal(requestHistoryBeforeForgedProviderState,
+            await db.DocumentRequestStatusHistories.CountAsync(x => x.DocumentRequestId == request.Id));
+
+        var itemHistoryBeforeForgedProviderState = await db.DocumentRequestItemStatusHistories
+            .CountAsync(x => x.DocumentRequestItemId == firstItem.Id);
+        var forgedItemState = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
+        {
+            ["requestId"] = request.Id.ToString(),
+            ["itemId"] = firstItem.Id.ToString(),
+            ["expectedVersion"] = firstItem.Version.ToString(),
+            ["targetStatus"] = DocumentRequestItemStatus.Received.ToString(),
+            ["reason"] = "Forged document evidence"
+        }, detailsPath);
+        Assert.Equal(HttpStatusCode.Redirect, forgedItemState.StatusCode);
+        var forgedItemPage = await admin.GetStringAsync(detailsPath);
+        Assert.Contains("Requested/received states require later provider and evidence operations", forgedItemPage);
+        db.ChangeTracker.Clear();
+        firstItem = await db.DocumentRequestItems.SingleAsync(x => x.Id == firstItem.Id);
+        Assert.Equal(DocumentRequestItemStatus.Missing, firstItem.Status);
+        Assert.Equal(itemHistoryBeforeForgedProviderState,
+            await db.DocumentRequestItemStatusHistories.CountAsync(x => x.DocumentRequestItemId == firstItem.Id));
+
         var notRequired = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
         {
             ["requestId"] = request.Id.ToString(),
@@ -375,6 +418,30 @@ public partial class IntegrationTests
             ["reason"] = "Recheck requirement"
         }, detailsPath);
         Assert.Equal(HttpStatusCode.Redirect, restored.StatusCode);
+
+        db.ChangeTracker.Clear();
+        firstItem = await db.DocumentRequestItems.SingleAsync(x => x.Id == firstItem.Id);
+        var waived = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
+        {
+            ["requestId"] = request.Id.ToString(),
+            ["itemId"] = firstItem.Id.ToString(),
+            ["expectedVersion"] = firstItem.Version.ToString(),
+            ["targetStatus"] = DocumentRequestItemStatus.Waived.ToString(),
+            ["reason"] = "Approved waiver"
+        }, detailsPath);
+        Assert.Equal(HttpStatusCode.Redirect, waived.StatusCode);
+
+        db.ChangeTracker.Clear();
+        firstItem = await db.DocumentRequestItems.SingleAsync(x => x.Id == firstItem.Id);
+        var reopened = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
+        {
+            ["requestId"] = request.Id.ToString(),
+            ["itemId"] = firstItem.Id.ToString(),
+            ["expectedVersion"] = firstItem.Version.ToString(),
+            ["targetStatus"] = DocumentRequestItemStatus.Missing.ToString(),
+            ["reason"] = "Reopen requirement"
+        }, detailsPath);
+        Assert.Equal(HttpStatusCode.Redirect, reopened.StatusCode);
 
         db.ChangeTracker.Clear();
         firstItem = await db.DocumentRequestItems.SingleAsync(x => x.Id == firstItem.Id);
@@ -491,11 +558,15 @@ public partial class IntegrationTests
             DocumentRequestItemStatus.Missing,
             DocumentRequestItemStatus.NotRequired,
             DocumentRequestItemStatus.Missing,
+            DocumentRequestItemStatus.Waived,
+            DocumentRequestItemStatus.Missing,
             DocumentRequestItemStatus.Waived
         }, readModel.Items.Single(x => x.Id == firstItem.Id).StatusHistory.Select(x => x.NewStatus));
 
         Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/DocumentRequests/Details/999999")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/DocumentRequests/Create?workItemId=999999")).StatusCode);
+        Assert.True((await admin.GetAsync("/DocumentRequests/Details/not-an-id")).StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound);
+        Assert.True((await admin.GetAsync("/DocumentRequests/Create?workItemId=not-an-id")).StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await admin.GetAsync($"/DocumentRequests/Transition?requestId={request.Id}")).StatusCode);
     }
 
@@ -509,15 +580,39 @@ public partial class IntegrationTests
         using var admin = await SignedIn(app, AdminEmail(prefix), setup.Password);
         var createPath = $"/DocumentRequests/Create?workItemId={setup.WorkItemId}";
 
+        var secondTemplate = await AddDocumentTemplateAsync(db, setup.ServiceId, $"{prefix}-template", 2, isActive: true);
+        var secondTemplateItem = await AddDocumentTemplateItemAsync(db, secondTemplate.Id, $"{prefix}-template-v2-only");
+        secondTemplateItem.Name = "Revised trial balance";
+        secondTemplateItem.Description = "Revised trial balance for the next request revision";
+        secondTemplateItem.DisplayOrder = 0;
+        secondTemplateItem.Wave = DocumentRequirementWave.StartWork;
+        await db.SaveChangesAsync();
+
         var firstResponse = await PostWithToken(admin, createPath, "/DocumentRequests/Create", RequestCreateFields(setup.WorkItemId, setup.TemplateId), createPath);
         Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
         var firstDetails = firstResponse.Headers.Location!.ToString();
         db.ChangeTracker.Clear();
         var first = await db.DocumentRequests.SingleAsync(x => x.WorkItemId == setup.WorkItemId);
+        var firstItem = await db.DocumentRequestItems.Where(x => x.DocumentRequestId == first.Id).OrderBy(x => x.DisplayOrder).FirstAsync();
+        var firstItemKey = firstItem.RequirementKey;
+        var firstItemName = firstItem.RequirementName;
+        var billingBefore = await db.BillingRecords.AsNoTracking().SingleAsync(x => x.WorkItem.Id == setup.WorkItemId);
+        var workBefore = await db.WorkItems.AsNoTracking().SingleAsync(x => x.Id == setup.WorkItemId);
+        var assignmentBefore = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == setup.WorkerAssignmentId);
+        var receivedDocumentCountBefore = await db.ReceivedDocuments.CountAsync();
+        var evidenceCountBefore = await db.DocumentRequestItemEvidences.CountAsync();
+        var batchCountBefore = await db.DocumentRequestBatches.CountAsync();
+        var batchMemberCountBefore = await db.DocumentRequestBatchMembers.CountAsync();
+        var workflowHistoryCountBefore = await db.WorkerAssignmentWorkflowHistories.CountAsync();
         var firstVersion = first.Version;
         var requestCountBeforeReads = await db.DocumentRequests.CountAsync();
         var itemCountBeforeReads = await db.DocumentRequestItems.CountAsync();
         var historyCountBeforeReads = await db.DocumentRequestStatusHistories.CountAsync();
+
+        var firstWorkDetails = await admin.GetStringAsync($"/Work/Details/{setup.WorkItemId}");
+        Assert.Contains("<strong>Revision 1</strong>", firstWorkDetails);
+        Assert.Contains($"href=\"/DocumentRequests/Details/{first.Id}\">Open full request", firstWorkDetails);
+        Assert.DoesNotContain("No active document request", firstWorkDetails);
 
         var cancelled = await PostWithToken(admin, firstDetails, "/DocumentRequests/Transition", new()
         {
@@ -528,34 +623,82 @@ public partial class IntegrationTests
         }, firstDetails);
         Assert.Equal(HttpStatusCode.Redirect, cancelled.StatusCode);
 
-        var secondResponse = await PostWithToken(admin, createPath, "/DocumentRequests/Create", RequestCreateFields(setup.WorkItemId, setup.TemplateId), createPath);
+        var cancelledWorkDetails = await admin.GetStringAsync($"/Work/Details/{setup.WorkItemId}");
+        Assert.Contains("No active document request", cancelledWorkDetails);
+        Assert.Contains($"href=\"/DocumentRequests/Details/{first.Id}\">Revision 1", cancelledWorkDetails);
+        Assert.DoesNotContain("<strong>Revision 1</strong>", cancelledWorkDetails);
+
+        var secondResponse = await PostWithToken(admin, createPath, "/DocumentRequests/Create", new()
+        {
+            ["WorkItemId"] = setup.WorkItemId.ToString(),
+            ["DocumentRequirementTemplateId"] = secondTemplate.Id.ToString()
+        }, createPath);
         Assert.Equal(HttpStatusCode.Redirect, secondResponse.StatusCode);
         var secondDetails = secondResponse.Headers.Location!.ToString();
+        db.ChangeTracker.Clear();
+        var second = await db.DocumentRequests.SingleAsync(x => x.WorkItemId == setup.WorkItemId && x.Revision == 2);
         var workDetails = await admin.GetStringAsync($"/Work/Details/{setup.WorkItemId}");
         Assert.Contains("Document collection", workDetails);
-        Assert.Contains("Revision 1", workDetails);
+        Assert.Contains("<strong>Revision 2</strong>", workDetails);
+        Assert.Contains($"href=\"/DocumentRequests/Details/{second.Id}\">Open full request", workDetails);
+        Assert.Contains($"href=\"/DocumentRequests/Details/{first.Id}\">Revision 1", workDetails);
         Assert.Contains("Cancelled", workDetails);
-        Assert.Contains(secondDetails.Replace("/DocumentRequests/Details/", "/DocumentRequests/Details/"), workDetails);
+        Assert.Contains($"{secondTemplate.TemplateKey} v2", workDetails);
+        Assert.DoesNotContain("No active document request", workDetails);
 
         var firstHistoryPage = await admin.GetStringAsync(firstDetails);
         Assert.Contains("This cancelled request is read-only", firstHistoryPage);
         Assert.Contains("Created", firstHistoryPage);
         Assert.Contains("CreatedFromTemplate", firstHistoryPage);
         Assert.Contains("Replace checklist revision", firstHistoryPage);
+        Assert.Contains($"/DocumentRequests/Details/{second.Id}", firstHistoryPage);
         Assert.DoesNotContain("name=\"targetStatus\"", firstHistoryPage);
+        Assert.DoesNotContain("class=\"item-action-form\"", firstHistoryPage);
 
         var secondPage = await admin.GetStringAsync(secondDetails);
         Assert.Contains("WorkItem request revisions", secondPage);
         Assert.Contains($"/DocumentRequests/Details/{first.Id}", secondPage);
         Assert.Contains("Revision 1", secondPage);
         Assert.Contains("Revision 2", secondPage);
+        Assert.Contains(secondTemplate.TemplateKey, secondPage);
+        Assert.Contains(secondTemplateItem.RequirementKey, secondPage);
+        Assert.Contains("Revised trial balance", secondPage);
+        Assert.DoesNotContain(firstItemKey, secondPage);
+        Assert.DoesNotContain(firstItemName, secondPage);
+        Assert.DoesNotContain("This cancelled request is read-only", secondPage);
 
         db.ChangeTracker.Clear();
+        var firstStored = await db.DocumentRequests.AsNoTracking().SingleAsync(x => x.Id == first.Id);
+        var firstStoredItem = await db.DocumentRequestItems.AsNoTracking().SingleAsync(x => x.Id == firstItem.Id);
+        var secondStored = await db.DocumentRequests.AsNoTracking().SingleAsync(x => x.Id == second.Id);
+        var secondStoredItem = await db.DocumentRequestItems.AsNoTracking().SingleAsync(x => x.DocumentRequestId == second.Id);
+        Assert.Equal(DocumentRequestStatus.Cancelled, firstStored.Status);
+        Assert.Equal(setup.TemplateId, firstStored.DocumentRequirementTemplateId);
+        Assert.Equal(firstItemKey, firstStoredItem.RequirementKey);
+        Assert.Equal(firstItemName, firstStoredItem.RequirementName);
+        Assert.Equal(DocumentRequestStatus.Draft, secondStored.Status);
+        Assert.Equal(secondTemplate.Id, secondStored.DocumentRequirementTemplateId);
+        Assert.Equal(secondTemplateItem.RequirementKey, secondStoredItem.RequirementKey);
+        Assert.Equal(secondTemplateItem.Name, secondStoredItem.RequirementName);
         var revisions = await new DocumentRequestService(db, RequestTestClock()).GetRevisionsForWorkItemAsync(setup.WorkItemId);
         Assert.Equal(new[] { 1, 2 }, revisions.Select(x => x.Revision));
         Assert.Equal(new[] { DocumentRequestStatus.Cancelled, DocumentRequestStatus.Draft }, revisions.Select(x => x.StatusHistory.Last().NewStatus));
+        Assert.Equal(new[] { DocumentRequestStatus.Draft, DocumentRequestStatus.Cancelled }, revisions[0].StatusHistory.Select(x => x.NewStatus));
+        Assert.Equal(new[] { DocumentRequestStatus.Draft }, revisions[1].StatusHistory.Select(x => x.NewStatus));
+        Assert.Equal(second.Id, (await new DocumentRequestService(db, RequestTestClock()).GetCurrentForWorkItemAsync(setup.WorkItemId))!.Id);
         Assert.Equal(requestCountBeforeReads + 1, await db.DocumentRequests.CountAsync());
-        Assert.Equal(itemCountBeforeReads + 2, await db.DocumentRequestItems.CountAsync());
+        Assert.Equal(itemCountBeforeReads + 1, await db.DocumentRequestItems.CountAsync());
         Assert.Equal(historyCountBeforeReads + 2, await db.DocumentRequestStatusHistories.CountAsync());
+        Assert.Equal(billingBefore.Version, await db.BillingRecords.Where(x => x.Id == billingBefore.Id).Select(x => x.Version).SingleAsync());
+        Assert.Equal(workBefore.Version, await db.WorkItems.Where(x => x.Id == workBefore.Id).Select(x => x.Version).SingleAsync());
+        var assignmentAfter = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == assignmentBefore.Id);
+        Assert.Equal(assignmentBefore.Version, assignmentAfter.Version);
+        Assert.Equal(assignmentBefore.CurrentWorkflowVersion, assignmentAfter.CurrentWorkflowVersion);
+        Assert.Equal(assignmentBefore.CurrentWorkflowStatus, assignmentAfter.CurrentWorkflowStatus);
+        Assert.Equal(receivedDocumentCountBefore, await db.ReceivedDocuments.CountAsync());
+        Assert.Equal(evidenceCountBefore, await db.DocumentRequestItemEvidences.CountAsync());
+        Assert.Equal(batchCountBefore, await db.DocumentRequestBatches.CountAsync());
+        Assert.Equal(batchMemberCountBefore, await db.DocumentRequestBatchMembers.CountAsync());
+        Assert.Equal(workflowHistoryCountBefore, await db.WorkerAssignmentWorkflowHistories.CountAsync());
     }
 }

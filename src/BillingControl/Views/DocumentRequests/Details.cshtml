@@ -16,6 +16,8 @@
         (DocumentRequestStatus.Draft, DocumentRequestStatus.ReadyToSend) => "Mark Ready to Send",
         (DocumentRequestStatus.Paused, DocumentRequestStatus.Draft) => "Resume to Draft",
         (DocumentRequestStatus.Paused, DocumentRequestStatus.ReadyToSend) => "Resume to Ready to Send",
+        (_, DocumentRequestStatus.Paused) => "Pause",
+        (_, DocumentRequestStatus.Cancelled) => "Cancel",
         _ => Finance.Label(target)
     };
 }
