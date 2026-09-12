@@ -205,6 +205,17 @@ public partial class IntegrationTests
         var cancelled = await requestService.TransitionAsync(request.Id,
             new(DocumentRequestStatus.Cancelled, readyAgain.Version, "staff", "test", "Cancel request"));
         Assert.Equal(DocumentRequestStatus.Cancelled, cancelled.Status);
+
+        var requestHistoryCountAfterCancellation = await db.DocumentRequestStatusHistories
+            .CountAsync(x => x.DocumentRequestId == request.Id);
+        await Assert.ThrowsAsync<BusinessException>(() => requestService.TransitionAsync(request.Id,
+            new(DocumentRequestStatus.Draft, cancelled.Version, "staff", "test", "Attempt to reopen cancelled request")));
+        var afterTerminalAttempt = await requestService.GetByIdAsync(request.Id);
+        Assert.NotNull(afterTerminalAttempt);
+        Assert.Equal(DocumentRequestStatus.Cancelled, afterTerminalAttempt!.Status);
+        Assert.Equal(requestHistoryCountAfterCancellation,
+            await db.DocumentRequestStatusHistories.CountAsync(x => x.DocumentRequestId == request.Id));
+
         await Assert.ThrowsAsync<BusinessException>(() => requestService.TransitionItemAsync(item.Id,
             new(DocumentRequestItemStatus.NotRequired, missingAgain.Version, "staff", "test", "Cancelled request")));
 
@@ -212,12 +223,69 @@ public partial class IntegrationTests
         Assert.NotNull(histories);
         Assert.Equal(7, histories!.StatusHistory.Count);
         Assert.Equal(5, histories.Items.Single(x => x.Id == item.Id).StatusHistory.Count);
+        Assert.Equal(
+            new[]
+            {
+                DocumentRequestStatus.Draft,
+                DocumentRequestStatus.Paused,
+                DocumentRequestStatus.Draft,
+                DocumentRequestStatus.ReadyToSend,
+                DocumentRequestStatus.Paused,
+                DocumentRequestStatus.ReadyToSend,
+                DocumentRequestStatus.Cancelled
+            },
+            histories.StatusHistory.Select(x => x.NewStatus));
+        Assert.Equal(
+            new[]
+            {
+                DocumentRequestItemStatus.Missing,
+                DocumentRequestItemStatus.NotRequired,
+                DocumentRequestItemStatus.Missing,
+                DocumentRequestItemStatus.Waived,
+                DocumentRequestItemStatus.Missing
+            },
+            histories.Items.Single(x => x.Id == item.Id).StatusHistory.Select(x => x.NewStatus));
         Assert.All(histories.StatusHistory, x =>
         {
             Assert.False(string.IsNullOrWhiteSpace(x.Actor));
             Assert.False(string.IsNullOrWhiteSpace(x.Source));
             if (x.PreviousStatus is not null) Assert.False(string.IsNullOrWhiteSpace(x.Reason));
         });
+    }
+
+    [PostgresFact]
+    public async Task DocumentRequestService_RejectsStaleItemVersionWithoutWritingHistory()
+    {
+        await using var db = await Fresh();
+        var service = await AddDocumentServiceAsync(db, "request-item-concurrency-service");
+        var fixture = await AddDocumentFixtureAsync(db, "request-item-concurrency", service.Id);
+        var template = await AddRequestTemplateAsync(db, service.Id, "request-item-concurrency-template");
+        var requestService = new DocumentRequestService(db, RequestTestClock());
+        var request = await requestService.CreateDraftAsync(new(fixture.WorkItemId, template.Id, "staff", "test"));
+        var item = request.Items.Single(x => x.RequirementKey == "request-item-concurrency-template-start");
+        var originalVersion = item.Version;
+
+        var notRequired = await requestService.TransitionItemAsync(item.Id,
+            new(DocumentRequestItemStatus.NotRequired, originalVersion, "staff", "test", "Not applicable"));
+        Assert.NotEqual(originalVersion, notRequired.Version);
+        var historyCountAfterValidTransition = await db.DocumentRequestItemStatusHistories
+            .CountAsync(x => x.DocumentRequestItemId == item.Id);
+
+        await Assert.ThrowsAsync<BusinessException>(() => requestService.TransitionItemAsync(item.Id,
+            new(DocumentRequestItemStatus.Missing, originalVersion, "staff", "test", "Stale reactivation")));
+
+        var afterStaleAttempt = await requestService.GetByIdAsync(request.Id);
+        Assert.NotNull(afterStaleAttempt);
+        var itemAfterStaleAttempt = afterStaleAttempt!.Items.Single(x => x.Id == item.Id);
+        Assert.Equal(DocumentRequestItemStatus.NotRequired, itemAfterStaleAttempt.Status);
+        Assert.Equal(historyCountAfterValidTransition,
+            await db.DocumentRequestItemStatusHistories.CountAsync(x => x.DocumentRequestItemId == item.Id));
+
+        var missing = await requestService.TransitionItemAsync(item.Id,
+            new(DocumentRequestItemStatus.Missing, notRequired.Version, "staff", "test", "Reactivate requirement"));
+        Assert.Equal(DocumentRequestItemStatus.Missing, missing.Status);
+        Assert.Equal(historyCountAfterValidTransition + 1,
+            await db.DocumentRequestItemStatusHistories.CountAsync(x => x.DocumentRequestItemId == item.Id));
     }
 
     [PostgresFact]
