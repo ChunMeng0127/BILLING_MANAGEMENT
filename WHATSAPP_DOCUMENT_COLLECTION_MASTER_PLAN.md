@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 4A — Contact / PIC Persistence and Domain Model
-**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 manual UI acceptance remains pending because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3 is technically complete and Phase 3C is technically approved against `9abee34fed787be17d640a2d38c0b1ef8c27f645`; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending until the user can access the system. Phase 4A has started and is complete, awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.
+**Current Phase:** Phase 4B — Contact / PIC Application Service
+**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 manual UI acceptance remains pending because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3 is technically complete and Phase 3C is technically approved against `9abee34fed787be17d640a2d38c0b1ef8c27f645`; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending until the user can access the system. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B has started and is complete, awaiting ChatGPT review. Phase 4C and Phase 5 have not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -39,7 +39,8 @@
 - Phase 3B internal document request/checklist UI is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. It adds staff-only request creation/details routes, compact WorkItem integration, service-backed request/item actions, ordered histories and focused PostgreSQL MVC regression coverage without a migration or provider/evidence integration.
 - Phase 3C technical regression/review closure is complete. CI run `34681009278` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 3 remains pending final manual user UI acceptance; no new Phase 3 feature or migration was introduced.
 - Phase 4 execution split recorded: 4A Contact/PIC persistence and domain model, 4B ContactService/application behavior, and 4C Contact/PIC management UI and review closure.
-- Phase 4A Contact/PIC persistence and domain model is complete and awaiting ChatGPT review. It adds the Contact, ContactWhatsAppAddress, ContactCustomerLink and append-only history entities, consent enum, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. No ContactService, MVC UI, controller, navigation, WhatsApp provider integration, or Phase 5 work was added.
+- Phase 4A Contact/PIC persistence and domain model is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. It adds the Contact, ContactWhatsAppAddress, ContactCustomerLink and append-only history entities, consent enum, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. No ContactService, MVC UI, controller, navigation, WhatsApp provider integration, or Phase 5 work was added.
+- Phase 4B Contact/PIC application service has started and is complete, awaiting ChatGPT review. It adds deterministic E.164 and preferred-language helpers, untracked read models, audited Contact/address/customer-link operations, expected-version and PostgreSQL transaction/locking protections, and focused helper/service tests. No migration, MVC UI, controller, navigation, provider integration, conversation model, batching, or Phase 5 work was added.
 
 ### Current Work
 
@@ -58,7 +59,7 @@
 - Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.
 - Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.
 - Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending until the user can access the system.
-- Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C have not started. Phase 5 has not started.
+- Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is complete and awaiting ChatGPT review. Phase 4C has not started. Phase 5 has not started.
 
 ### Outstanding
 
@@ -68,7 +69,7 @@
 
 ### Next Step
 
-Complete final manual user UI acceptance for Phase 2 and Phase 3 when the user can access the application, then review Phase 4A. Do not mark either manual acceptance fully closed by technical checks alone, and do not start Phase 4B/4C or Phase 5 before the relevant review.
+Complete final manual user UI acceptance for Phase 2 and Phase 3 when the user can access the application, then review Phase 4B. Do not mark either manual acceptance fully closed by technical checks alone, do not mark Phase 4 fully complete, and do not start Phase 4C or Phase 5 before the relevant review.
 
 ---
 
@@ -1312,11 +1313,11 @@ Phase 3A deliberately does not set `Requested`, `PartiallyReceived`, `Complete`,
 
 Phase 4 is deliberately split into the following bounded execution units:
 
-- **4A — Contact/PIC persistence and domain model:** add Contact, ContactWhatsAppAddress, ContactCustomerLink, consent state, append-only histories, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. **Complete and awaiting ChatGPT review.**
-- **4B — ContactService/application behavior:** implement the service boundary for contact/address/link operations, including audited business rules and safe concurrency behavior. **Not started.**
+- **4A — Contact/PIC persistence and domain model:** add Contact, ContactWhatsAppAddress, ContactCustomerLink, consent state, append-only histories, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. **Approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed.**
+- **4B — ContactService/application behavior:** implement the service boundary for contact/address/link operations, including audited business rules and safe concurrency behavior. **Complete and awaiting ChatGPT review.**
 - **4C — Contact/PIC management UI and review closure:** add the staff-authorized MVC management surface and focused UI/regression review. **Not started.**
 
-Phase 4A does not implement ContactService, MVC UI, controllers, navigation, WhatsApp provider integration, or Phase 5 behavior. No WhatsApp sending occurs in Phase 4.
+Phase 4A does not implement ContactService, MVC UI, controllers, navigation, WhatsApp provider integration, or Phase 5 behavior. Phase 4B does not implement MVC UI, controllers, navigation, provider integration, conversation/batching behavior, or Phase 5. No WhatsApp sending occurs in Phase 4.
 
 ### Phase 5 — Request Batching
 
@@ -1499,7 +1500,7 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is complete and awaiting ChatGPT review. Phase 4C has not started. Phase 5 has not started.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Phase 1A, 1B and 1C are approved/closed; Phase 1 is complete.
 
@@ -1547,7 +1548,15 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `src/BillingControl/Data/Migrations/20260912082332_Phase4AContactPersistence.cs` is the single additive Phase 4A migration. It adds exactly `Contacts`, `ContactWhatsAppAddresses`, `ContactCustomerLinks`, `ContactStatusHistories`, `ContactWhatsAppAddressHistories`, and `ContactCustomerLinkHistories`; the EF model snapshot was updated normally and previous migrations were not modified.
 - `tests/BillingControl.Tests/ContactPersistenceTests.cs` provides focused real-PostgreSQL coverage for migration/schema application, Contact/address/link persistence and invariants, endpoint ownership, primary addresses, consent states and retained opt-out facts, restrictive deletes, immutable identities, append-only histories, and existing financial/workflow isolation. Local PostgreSQL tests remain skip-only without `BILLING_TEST_CONNECTION`; CI is the authoritative PostgreSQL 17 run.
 - Phase 4A consent audit history now snapshots consent evidence, source, and timestamps together with preserved opt-out facts, so later consent transitions cannot erase earlier audit evidence.
-- Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.
+- Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed.
+
+### Phase 4B Contact/PIC application service record
+
+- `src/BillingControl/Services/ContactValueObjects.cs` adds deterministic explicit-`+` E.164 presentation normalization/validation and a dependency-free preferred-language normalizer. Neither helper infers country codes or grants authorization.
+- `src/BillingControl/Services/ContactService.cs` adds scoped untracked Contact/address/customer-link read models and audited creation, profile, active-state, address-primary, address-active, consent, and durable customer-link operations. Actor and audit Source are explicit inputs; staff operations do not mutate provider-owned `ProviderWaId`.
+- Contact-level row locks, address-set locks, serializable transactions, expected Record.Version checks, unique indexes, and safe BusinessException translations protect multi-row primary/active/endpoint/link invariants. Lifecycle histories are written atomically with state changes, capture complete address consent/current snapshots, and remain append-only through the existing AppDbContext rules.
+- `tests/BillingControl.Tests/ContactValueObjectTests.cs` covers E.164 and preferred-language helpers. `tests/BillingControl.Tests/ContactServiceTests.cs` covers service creation/profile/state, untracked reads, primary/active addresses, consent transitions and retained audit facts, durable link reactivation/effective dates, concurrency/endpoint ownership, and financial/workflow isolation against real PostgreSQL when configured.
+- No migration or model/schema change was introduced for Phase 4B, and no genuine Phase 4A persistence defect was found. Phase 4B is complete and awaiting ChatGPT review. Phase 4C has not started. Phase 5 has not started. Phase 2 and Phase 3 manual user UI acceptance remain pending.
 
 ---
 
