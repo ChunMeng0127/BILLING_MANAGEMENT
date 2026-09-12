@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 2A — Document Requirement Template Application Service
-**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is complete and awaiting ChatGPT review. Phase 2B and Phase 2C have not started.
+**Current Phase:** Phase 2B — Internal Document Requirement Template Management UI
+**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is complete and awaiting ChatGPT review. Phase 2C and Phase 3 have not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -31,7 +31,8 @@
 - Phase 1B EF Core persistence and final correction was approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`: document DbSets, explicit restrictive relationships, immutable-field allowlists, used-template protection, enum/value checks, lineage constraints, referenced-row template/service consistency triggers, received-document duplicate/replacement guards, concurrency mapping, history protection, and one additive migration are present. No document-collection data was backfilled.
 - Phase 1C PostgreSQL persistence/invariant coverage is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; GitHub Actions run `34662113750` executed all 60 .NET tests against PostgreSQL 17/`billing_test` with 0 failures and 0 skips. Phase 1 is complete.
 - Phase 2 execution split recorded: 2A template application/service layer, 2B internal template management UI, and 2C Phase 2 business/integration tests and review closure.
-- Phase 2A template application/service layer is complete and awaiting ChatGPT review; GitHub Actions run `34663642264` for commit `6b7a94165dce2a4e12b80c4ee442c7eb158597f4` executed all 65 .NET tests against PostgreSQL 17/`billing_test` with 0 failures and 0 skips.
+- Phase 2A template application/service layer is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed.
+- Phase 2B internal template management UI is complete and awaiting ChatGPT review. It adds staff-only MVC routes, service-backed mutations, version/item forms, lifecycle/default controls, immutable-used-version presentation, staff navigation, and focused PostgreSQL-backed MVC authorization/regression coverage. Phase 2C has not started.
 
 ### Current Work
 
@@ -43,17 +44,18 @@
 - Phase 1B is approved and closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`.
 - Phase 1C PostgreSQL persistence/invariant tests are approved and closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; local execution remains skip-only without an isolated PostgreSQL connection, while CI execution is green.
 - Phase 1 is approved/closed and complete.
-- Phase 2A template application/service layer is complete and awaiting ChatGPT review.
-- Phase 2B internal template management UI and Phase 2C business/integration tests and review closure have not started.
+- Phase 2A template application/service layer is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed.
+- Phase 2B internal template management UI is complete and awaiting ChatGPT review.
+- Phase 2C business/integration tests and review closure have not started.
 
 ### Outstanding
 
-- Phase 2B — internal template management UI and Phase 2C — Phase 2 business/integration tests and review closure remain pending explicit review of Phase 2A.
+- Phase 2C — Phase 2 business/integration tests and review closure remains pending explicit review of Phase 2B.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Review and approve **Phase 2A — Document Requirement Template Application Service**. Do not start Phase 2B or Phase 2C automatically.
+Review and approve **Phase 2B — Internal Document Requirement Template Management UI**. Do not start Phase 2C or Phase 3 automatically.
 
 ---
 
@@ -1273,8 +1275,8 @@ Add reusable service-based templates with Required/Optional, Priority/Wave, disp
 
 Phase 2 is deliberately split into the following bounded execution units:
 
-- **2A — Template application/service layer:** provide staff-side application operations and DTO/read models for creating the first version, cloning the next version, editing unused versions/items, explicit activation/default management, deterministic ordering, and service-scoped queries. **Complete and awaiting ChatGPT review.**
-- **2B — Internal template management UI:** wire the service into internal Razor/MVC UI and staff-only endpoint authorization using the existing `AppRoles.Staff` boundary. **Not started.**
+- **2A — Template application/service layer:** provide staff-side application operations and DTO/read models for creating the first version, cloning the next version, editing unused versions/items, explicit activation/default management, deterministic ordering, and service-scoped queries. **Approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed.**
+- **2B — Internal template management UI:** wire the service into internal Razor/MVC UI and staff-only endpoint authorization using the existing `AppRoles.Staff` boundary. **Complete and awaiting ChatGPT review.**
 - **2C — Phase 2 business/integration tests and review closure:** add the focused service/UI/integration regression coverage and close Phase 2 after review. **Not started.**
 
 2A does not create document requests, change financial/WorkItem/WorkerAssignment state, add provider integrations, or alter the approved Phase 1 schema/migration.
@@ -1468,13 +1470,20 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is complete and ready for ChatGPT review. Phase 2B and Phase 2C have not started.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is complete and ready for ChatGPT review. Phase 2C and Phase 3 have not started.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Phase 1A, 1B and 1C are approved/closed; Phase 1 is complete.
 
 Phase 1A implemented only the deterministic Phase 0B CLR domain types. Phase 1B added only their EF Core persistence mapping, PostgreSQL constraints/indexes, immutable-field/template guards, request/artifact lineage checks, referenced-row service/template consistency triggers, duplicate classification and received-document acyclicity guards, concurrency/history persistence conventions, and one additive migration. Phase 1C added only PostgreSQL-backed persistence/invariant coverage; Contact/PIC, WhatsApp, SharePoint, follow-up automation and AI remain outside this Phase 1 split even though their architecture is now frozen.
 
-Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and its application DTO/read models. First versions are allocated as version 1 for a new service/template key; new versions clone the prior definition and use the previous maximum plus one. Version allocation, cloning and default switching use PostgreSQL transactions and a `SELECT ... FOR UPDATE` lock on the authoritative Service row; unique/serialization conflicts become clear retryable business errors. Default switching clears existing defaults before setting the target, and operational/default templates must retain at least one active item. Used versions are rejected by the service before edits, existing Phase 1 persistence guards remain authoritative, item keys are stable, and no hard-delete operation is provided. Queries use untracked read models and expose version/default/active/used state plus display-ordered items. The service is registered for dependency injection but Phase 2B remains responsible for staff-only endpoint authorization through the existing `AppRoles.Staff` boundary.
+Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and its application DTO/read models. First versions are allocated as version 1 for a new service/template key; new versions clone the prior definition and use the previous maximum plus one. Version allocation, cloning and default switching use PostgreSQL transactions and a `SELECT ... FOR UPDATE` lock on the authoritative Service row; unique/serialization conflicts become clear retryable business errors. Default switching clears existing defaults before setting the target, and operational/default templates must retain at least one active item. Used versions are rejected by the service before edits, existing Phase 1 persistence guards remain authoritative, item keys are stable, and no hard-delete operation is provided. Queries use untracked read models and expose version/default/active/used state plus display-ordered items. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed.
+
+### Phase 2B internal template management UI record
+
+- `src/BillingControl/Controllers/DocumentRequirementTemplatesController.cs` adds the staff-only `/DocumentRequirementTemplates` MVC route family. Every read and mutation is protected by `[Authorize(Roles = AppRoles.Staff)]`; mutations use antiforgery-protected POST actions and call `DocumentRequirementTemplateService` rather than changing template entities in the controller. Only Service names/options are read directly for supporting lookup/display data.
+- `src/BillingControl/Views/DocumentRequirementTemplates/Index.cshtml`, `Create.cshtml`, and `Edit.cshtml` provide service filtering, Service → TemplateKey → version history, first-version creation with initial requirements, unused-version definition/item editing, server-rendered reorder actions, new-version cloning, explicit activation/default actions, and clear Default/Active/Used/Unused indicators. Used versions remain read-only for definition/checklist fields while lifecycle controls remain available. The existing `DocumentRequirementWave` enum is presented through human-friendly labels; no second wave/status definition was introduced.
+- `src/BillingControl/Views/Shared/_Layout.cshtml` adds a staff-only Document templates navigation entry. `src/BillingControl/wwwroot/js/document-templates.js` only supports adding/removing initial form rows and does not perform mutations or bypass MVC/antiforgery.
+- `tests/BillingControl.Tests/DocumentRequirementTemplateUiTests.cs` adds focused PostgreSQL-backed MVC coverage for anonymous/external-role denial, Admin/InternalUser access, validation display, service-backed creation/version/default/lifecycle behavior, used-version read-only presentation, POST/antiforgery enforcement, and financial/WorkItem/WorkerAssignment isolation. Phase 2C remains unstarted; broader Phase 2 review closure is intentionally deferred there.
 
 ---
 
@@ -1617,7 +1626,7 @@ Accepted-document correction remains atomic:
 
 - `tests/BillingControl.Tests/DocumentCollectionPersistenceTests.cs` reuses the existing `IntegrationTests` partial class, `PostgresFact`, `Connection`, `Db()`, and `Fresh()` helpers. It verifies migration application and schema shape, template/default/version/text rules, used-template and used-item immutability, template/service consistency across authoritative relationship changes, request/revision/current-lineage rules, frozen request-item snapshots, raw artifact metadata/hash/byte-length rules, duplicate classification, replacement/duplicate reference rules, evidence lifecycle/identity, all four append-only histories, and `Record.Version` concurrency for requests and received artifacts.
 - GitHub Actions run `34662113750` for commit `fd49071c469e5a0221e9b84dd2481c16a32d5eb1` executed the full suite against PostgreSQL 17 and `billing_test`: 60 .NET tests passed, 0 failed, and 0 skipped. Local PostgreSQL tests remain skip-only when `BILLING_TEST_CONNECTION` is absent; no non-test database is used.
-- Phase 1C intentionally does not implement or test future business-service orchestration: request cancellation, human completion, accepted-document correction with evidence recalculation, carry-forward/reuse workflows, and status-transition services remain deferred to their later implementation phases. Phase 2A is now the separate template application/service unit; Phase 2B and Phase 2C remain unstarted.
+- Phase 1C intentionally does not implement or test future business-service orchestration: request cancellation, human completion, accepted-document correction with evidence recalculation, carry-forward/reuse workflows, and status-transition services remain deferred to their later implementation phases. Phase 2A is the separate template application/service unit; Phase 2B is the focused internal management UI; Phase 2C remains unstarted.
 
 ### Phase 2A template application service record
 
@@ -1625,4 +1634,4 @@ Accepted-document correction remains atomic:
 - The service does not accept a caller-supplied business `TemplateVersion`; a new `(ServiceId, TemplateKey)` starts at version `1`, while cloning allocates the previous maximum plus `1`. Clones preserve stable requirement keys and snapshots in new rows, leave historical versions unchanged, and start non-default.
 - Version allocation, cloning and default switching run in PostgreSQL transactions. A `SELECT ... FOR UPDATE` on the authoritative `Service` row serializes same-service version/default operations; the existing unique indexes and deterministic handling of unique/serialization/concurrency conflicts remain the final safety net. Default switching clears the old default and persists that change before setting the target, so the partial unique index is never temporarily violated.
 - The service rejects edits to any version already referenced by a `DocumentRequest`, rejects duplicate requirement keys, keeps existing item keys stable, provides no hard-delete path, requires active/default templates to have an active item, and refuses deactivation of the current default. No financial, WorkItem, WorkerAssignment, request, provider, or integration state is changed.
-- `tests/BillingControl.Tests/DocumentRequirementTemplateServiceTests.cs` adds PostgreSQL-backed coverage for first version `1`, clone contents/immutability, unused/used edits, duplicate keys, default/activation rules, concurrent version allocation, read behavior, and the financial/workflow boundary. Local tests skip without `BILLING_TEST_CONNECTION`; GitHub Actions run `34663642264` for commit `6b7a94165dce2a4e12b80c4ee442c7eb158597f4` passed all 65 .NET tests against PostgreSQL 17/`billing_test` with 0 failures and 0 skips. Phase 2C remains responsible for broader Phase 2 review closure.
+- `tests/BillingControl.Tests/DocumentRequirementTemplateServiceTests.cs` adds PostgreSQL-backed coverage for first version `1`, clone contents/immutability, unused/used edits, duplicate keys, default/activation rules, concurrent version allocation, read behavior, and the financial/workflow boundary. Phase 2A was approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2C remains responsible for broader Phase 2 review closure.

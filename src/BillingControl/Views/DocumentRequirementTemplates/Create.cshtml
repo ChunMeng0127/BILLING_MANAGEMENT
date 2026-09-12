@@ -1,0 +1,78 @@
+@model DocumentRequirementTemplateCreateViewModel
+@using BillingControl.Services
+@{
+    ViewData["Title"] = "New document template";
+    var services = ViewBag.Services as IReadOnlyList<DocumentRequirementTemplateServiceOption> ?? [];
+}
+<a class="back-link" href="/DocumentRequirementTemplates">← Document templates</a>
+<div class="page-heading">
+<div><p class="eyebrow">NEW TEMPLATE FAMILY</p><h1>Create first version</h1><p>Version 1 is allocated automatically. Add the initial checklist before making it active or default.</p></div>
+</div>
+
+<form asp-action="Create" method="post" class="panel form-panel wide">
+<div asp-validation-summary="All" class="text-danger"></div>
+<div class="form-grid">
+<div>
+<label asp-for="ServiceId" class="form-label">Service</label>
+<select asp-for="ServiceId" class="form-select" required>
+<option value="">Select service</option>
+@foreach (var service in services) { <option value="@service.Id">@service.Name@(service.IsActive ? "" : " (inactive)")</option> }
+</select>
+</div>
+<div>
+<label asp-for="TemplateKey" class="form-label">Template key</label>
+<input asp-for="TemplateKey" class="form-control" maxlength="100" required placeholder="monthly-bookkeeping" />
+<p class="hint">Stable key shared by future versions; version number is automatic.</p>
+</div>
+<div>
+<label asp-for="Name" class="form-label">Name</label>
+<input asp-for="Name" class="form-control" maxlength="160" required />
+</div>
+<div>
+<label asp-for="Description" class="form-label">Description</label>
+<textarea asp-for="Description" class="form-control" rows="2" maxlength="2000"></textarea>
+</div>
+</div>
+<div class="form-grid">
+<label class="form-check form-switch mt-3"><input asp-for="IsActive" class="form-check-input" /><span class="form-check-label">Active</span></label>
+<label class="form-check form-switch mt-3"><input asp-for="IsDefault" class="form-check-input" /><span class="form-check-label">Set as service default</span></label>
+</div>
+
+<h2 class="section-title">Initial requirements</h2>
+<p class="hint">Requirement keys are stable identifiers and must be unique in this version. Existing item keys cannot be changed after creation.</p>
+<div class="table-responsive">
+<table class="table data-grid template-items-table">
+<thead><tr><th>Requirement key</th><th>Name</th><th>Description</th><th>Required?</th><th>Wave</th><th>Order</th><th>Active?</th><th></th></tr></thead>
+<tbody data-template-rows data-next-index="@Model.Items.Count">
+@for (var i = 0; i < Model.Items.Count; i++)
+{
+<tr>
+<td><input asp-for="Items[i].RequirementKey" class="form-control" maxlength="100" /></td>
+<td><input asp-for="Items[i].Name" class="form-control" maxlength="160" /></td>
+<td><input asp-for="Items[i].Description" class="form-control" maxlength="2000" /></td>
+<td class="text-center"><input asp-for="Items[i].IsRequired" class="form-check-input" /></td>
+<td><select asp-for="Items[i].Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave">@Finance.Label(wave)</option> }</select></td>
+<td><input asp-for="Items[i].DisplayOrder" class="form-control" type="number" min="0" /></td>
+<td class="text-center"><input asp-for="Items[i].IsActive" class="form-check-input" /></td>
+<td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
+</tr>
+}
+</tbody>
+</table>
+</div>
+<button type="button" class="btn btn-outline-secondary" data-template-add-row data-template-target="[data-template-rows]">+ Add requirement</button>
+<template id="template-item-prototype">
+<tr>
+<td><input name="Items[__index__].RequirementKey" class="form-control" maxlength="100" /></td>
+<td><input name="Items[__index__].Name" class="form-control" maxlength="160" /></td>
+<td><input name="Items[__index__].Description" class="form-control" maxlength="2000" /></td>
+<td class="text-center"><input name="Items[__index__].IsRequired" value="true" type="checkbox" class="form-check-input" /></td>
+<td><select name="Items[__index__].Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave">@Finance.Label(wave)</option> }</select></td>
+<td><input name="Items[__index__].DisplayOrder" value="0" class="form-control" type="number" min="0" /></td>
+<td class="text-center"><input name="Items[__index__].IsActive" value="true" type="checkbox" class="form-check-input" checked /></td>
+<td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
+</tr>
+</template>
+<div class="form-actions"><button class="btn btn-primary">Create version 1</button><a class="btn btn-outline-secondary" href="/DocumentRequirementTemplates">Cancel</a></div>
+</form>
+@section Scripts { <script src="~/js/document-templates.js" asp-append-version="true"></script> }
