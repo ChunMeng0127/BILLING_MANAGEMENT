@@ -1,0 +1,400 @@
+@model ContactDetailsViewModel
+@{
+    var contact = Model.Contact;
+    ViewData["Title"] = $"{contact.Name} · Contact";
+    var linkedCustomerIds = contact.CustomerLinks.Select(x => x.CustomerId).ToHashSet();
+    var availableCustomers = Model.CustomerOptions.Where(x => !linkedCustomerIds.Contains(x.Id)).ToArray();
+}
+
+<a class="back-link" href="/Contacts">← Contacts / PICs</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">CONTACT / PIC</p>
+        <h1>@contact.Name</h1>
+        <p>Contact profile, communication routing data, relationships, and append-only audit history.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="/Contacts/Edit/@contact.Id">Edit profile</a>
+</div>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Contact profile</h2>
+            <p>Profile data is separate from Contact active state and WhatsApp consent.</p>
+        </div>
+        <span class="badge @(contact.IsActive ? "status-active" : "status-inactive")">@(contact.IsActive ? "Active" : "Inactive")</span>
+    </div>
+    <div class="form-grid thirds">
+        <div><span class="hint d-block">Name</span><strong>@contact.Name</strong></div>
+        <div><span class="hint d-block">Preferred language</span><strong>@(contact.PreferredLanguage ?? "—")</strong></div>
+        <div><span class="hint d-block">Created / updated</span><strong>@contact.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</strong><span class="hint d-block">Updated @contact.UpdatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span></div>
+    </div>
+    <div class="form-actions mt-3">
+        <form method="post" action="/Contacts/SetActive">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ContactId" value="@contact.Id" />
+            <input type="hidden" name="ExpectedVersion" value="@contact.Version" />
+            <input type="hidden" name="IsActive" value="@(!contact.IsActive ? "true" : "false")" />
+            <label class="visually-hidden" for="contact-state-reason">Reason for Contact state change</label>
+            <input id="contact-state-reason" name="Reason" class="form-control" maxlength="2000" required placeholder="Reason for state change" />
+            <button class="btn @(contact.IsActive ? "btn-outline-danger" : "btn-outline-primary")" type="submit">@(contact.IsActive ? "Deactivate Contact" : "Reactivate Contact")</button>
+        </form>
+    </div>
+    <p class="hint mt-3 mb-0">Primary address, customer relationships, and phone matching are routing data only; they do not grant WhatsApp authorization. WhatsApp sending is not implemented in Phase 4.</p>
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>WhatsApp addresses</h2>
+            <p>@contact.Addresses.Count address@(contact.Addresses.Count == 1 ? "" : "es") · consent and primary selection are separate decisions.</p>
+        </div>
+    </div>
+
+    @if (contact.IsActive)
+    {
+        <form method="post" action="/Contacts/AddAddress" class="mb-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ContactId" value="@contact.Id" />
+            <h3 class="section-title">Add address</h3>
+            <div class="form-grid">
+                <div>
+                    <label class="form-label" for="PhoneNumber">International phone number</label>
+                    <input id="PhoneNumber" name="PhoneNumber" class="form-control" maxlength="80" required placeholder="+60123456789" />
+                    <p class="hint">Enter an international number with country code, e.g. +60123456789. Spaces, hyphens, and parentheses are accepted.</p>
+                </div>
+            </div>
+            <button class="btn btn-outline-primary" type="submit">Add WhatsApp address</button>
+        </form>
+    }
+    else
+    {
+        <p class="hint">Activate the Contact before adding or reactivating an address. Do Not WhatsApp remains available below for inactive destinations.</p>
+    }
+
+    @if (contact.Addresses.Count == 0)
+    {
+        <p class="hint">No WhatsApp addresses have been recorded.</p>
+    }
+    else
+    {
+        @foreach (var address in contact.Addresses)
+        {
+            <article class="border rounded p-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
+                    <div>
+                        <h3 class="mb-1">@address.NormalizedE164</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            @if (address.IsPrimary) { <span class="badge status-completed">Primary</span> }
+                            <span class="badge @(address.IsActive ? "status-active" : "status-inactive")">@(address.IsActive ? "Active" : "Inactive")</span>
+                            <span class="badge status-muted">@Finance.Label(address.ConsentState)</span>
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        @if (contact.IsActive && address.IsActive && !address.IsPrimary)
+                        {
+                            <form method="post" action="/Contacts/SetAddressPrimary">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="AddressId" value="@address.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Make primary</button>
+                            </form>
+                        }
+                        @if (address.IsActive)
+                        {
+                            <form method="post" action="/Contacts/SetAddressActive">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="AddressId" value="@address.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                                <input type="hidden" name="IsActive" value="false" />
+                                <input type="hidden" name="MakePrimary" value="false" />
+                                <input name="Reason" class="form-control form-control-sm d-inline-block" style="width:190px" maxlength="2000" required placeholder="Reason" aria-label="Reason to deactivate @address.NormalizedE164" />
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Deactivate</button>
+                            </form>
+                        }
+                        else if (contact.IsActive)
+                        {
+                            <form method="post" action="/Contacts/SetAddressActive">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="AddressId" value="@address.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                                <input type="hidden" name="IsActive" value="true" />
+                                <input type="hidden" name="MakePrimary" value="false" />
+                                <input name="Reason" class="form-control form-control-sm d-inline-block" style="width:190px" maxlength="2000" required placeholder="Reason" aria-label="Reason to reactivate @address.NormalizedE164" />
+                                <button class="btn btn-sm btn-outline-secondary" type="submit">Reactivate</button>
+                            </form>
+                            <form method="post" action="/Contacts/SetAddressActive">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="AddressId" value="@address.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                                <input type="hidden" name="IsActive" value="true" />
+                                <input type="hidden" name="MakePrimary" value="true" />
+                                <input name="Reason" class="form-control form-control-sm d-inline-block" style="width:190px" maxlength="2000" required placeholder="Reason" aria-label="Reason to reactivate and make primary @address.NormalizedE164" />
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Reactivate + primary</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="hint">Reactivate the Contact before reactivating this address.</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="form-grid thirds mt-3">
+                    <div><span class="hint d-block">Consent recorded</span><span>@(address.ConsentRecordedAt is { } consentAt ? consentAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "—")</span></div>
+                    <div><span class="hint d-block">Consent source</span><span>@(address.ConsentSource ?? "—")</span></div>
+                    <div><span class="hint d-block">Consent evidence</span><span>@(address.ConsentEvidenceReference ?? "—")</span></div>
+                    <div><span class="hint d-block">Latest opt-out</span><span>@(address.LastOptOutAt is { } optOutAt ? optOutAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "—")</span></div>
+                    <div><span class="hint d-block">Opt-out reason</span><span>@(address.LastOptOutReason ?? "—")</span></div>
+                    <div><span class="hint d-block">Provider WA ID</span><span>@(address.ProviderWaId ?? "—")</span><small class="hint d-block">Provider-owned, read-only</small></div>
+                </div>
+
+                <div class="border-top mt-3 pt-3">
+                    <h4 class="section-title">Consent record</h4>
+                    @if (contact.IsActive && address.IsActive)
+                    {
+                        <form method="post" action="/Contacts/RecordConsent" class="mb-3">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ContactId" value="@contact.Id" />
+                            <input type="hidden" name="AddressId" value="@address.Id" />
+                            <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                            <input type="hidden" name="ConsentState" value="OptedIn" />
+                            <div class="form-grid thirds">
+                                <div><label class="form-label" for="consent-source-@address.Id">Consent source</label><input id="consent-source-@address.Id" name="ConsentSource" class="form-control" maxlength="254" required placeholder="How consent was obtained" /></div>
+                                <div><label class="form-label" for="consent-evidence-@address.Id">Evidence reference</label><input id="consent-evidence-@address.Id" name="ConsentEvidenceReference" class="form-control" maxlength="254" required placeholder="Evidence or record reference" /></div>
+                                <div><label class="form-label" for="consent-in-reason-@address.Id">Audit reason</label><input id="consent-in-reason-@address.Id" name="Reason" class="form-control" maxlength="2000" required placeholder="Reason" /></div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" type="submit">@(address.ConsentState == ContactWhatsAppConsentState.OptedIn ? "Record Opted In Again" : "Record Opted In")</button>
+                        </form>
+                    }
+                    <form method="post" action="/Contacts/RecordConsent" class="mb-3">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="ContactId" value="@contact.Id" />
+                        <input type="hidden" name="AddressId" value="@address.Id" />
+                        <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                        <input type="hidden" name="ConsentState" value="DoNotWhatsApp" />
+                        <div class="form-grid thirds">
+                            <div><label class="form-label" for="optout-source-@address.Id">Consent source</label><input id="optout-source-@address.Id" name="ConsentSource" class="form-control" maxlength="254" required placeholder="How opt-out was received" /></div>
+                            <div><label class="form-label" for="optout-evidence-@address.Id">Evidence reference <span class="hint">(optional)</span></label><input id="optout-evidence-@address.Id" name="ConsentEvidenceReference" class="form-control" maxlength="254" placeholder="Optional evidence reference" /></div>
+                            <div><label class="form-label" for="optout-reason-@address.Id">Audit reason</label><input id="optout-reason-@address.Id" name="Reason" class="form-control" maxlength="2000" required placeholder="Why Do Not WhatsApp was recorded" /></div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-danger" type="submit">@(address.ConsentState == ContactWhatsAppConsentState.DoNotWhatsApp ? "Record Do Not WhatsApp Again" : "Do Not WhatsApp")</button>
+                    </form>
+                    @if (address.ConsentState != ContactWhatsAppConsentState.Unknown)
+                    {
+                        <form method="post" action="/Contacts/RecordConsent">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ContactId" value="@contact.Id" />
+                            <input type="hidden" name="AddressId" value="@address.Id" />
+                            <input type="hidden" name="ExpectedVersion" value="@address.Version" />
+                            <input type="hidden" name="ConsentState" value="Unknown" />
+                            <label class="form-label" for="reset-reason-@address.Id">Reason to reset consent to Unknown</label>
+                            <div class="d-flex gap-2">
+                                <input id="reset-reason-@address.Id" name="Reason" class="form-control" maxlength="2000" required placeholder="Reason" />
+                                <button class="btn btn-sm btn-outline-secondary text-nowrap" type="submit">Reset consent to Unknown</button>
+                            </div>
+                        </form>
+                    }
+                    <p class="hint mt-2 mb-0">Primary status never means consent. Do Not WhatsApp remains available even when this Contact or address is inactive.</p>
+                </div>
+
+                <details class="mt-3">
+                    <summary>Address history (@address.History.Count)</summary>
+                    @if (address.History.Count == 0)
+                    {
+                        <p class="hint mt-2">No history recorded.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mt-2">
+                            <table class="table data-grid">
+                                <thead><tr><th>When</th><th>Action</th><th>Active</th><th>Primary</th><th>Consent</th><th>Source / evidence</th><th>Opt-out facts</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                                <tbody>
+                                @foreach (var history in address.History)
+                                {
+                                    <tr>
+                                        <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>@history.Action</td>
+                                        <td>@(history.PreviousIsActive is null ? "—" : (history.PreviousIsActive.Value ? "Active" : "Inactive")) → @(history.NewIsActive ? "Active" : "Inactive")</td>
+                                        <td>@(history.PreviousIsPrimary is null ? "—" : (history.PreviousIsPrimary.Value ? "Primary" : "Not primary")) → @(history.NewIsPrimary ? "Primary" : "Not primary")</td>
+                                        <td>@(history.PreviousConsentState is null ? "—" : Finance.Label(history.PreviousConsentState.Value)) → @Finance.Label(history.NewConsentState)<br /><span class="hint">@(history.NewConsentRecordedAt is { } newAt ? newAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "No timestamp")</span></td>
+                                        <td>@(history.NewConsentSource ?? "—")<br /><span class="hint">@(history.NewConsentEvidenceReference ?? "—")</span></td>
+                                        <td>@(history.NewLastOptOutAt is { } lastOptOutAt ? lastOptOutAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "—")<br /><span class="hint">@(history.NewLastOptOutReason ?? "—")</span></td>
+                                        <td>@(history.Reason ?? "—")</td>
+                                        <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </details>
+            </article>
+        }
+    }
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Customer relationships</h2>
+            <p>Customer links describe routing relationships and do not authorize WhatsApp sending.</p>
+        </div>
+    </div>
+    @if (contact.IsActive && availableCustomers.Length > 0)
+    {
+        <form method="post" action="/Contacts/AddCustomerLink" class="mb-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ContactId" value="@contact.Id" />
+            <h3 class="section-title">Add customer relationship</h3>
+            <div class="form-grid thirds">
+                <div>
+                    <label class="form-label" for="CustomerId">Customer</label>
+                    <select id="CustomerId" name="CustomerId" class="form-select" required>
+                        <option value="">Select active customer</option>
+                        @foreach (var option in availableCustomers)
+                        {
+                            <option value="@option.Id">@option.Name</option>
+                        }
+                    </select>
+                </div>
+                <div><label class="form-label" for="Role">Role <span class="hint">(optional)</span></label><input id="Role" name="Role" class="form-control" maxlength="120" placeholder="e.g. Finance PIC" /></div>
+                <div><label class="form-label" for="Note">Note <span class="hint">(optional)</span></label><textarea id="Note" name="Note" class="form-control" rows="2" maxlength="2000"></textarea></div>
+            </div>
+            <button class="btn btn-outline-primary" type="submit">Add relationship</button>
+        </form>
+    }
+    else if (!contact.IsActive)
+    {
+        <p class="hint">Activate the Contact before adding or reactivating a customer relationship.</p>
+    }
+    else if (availableCustomers.Length == 0)
+    {
+        <p class="hint">There are no unlinked active Customers available. Existing inactive links can be reactivated below.</p>
+    }
+
+    @if (contact.CustomerLinks.Count == 0)
+    {
+        <p class="hint">No customer relationships have been recorded.</p>
+    }
+    else
+    {
+        @foreach (var link in contact.CustomerLinks)
+        {
+            <article class="border rounded p-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between gap-2">
+                    <div>
+                        <h3 class="mb-1">@link.CustomerName</h3>
+                        <span class="badge @(link.IsActive ? "status-active" : "status-inactive")">@(link.IsActive ? "Active" : "Inactive")</span>
+                    </div>
+                    <div class="d-flex gap-2 align-items-start">
+                        @if (link.IsActive)
+                        {
+                            <form method="post" action="/Contacts/SetCustomerLinkActive" class="d-flex gap-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="LinkId" value="@link.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@link.Version" />
+                                <input type="hidden" name="IsActive" value="false" />
+                                <input name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason" aria-label="Reason to deactivate @link.CustomerName" />
+                                <button class="btn btn-sm btn-outline-danger text-nowrap" type="submit">Deactivate</button>
+                            </form>
+                        }
+                        else if (contact.IsActive)
+                        {
+                            <form method="post" action="/Contacts/SetCustomerLinkActive" class="d-flex gap-2">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ContactId" value="@contact.Id" />
+                                <input type="hidden" name="LinkId" value="@link.Id" />
+                                <input type="hidden" name="ExpectedVersion" value="@link.Version" />
+                                <input type="hidden" name="IsActive" value="true" />
+                                <input name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason" aria-label="Reason to reactivate @link.CustomerName" />
+                                <button class="btn btn-sm btn-outline-primary text-nowrap" type="submit">Reactivate</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="hint">Activate the Contact before reactivating this relationship.</span>
+                        }
+                    </div>
+                </div>
+                <div class="form-grid thirds mt-3">
+                    <div><span class="hint d-block">Effective from</span>@link.EffectiveFrom.ToString("dd MMM yyyy")</div>
+                    <div><span class="hint d-block">Effective to</span>@(link.EffectiveTo is { } effectiveTo ? effectiveTo.ToString("dd MMM yyyy") : "—")</div>
+                    <div><span class="hint d-block">Role</span>@(link.Role ?? "—")</div>
+                    <div class="grid-span-2"><span class="hint d-block">Note</span>@(link.Note ?? "—")</div>
+                </div>
+                <form method="post" action="/Contacts/EditCustomerLink" class="mt-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="ContactId" value="@contact.Id" />
+                    <input type="hidden" name="LinkId" value="@link.Id" />
+                    <input type="hidden" name="ExpectedVersion" value="@link.Version" />
+                    <h4 class="section-title">Edit relationship metadata</h4>
+                    <div class="form-grid thirds">
+                        <div><label class="form-label" for="link-role-@link.Id">Role</label><input id="link-role-@link.Id" name="Role" class="form-control" maxlength="120" value="@link.Role" /></div>
+                        <div><label class="form-label" for="link-note-@link.Id">Note</label><textarea id="link-note-@link.Id" name="Note" class="form-control" rows="2" maxlength="2000">@link.Note</textarea></div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">Save relationship</button>
+                </form>
+                <details class="mt-3">
+                    <summary>Relationship history (@link.History.Count)</summary>
+                    @if (link.History.Count == 0)
+                    {
+                        <p class="hint mt-2">No history recorded.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mt-2">
+                            <table class="table data-grid">
+                                <thead><tr><th>When</th><th>Action</th><th>Active</th><th>Effective dates</th><th>Role / note</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                                <tbody>
+                                @foreach (var history in link.History)
+                                {
+                                    <tr>
+                                        <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>@history.Action</td>
+                                        <td>@(history.PreviousIsActive is null ? "—" : (history.PreviousIsActive.Value ? "Active" : "Inactive")) → @(history.NewIsActive ? "Active" : "Inactive")</td>
+                                        <td>@(history.PreviousEffectiveFrom is { } previousFrom ? previousFrom.ToString("dd MMM yyyy") : "—") → @history.NewEffectiveFrom.ToString("dd MMM yyyy")<br /><span class="hint">@(history.PreviousEffectiveTo is { } previousTo ? previousTo.ToString("dd MMM yyyy") : "—") → @(history.NewEffectiveTo is { } newTo ? newTo.ToString("dd MMM yyyy") : "—")</span></td>
+                                        <td>@(history.PreviousRole ?? "—") → @(history.NewRole ?? "—")<br /><span class="hint">@(history.PreviousNote ?? "—") → @(history.NewNote ?? "—")</span></td>
+                                        <td>@(history.Reason ?? "—")</td>
+                                        <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </details>
+            </article>
+        }
+    }
+</section>
+
+<section class="panel form-panel wide">
+    <div class="panel-heading">
+        <div>
+            <h2>Contact history</h2>
+            <p>Active-state history is append-only and ordered chronologically.</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table data-grid">
+            <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>Actor / source</th></tr></thead>
+            <tbody>
+            @foreach (var history in contact.StatusHistory)
+            {
+                <tr>
+                    <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                    <td>@(history.PreviousIsActive is null ? "Created" : $"{(history.PreviousIsActive.Value ? "Active" : "Inactive")} → {(history.NewIsActive ? "Active" : "Inactive")}")<br /><span class="hint">@history.Action</span></td>
+                    <td>@(history.Reason ?? "—")</td>
+                    <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>

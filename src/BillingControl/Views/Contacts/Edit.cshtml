@@ -1,0 +1,35 @@
+@model ContactEditViewModel
+@{
+    ViewData["Title"] = "Edit Contact / PIC";
+}
+
+<a class="back-link" href="/Contacts/Details/@Model.Id">← Contact details</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">CONTACT MANAGEMENT</p>
+        <h1>Edit Contact / PIC</h1>
+        <p>Profile edits do not change active state, address consent, or customer relationships.</p>
+    </div>
+</div>
+
+<form method="post" action="/Contacts/Edit" class="panel form-panel">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <input type="hidden" asp-for="Id" />
+    <input type="hidden" asp-for="ExpectedVersion" />
+    <div class="form-grid">
+        <div>
+            <label asp-for="Name" class="form-label">Name</label>
+            <input asp-for="Name" class="form-control" maxlength="160" required autofocus />
+        </div>
+        <div>
+            <label asp-for="PreferredLanguage" class="form-label">Preferred language</label>
+            <input asp-for="PreferredLanguage" class="form-control" maxlength="35" placeholder="e.g. en-MY" />
+            <p class="hint">Descriptive only; this does not grant authorization.</p>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Save profile</button>
+        <a class="btn btn-outline-secondary" href="/Contacts/Details/@Model.Id">Cancel</a>
+    </div>
+</form>
