@@ -53,6 +53,7 @@ public sealed class ContactValueObjectTests
     [InlineData("en-")]
     [InlineData("English (Malaysia)")]
     [InlineData("en.MY")]
+    [InlineData("en-123456789")]
     public void NormalizePreferredLanguageRejectsInvalidTags(string input)
     {
         Assert.Throws<BusinessException>(() => ContactValueObjects.NormalizePreferredLanguage(input));

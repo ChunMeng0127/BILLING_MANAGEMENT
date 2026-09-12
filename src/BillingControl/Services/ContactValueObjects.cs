@@ -49,6 +49,8 @@ public static class ContactValueObjects
         var subtags = candidate.Split('-');
         Finance.Require(subtags.Length > 0 && subtags.All(x => x.Length > 0),
             "Preferred language contains an empty subtag.");
+        Finance.Require(subtags.All(x => x.Length <= 8),
+            "Preferred language subtags must be 8 characters or fewer.");
         Finance.Require(subtags.All(x => x.All(IsAsciiAlphaNumeric)),
             "Preferred language contains an invalid subtag.");
         Finance.Require(subtags[0].Length is >= 2 and <= 8 && subtags[0].All(IsAsciiLetter),
