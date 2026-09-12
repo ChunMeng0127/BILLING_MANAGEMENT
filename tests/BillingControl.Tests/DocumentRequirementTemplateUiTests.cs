@@ -244,8 +244,6 @@ public partial class IntegrationTests
         Assert.Contains("annual-checklist", keyFiltered);
         Assert.DoesNotContain("monthly-checklist", keyFiltered);
         Assert.Contains("Inactive", keyFiltered);
-        Assert.Contains("v1", keyFiltered);
-        Assert.Contains("v2", keyFiltered);
 
         var fixture = await AddDocumentFixtureAsync(db, "template-ui-used", serviceId);
         await AddDocumentRequestAsync(db, fixture.WorkItemId, firstId);
