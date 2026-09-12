@@ -370,7 +370,7 @@ public partial class IntegrationTests
         db.ChangeTracker.Clear();
         Assert.True(await db.DocumentRequirementTemplates.Where(x => x.Id == firstId).Select(x => x.IsActive).SingleAsync());
         var usedPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{firstId}");
-        Assert.Contains("This checklist version has already been used in a document request. Its requirements can no longer be changed. Create a new version to make changes.", usedPage);
+        Assert.Contains("This checklist version has already been used in a document request. Its documents can no longer be changed. Create a new version to make changes.", usedPage);
         Assert.DoesNotContain("name=\"Name\"", usedPage);
         Assert.Contains("Create new version", usedPage);
 

@@ -118,11 +118,11 @@ public partial class IntegrationTests
             created.Items[0].Id,
             "Bank Statement",
             "Maybank and CIMB",
-            false);
+            true);
 
         Assert.Equal("Bank Statement", updated.Name);
         Assert.Equal("Maybank and CIMB", updated.Description);
-        Assert.False(updated.IsActive);
+        Assert.True(updated.IsActive);
         Assert.False(updated.IsRequired);
         Assert.Equal(DocumentRequirementWave.Later, updated.Wave);
         Assert.Equal("legacy-document", updated.RequirementKey);
