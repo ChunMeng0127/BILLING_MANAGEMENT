@@ -170,8 +170,9 @@ public partial class IntegrationTests
         Assert.DoesNotContain("name=\"ProviderWaId\"", detailsWithFirstAddress);
         var formattedPhoneSearch = Uri.EscapeDataString("+60 (12) 345-6789");
         var phoneSearchUrl = $"/Contacts?search={formattedPhoneSearch}";
-        var phoneSearch = WebUtility.HtmlDecode(await admin.GetStringAsync(phoneSearchUrl));
-        Assert.Contains("+60123456789", phoneSearch);
+        var phoneSearch = await admin.GetStringAsync(phoneSearchUrl);
+        Assert.Contains("Alice PIC", phoneSearch);
+        Assert.DoesNotContain("Bob PIC", phoneSearch);
 
         var secondAddressResponse = await PostWithToken(admin, $"/Contacts/Details/{contactId}", "/Contacts/AddAddress", new()
         {
