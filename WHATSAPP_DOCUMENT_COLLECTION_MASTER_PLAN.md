@@ -10,8 +10,8 @@
 
 ## Current Project Status
 
-**Current Phase:** Phase 3C — Phase 3 Integration / Regression and Review Closure
-**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C technical regression/review is complete; Phase 3 remains pending final manual user UI acceptance, deferred until the user can access the system. Phase 2 manual UI acceptance remains pending. Phase 4 has not started.
+**Current Phase:** Phase 4A — Contact / PIC Persistence and Domain Model
+**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 manual UI acceptance remains pending because the user will access the application later; the user explicitly authorized continuing development before that check. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3 is technically complete and Phase 3C is technically approved against `9abee34fed787be17d640a2d38c0b1ef8c27f645`; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending until the user can access the system. Phase 4A has started and is complete, awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.
 **Last Reviewed:** 2026-09-12
 
 ### Completed
@@ -37,7 +37,9 @@
 - Phase 3 execution split recorded: 3A document request application/internal workflow service, 3B internal document request/checklist UI, and 3C Phase 3 integration/regression and manual acceptance.
 - Phase 3A document request application/internal workflow service is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. It adds provider-neutral request creation, active-template snapshotting, WorkItem revision allocation, pre-provider request/item transitions, append-only status histories, untracked read models, and PostgreSQL locking/concurrency handling without schema changes or financial/workflow side effects.
 - Phase 3B internal document request/checklist UI is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. It adds staff-only request creation/details routes, compact WorkItem integration, service-backed request/item actions, ordered histories and focused PostgreSQL MVC regression coverage without a migration or provider/evidence integration.
-- Phase 3C technical regression/review closure is complete. CI run `34680785647` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 3 remains pending final manual user UI acceptance; no new Phase 3 feature or migration was introduced.
+- Phase 3C technical regression/review closure is complete. CI run `34681009278` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 3 remains pending final manual user UI acceptance; no new Phase 3 feature or migration was introduced.
+- Phase 4 execution split recorded: 4A Contact/PIC persistence and domain model, 4B ContactService/application behavior, and 4C Contact/PIC management UI and review closure.
+- Phase 4A Contact/PIC persistence and domain model is complete and awaiting ChatGPT review. It adds the Contact, ContactWhatsAppAddress, ContactCustomerLink and append-only history entities, consent enum, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. No ContactService, MVC UI, controller, navigation, WhatsApp provider integration, or Phase 5 work was added.
 
 ### Current Work
 
@@ -55,7 +57,8 @@
 - The user explicitly authorized continuing Phase 3 development before the outstanding Phase 2 manual UI acceptance.
 - Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.
 - Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.
-- Phase 3C technical regression/review is complete; Phase 3 manual UI acceptance remains pending until the user can access the system. Phase 4 has not started.
+- Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending until the user can access the system.
+- Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C have not started. Phase 5 has not started.
 
 ### Outstanding
 
@@ -65,7 +68,7 @@
 
 ### Next Step
 
-Complete final manual user UI acceptance for Phase 2 and Phase 3 when the user can access the application; do not mark either phase fully closed by technical checks alone, and do not start Phase 4 automatically.
+Complete final manual user UI acceptance for Phase 2 and Phase 3 when the user can access the application, then review Phase 4A. Do not mark either manual acceptance fully closed by technical checks alone, and do not start Phase 4B/4C or Phase 5 before the relevant review.
 
 ---
 
@@ -1307,7 +1310,13 @@ Phase 3A deliberately does not set `Requested`, `PartiallyReceived`, `Complete`,
 
 ### Phase 4 — Contact / PIC Model
 
-Implement approved Contact, ContactWhatsAppAddress, ContactCustomerLink, consent/opt-out and management UI. No WhatsApp sending yet.
+Phase 4 is deliberately split into the following bounded execution units:
+
+- **4A — Contact/PIC persistence and domain model:** add Contact, ContactWhatsAppAddress, ContactCustomerLink, consent state, append-only histories, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. **Complete and awaiting ChatGPT review.**
+- **4B — ContactService/application behavior:** implement the service boundary for contact/address/link operations, including audited business rules and safe concurrency behavior. **Not started.**
+- **4C — Contact/PIC management UI and review closure:** add the staff-authorized MVC management surface and focused UI/regression review. **Not started.**
+
+Phase 4A does not implement ContactService, MVC UI, controllers, navigation, WhatsApp provider integration, or Phase 5 behavior. No WhatsApp sending occurs in Phase 4.
 
 ### Phase 5 — Request Batching
 
@@ -1490,7 +1499,7 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C technical regression/review is complete, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4 has not started.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Phase 1A, 1B and 1C are approved/closed; Phase 1 is complete.
 
@@ -1528,8 +1537,16 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `Controllers/WorkController.cs` loads the document panel only for Admin/InternalUser. `Services/Finance.cs` extends the existing label helper for document request/item statuses. No `Program.cs` registration change or migration was needed.
 - `tests/BillingControl.Tests/DocumentRequestUiTests.cs` covers anonymous/external-role denial, Admin/InternalUser access, WorkItem data isolation, template/default and no-template states, Draft creation and duplicate protection, exact request/checklist action rendering, read-only provider/evidence states, antiforgery, malformed/foreign IDs, stale request/item versions, foreign item rejection, ordered histories/revisions, GET non-mutation, and BillingRecord/WorkItem/WorkerAssignment isolation.
 - Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. No Phase 3A/3B defect was found.
-- Phase 3C technical regression/review closure is complete. `tests/BillingControl.Tests/DocumentRequestUiTests.cs` now covers the cancelled-revision → new-template-version MVC flow, current-vs-historical WorkItem presentation, historical read-only access, forged provider-driven state rejection through MVC, repeated checklist audit ordering, malformed IDs, and provider/evidence/financial/workflow isolation. Request action labels were polished to use the approved `Pause` and `Cancel` verbs. CI run `34680785647` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Local Release build, full .NET test command (19 passed and 58 skipped without `BILLING_TEST_CONNECTION`), 12 JavaScript tests, and EF pending-model check also passed. Phase 3 remains pending final manual user UI acceptance; Phase 2 manual user UI acceptance remains pending; Phase 4 has not started. No migration or provider/evidence/send work was introduced.
+- Phase 3C technical regression/review closure is complete against `9abee34fed787be17d640a2d38c0b1ef8c27f645`. `tests/BillingControl.Tests/DocumentRequestUiTests.cs` now covers the cancelled-revision → new-template-version MVC flow, current-vs-historical WorkItem presentation, historical read-only access, forged provider-driven state rejection through MVC, repeated checklist audit ordering, malformed IDs, and provider/evidence/financial/workflow isolation. Request action labels were polished to use the approved `Pause` and `Cancel` verbs. CI run `34681009278` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Local Release build, full .NET test command (19 passed and 58 skipped without `BILLING_TEST_CONNECTION`), 12 JavaScript tests, and EF pending-model check also passed. Phase 3 is technically complete but remains pending final manual user UI acceptance; Phase 2 manual user UI acceptance remains pending; Phase 4A has started. No migration or provider/evidence/send work was introduced.
 - Phase 3A validation was completed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` executed the PostgreSQL 17 suite with 0 failures and 0 skips and passed the Docker image and production Compose HTTPS smoke checks.
+
+### Phase 4A Contact/PIC persistence and domain model record
+
+- `src/BillingControl/Models/ContactDomain.cs` adds `Contact`, `ContactWhatsAppAddress`, `ContactCustomerLink`, `ContactStatusHistory`, `ContactWhatsAppAddressHistory`, `ContactCustomerLinkHistory`, and `ContactWhatsAppConsentState`. Contact is a `Record`, not a `Master`, has no application-authorization or operational-work foreign keys, and address/link identity fields remain immutable through the existing `AppDbContext` allowlist.
+- `src/BillingControl/Data/AppDbContext.cs` adds the six DbSets, restrictive Contact/address/link/history relationships, the approved modified-field allowlists, canonical E.164, text, primary/active, consent, effective-date, enum, and history text constraints, lookup/uniqueness indexes, and `(OwnerId, OccurredAt, Id)` history indexes. No automatic primary selection or consent/link transition service behavior was added.
+- `src/BillingControl/Data/Migrations/20260912082332_Phase4AContactPersistence.cs` is the single additive Phase 4A migration. It adds exactly `Contacts`, `ContactWhatsAppAddresses`, `ContactCustomerLinks`, `ContactStatusHistories`, `ContactWhatsAppAddressHistories`, and `ContactCustomerLinkHistories`; the EF model snapshot was updated normally and previous migrations were not modified.
+- `tests/BillingControl.Tests/ContactPersistenceTests.cs` provides focused real-PostgreSQL coverage for migration/schema application, Contact/address/link persistence and invariants, endpoint ownership, primary addresses, consent states and retained opt-out facts, restrictive deletes, immutable identities, append-only histories, and existing financial/workflow isolation. Local PostgreSQL tests remain skip-only without `BILLING_TEST_CONNECTION`; CI is the authoritative PostgreSQL 17 run.
+- Phase 4A is complete and awaiting ChatGPT review. Phase 4B/4C and Phase 5 have not started.
 
 ---
 

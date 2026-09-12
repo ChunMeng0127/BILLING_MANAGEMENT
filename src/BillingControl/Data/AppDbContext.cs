@@ -43,6 +43,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<DocumentRequestItemStatusHistory> DocumentRequestItemStatusHistories => Set<DocumentRequestItemStatusHistory>();
     public DbSet<ReceivedDocumentStatusHistory> ReceivedDocumentStatusHistories => Set<ReceivedDocumentStatusHistory>();
     public DbSet<DocumentRequestItemEvidenceHistory> DocumentRequestItemEvidenceHistories => Set<DocumentRequestItemEvidenceHistory>();
+    public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<ContactWhatsAppAddress> ContactWhatsAppAddresses => Set<ContactWhatsAppAddress>();
+    public DbSet<ContactCustomerLink> ContactCustomerLinks => Set<ContactCustomerLink>();
+    public DbSet<ContactStatusHistory> ContactStatusHistories => Set<ContactStatusHistory>();
+    public DbSet<ContactWhatsAppAddressHistory> ContactWhatsAppAddressHistories => Set<ContactWhatsAppAddressHistory>();
+    public DbSet<ContactCustomerLinkHistory> ContactCustomerLinkHistories => Set<ContactCustomerLinkHistory>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -290,6 +296,92 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         });
         b.Entity<DocumentRequestItemEvidenceHistory>().ToTable(t =>
             t.HasCheckConstraint("CK_DocumentRequestItemEvidenceHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0"));
+
+        b.Entity<Contact>().Property(x => x.Name).HasMaxLength(160).IsRequired();
+        b.Entity<Contact>().Property(x => x.PreferredLanguage).HasMaxLength(35);
+        b.Entity<Contact>().HasIndex(x => x.Name);
+        b.Entity<Contact>().ToTable(t => t.HasCheckConstraint(
+            "CK_Contact_Text",
+            "length(btrim(\"Name\")) > 0 AND (\"PreferredLanguage\" IS NULL OR length(btrim(\"PreferredLanguage\")) > 0)"));
+
+        b.Entity<ContactWhatsAppAddress>().Property(x => x.NormalizedE164).HasMaxLength(16).IsRequired();
+        b.Entity<ContactWhatsAppAddress>().Property(x => x.ProviderWaId).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddress>().Property(x => x.ConsentSource).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddress>().Property(x => x.ConsentEvidenceReference).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddress>().Property(x => x.LastOptOutReason).HasMaxLength(2000);
+        b.Entity<ContactWhatsAppAddress>().HasIndex(x => new { x.ContactId, x.NormalizedE164 }).IsUnique();
+        b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.NormalizedE164).IsUnique().HasFilter("\"IsActive\" = TRUE");
+        b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.ContactId).IsUnique().HasFilter("\"IsActive\" = TRUE AND \"IsPrimary\" = TRUE");
+        b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.ProviderWaId);
+        b.Entity<ContactWhatsAppAddress>().HasOne(x => x.Contact).WithMany(x => x.Addresses)
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactWhatsAppAddress>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_NormalizedE164", "\"NormalizedE164\" ~ '^\\+[1-9][0-9]{0,14}$'");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_PrimaryActive", "NOT \"IsPrimary\" OR \"IsActive\"");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_ConsentState", "\"ConsentState\" IN (0, 1, 2)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_UnknownConsent", "\"ConsentState\" <> 0 OR (\"ConsentRecordedAt\" IS NULL AND \"ConsentSource\" IS NULL AND \"ConsentEvidenceReference\" IS NULL)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_OptedInConsent", "\"ConsentState\" <> 1 OR (\"ConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"ConsentSource\", ''))) > 0 AND length(btrim(COALESCE(\"ConsentEvidenceReference\", ''))) > 0)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddress_DoNotWhatsAppConsent", "\"ConsentState\" <> 2 OR (\"ConsentRecordedAt\" IS NOT NULL AND length(btrim(COALESCE(\"ConsentSource\", ''))) > 0 AND \"LastOptOutAt\" IS NOT NULL AND length(btrim(COALESCE(\"LastOptOutReason\", ''))) > 0)");
+        });
+
+        b.Entity<ContactCustomerLink>().Property(x => x.Role).HasMaxLength(120);
+        b.Entity<ContactCustomerLink>().Property(x => x.Note).HasMaxLength(2000);
+        b.Entity<ContactCustomerLink>().HasIndex(x => new { x.ContactId, x.CustomerId }).IsUnique();
+        b.Entity<ContactCustomerLink>().HasIndex(x => x.ContactId).HasFilter("\"IsActive\" = TRUE");
+        b.Entity<ContactCustomerLink>().HasIndex(x => x.CustomerId).HasFilter("\"IsActive\" = TRUE");
+        b.Entity<ContactCustomerLink>().HasOne(x => x.Contact).WithMany(x => x.CustomerLinks)
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactCustomerLink>().HasOne(x => x.Customer).WithMany(x => x.ContactCustomerLinks)
+            .HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactCustomerLink>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ContactCustomerLink_EffectiveState", "(\"IsActive\" AND \"EffectiveTo\" IS NULL) OR (NOT \"IsActive\" AND \"EffectiveTo\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_ContactCustomerLink_EffectiveDates", "\"EffectiveTo\" IS NULL OR \"EffectiveTo\" >= \"EffectiveFrom\"");
+            t.HasCheckConstraint("CK_ContactCustomerLink_Role", "\"Role\" IS NULL OR length(btrim(\"Role\")) > 0");
+        });
+
+        b.Entity<ContactStatusHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<ContactStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<ContactStatusHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<ContactStatusHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<ContactStatusHistory>().HasIndex(x => new { x.ContactId, x.OccurredAt, x.Id });
+        b.Entity<ContactStatusHistory>().HasOne(x => x.Contact).WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactStatusHistory>().ToTable(t => t.HasCheckConstraint(
+            "CK_ContactStatusHistory_Text",
+            "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0"));
+
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.PreviousProviderWaId).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.NewProviderWaId).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<ContactWhatsAppAddressHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<ContactWhatsAppAddressHistory>().HasIndex(x => new { x.ContactWhatsAppAddressId, x.OccurredAt, x.Id });
+        b.Entity<ContactWhatsAppAddressHistory>().HasOne(x => x.ContactWhatsAppAddress).WithMany(x => x.History)
+            .HasForeignKey(x => x.ContactWhatsAppAddressId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactWhatsAppAddressHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_ConsentState", "(\"PreviousConsentState\" IS NULL OR \"PreviousConsentState\" IN (0, 1, 2)) AND \"NewConsentState\" IN (0, 1, 2)");
+            t.HasCheckConstraint("CK_ContactWhatsAppAddressHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.PreviousRole).HasMaxLength(120);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.NewRole).HasMaxLength(120);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.PreviousNote).HasMaxLength(2000);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.NewNote).HasMaxLength(2000);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<ContactCustomerLinkHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<ContactCustomerLinkHistory>().HasIndex(x => new { x.ContactCustomerLinkId, x.OccurredAt, x.Id });
+        b.Entity<ContactCustomerLinkHistory>().HasOne(x => x.ContactCustomerLink).WithMany(x => x.History)
+            .HasForeignKey(x => x.ContactCustomerLinkId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<ContactCustomerLinkHistory>().ToTable(t => t.HasCheckConstraint(
+            "CK_ContactCustomerLinkHistory_Text",
+            "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0"));
+
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
     }
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -341,6 +433,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         DocumentRequestItemStatusHistory => [],
                         ReceivedDocumentStatusHistory => [],
                         DocumentRequestItemEvidenceHistory => [],
+                        Contact => ["Name", "PreferredLanguage", "IsActive"],
+                        ContactWhatsAppAddress => ["ProviderWaId", "IsPrimary", "IsActive", "ConsentState", "ConsentRecordedAt", "ConsentSource", "ConsentEvidenceReference", "LastOptOutAt", "LastOptOutReason"],
+                        ContactCustomerLink => ["IsActive", "EffectiveFrom", "EffectiveTo", "Role", "Note"],
+                        ContactStatusHistory => [],
+                        ContactWhatsAppAddressHistory => [],
+                        ContactCustomerLinkHistory => [],
                         WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                         WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                         CustomerReceipt => allowReceiptAllocationCorrection
