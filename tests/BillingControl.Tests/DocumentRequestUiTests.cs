@@ -149,7 +149,7 @@ public partial class IntegrationTests
         }
 
         var adminCreate = await admin.GetStringAsync($"/DocumentRequests/Create?workItemId={setup.WorkItemId}");
-        Assert.Contains("Document request", adminCreate);
+        Assert.Contains("document request", adminCreate);
         Assert.Contains("Default", adminCreate);
         Assert.Contains($"value=\"{setup.TemplateId}\"", adminCreate);
         Assert.Equal(HttpStatusCode.OK, (await internalUser.GetAsync($"/DocumentRequests/Create?workItemId={setup.WorkItemId}")).StatusCode);
