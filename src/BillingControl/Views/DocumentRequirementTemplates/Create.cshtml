@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "New document checklist";
     var services = ViewBag.Services as IReadOnlyList<DocumentRequirementTemplateServiceOption> ?? [];
+    var standardDocuments = DocumentChecklistDocumentOptions.StandardDocuments;
 }
 
 <a class="back-link" href="/DocumentRequirementTemplates">← Document Checklists</a>
@@ -44,33 +45,56 @@
 
     <h2 class="section-title">Initial checklist items</h2>
     <p class="hint">Documents will appear in the order shown below. You can change the order later.</p>
-    <p class="hint">Request priority controls when the item should be requested. Required controls whether the item is mandatory.</p>
     <div class="table-responsive">
         <table class="table data-grid template-items-table">
-            <thead><tr><th>Document / requirement</th><th>Description</th><th>Required?</th><th>Request priority</th><th>Active?</th><th></th></tr></thead>
+            <thead><tr><th>Document</th><th>Description</th><th>Include in new requests</th><th></th></tr></thead>
             <tbody data-template-rows data-next-index="@Model.Items.Count">
             @for (var i = 0; i < Model.Items.Count; i++)
             {
+                var isOtherDocument = string.Equals(Model.Items[i].DocumentSelection, DocumentChecklistDocumentOptions.OtherDocuments, StringComparison.Ordinal);
                 <tr>
-                    <td><input asp-for="Items[i].Name" class="form-control" maxlength="160" placeholder="Bank Statements" /></td>
+                    <td>
+                        <select name="Items[@i].DocumentSelection" class="form-select" data-document-selection required>
+                            <option value="">Select document</option>
+                            @foreach (var document in standardDocuments)
+                            {
+                                <option value="@document" selected="@(Model.Items[i].DocumentSelection == document ? "selected" : null)">@document</option>
+                            }
+                            <option value="@DocumentChecklistDocumentOptions.OtherDocuments" selected="@(isOtherDocument ? "selected" : null)">@DocumentChecklistDocumentOptions.OtherDocuments</option>
+                        </select>
+                        <div class="mt-2" data-other-document-wrapper hidden="@(isOtherDocument ? null : "hidden")">
+                            <label class="form-label" for="other-document-@i">Other document name</label>
+                            <input id="other-document-@i" name="Items[@i].OtherDocumentName" class="form-control" maxlength="160" value="@Model.Items[i].OtherDocumentName" data-other-document-name disabled="@(!isOtherDocument ? "disabled" : null)" />
+                        </div>
+                    </td>
                     <td><input asp-for="Items[i].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
-                    <td class="text-center"><input asp-for="Items[i].IsRequired" class="form-check-input" /></td>
-                    <td><select asp-for="Items[i].Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave">@Finance.Label(wave)</option> }</select></td>
-                    <td class="text-center"><input asp-for="Items[i].IsActive" class="form-check-input" /></td>
+                    <td class="text-center"><input id="include-in-requests-@i" name="Items[@i].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(Model.Items[i].IncludeInNewRequests ? "checked" : null) /><label class="visually-hidden" for="include-in-requests-@i">Include in new requests</label></td>
                     <td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
                 </tr>
             }
             </tbody>
         </table>
     </div>
-    <button type="button" class="btn btn-outline-secondary" data-template-add-row data-template-target="[data-template-rows]">+ Add document / requirement</button>
+    <button type="button" class="btn btn-outline-secondary" data-template-add-row data-template-target="[data-template-rows]">+ Add document</button>
+    <p class="hint mt-2">Turn this off to keep the item for history but exclude it from future document requests.</p>
     <template id="template-item-prototype">
         <tr>
-            <td><input name="Items[__index__].Name" class="form-control" maxlength="160" placeholder="Bank Statements" /></td>
+            <td>
+                <select name="Items[__index__].DocumentSelection" class="form-select" data-document-selection required>
+                    <option value="">Select document</option>
+                    @foreach (var document in standardDocuments)
+                    {
+                        <option value="@document">@document</option>
+                    }
+                    <option value="@DocumentChecklistDocumentOptions.OtherDocuments">@DocumentChecklistDocumentOptions.OtherDocuments</option>
+                </select>
+                <div class="mt-2" data-other-document-wrapper hidden>
+                    <label class="form-label" for="other-document-__index__">Other document name</label>
+                    <input id="other-document-__index__" name="Items[__index__].OtherDocumentName" class="form-control" maxlength="160" data-other-document-name disabled />
+                </div>
+            </td>
             <td><input name="Items[__index__].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
-            <td class="text-center"><input name="Items[__index__].IsRequired" value="true" type="checkbox" class="form-check-input" /></td>
-            <td><select name="Items[__index__].Wave" class="form-select">@foreach (var wave in Enum.GetValues<DocumentRequirementWave>()) { <option value="@wave">@Finance.Label(wave)</option> }</select></td>
-            <td class="text-center"><input name="Items[__index__].IsActive" value="true" type="checkbox" class="form-check-input" checked /></td>
+            <td class="text-center"><input name="Items[__index__].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests checked /></td>
             <td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
         </tr>
     </template>

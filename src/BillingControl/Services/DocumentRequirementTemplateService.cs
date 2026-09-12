@@ -205,11 +205,11 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                     template.Items.Select(x => x.RequirementKey))
                 : NormalizeRequired(normalized.RequirementKey, "Requirement key", 100);
             Finance.Require(!template.Items.Any(x => string.Equals(x.RequirementKey, requirementKey, StringComparison.OrdinalIgnoreCase)),
-                "This document / requirement is already used by this checklist version.");
+                "This document is already used by this checklist version.");
             var nextDisplayOrder = template.Items.Count == 0
                 ? 0
                 : template.Items.Max(x => x.DisplayOrder) == int.MaxValue
-                    ? throw new BusinessException("No further requirement order can be allocated.")
+                    ? throw new BusinessException("No further document order can be allocated.")
                     : template.Items.Max(x => x.DisplayOrder) + 1;
 
             var item = ToEntity(normalized with
@@ -237,7 +237,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Include(x => x.DocumentRequirementTemplate)
                 .ThenInclude(x => x.Items)
                 .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken)
-                ?? throw new BusinessException("The checklist document / requirement was not found.");
+                ?? throw new BusinessException("The checklist document was not found.");
             await EnsureUnusedAsync(item.DocumentRequirementTemplateId, cancellationToken);
             EnsureItemActiveChangeAllowed(item.DocumentRequirementTemplate, item, normalized.IsActive);
 
@@ -246,6 +246,34 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             item.IsRequired = normalized.IsRequired;
             item.Wave = normalized.Wave;
             item.IsActive = normalized.IsActive;
+            await db.SaveChangesAsync(cancellationToken);
+            return ToReadModel(item);
+        }, cancellationToken);
+    }
+
+    public async Task<DocumentRequirementTemplateItemReadModel> UpdateItemForStaffAsync(
+        int itemId,
+        string name,
+        string? description,
+        bool isActive,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = NormalizeRequired(name, "Document name", 160);
+        var normalizedDescription = NormalizeOptional(description, "Document description", 2000);
+
+        return await InSerializableTransactionAsync(async () =>
+        {
+            var item = await db.DocumentRequirementTemplateItems
+                .Include(x => x.DocumentRequirementTemplate)
+                .ThenInclude(x => x.Items)
+                .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken)
+                ?? throw new BusinessException("The checklist document was not found.");
+            await EnsureUnusedAsync(item.DocumentRequirementTemplateId, cancellationToken);
+            EnsureItemActiveChangeAllowed(item.DocumentRequirementTemplate, item, isActive);
+
+            item.Name = normalizedName;
+            item.Description = normalizedDescription;
+            item.IsActive = isActive;
             await db.SaveChangesAsync(cancellationToken);
             return ToReadModel(item);
         }, cancellationToken);
@@ -262,7 +290,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Include(x => x.DocumentRequirementTemplate)
                 .ThenInclude(x => x.Items)
                 .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken)
-                ?? throw new BusinessException("The checklist document / requirement was not found.");
+                ?? throw new BusinessException("The checklist document was not found.");
             await EnsureUnusedAsync(item.DocumentRequirementTemplateId, cancellationToken);
             EnsureItemActiveChangeAllowed(item.DocumentRequirementTemplate, item, isActive);
             item.IsActive = isActive;
@@ -283,9 +311,9 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             var template = await GetTrackedTemplateWithItemsAsync(templateId, cancellationToken);
             await EnsureUnusedAsync(template.Id, cancellationToken);
             Finance.Require(orderedItemIds.Count == template.Items.Count && orderedItemIds.Distinct().Count() == orderedItemIds.Count,
-                "The checklist order must include each document / requirement exactly once.");
+                "The checklist order must include each document exactly once.");
             var itemsById = template.Items.ToDictionary(x => x.Id);
-            Finance.Require(orderedItemIds.All(itemsById.ContainsKey), "The reorder list contains a document / requirement from another checklist.");
+            Finance.Require(orderedItemIds.All(itemsById.ContainsKey), "The reorder list contains a document from another checklist.");
             for (var index = 0; index < orderedItemIds.Count; index++)
                 itemsById[orderedItemIds[index]].DisplayOrder = index;
 
@@ -471,7 +499,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
 
     private static DocumentRequirementTemplateCreateInput NormalizeCreateInput(DocumentRequirementTemplateCreateInput input)
     {
-        var items = input.Items ?? throw new BusinessException("Checklist documents / requirements are required.");
+        var items = input.Items ?? throw new BusinessException("Checklist documents are required.");
         return input with
         {
             TemplateKey = NormalizeOptional(input.TemplateKey, "Template key", 100),
@@ -489,15 +517,15 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         return input with
         {
             RequirementKey = NormalizeOptional(input.RequirementKey, "Requirement key", 100),
-            Name = NormalizeRequired(input.Name, "Document / requirement name", 160),
-            Description = NormalizeOptional(input.Description, "Document / requirement description", 2000)
+            Name = NormalizeRequired(input.Name, "Document name", 160),
+            Description = NormalizeOptional(input.Description, "Document description", 2000)
         };
     }
 
     private static DocumentRequirementTemplateItemUpdateInput NormalizeItemUpdateInput(DocumentRequirementTemplateItemUpdateInput input) => input with
     {
-        Name = NormalizeRequired(input.Name, "Document / requirement name", 160),
-        Description = NormalizeOptional(input.Description, "Document / requirement description", 2000)
+        Name = NormalizeRequired(input.Name, "Document name", 160),
+        Description = NormalizeOptional(input.Description, "Document description", 2000)
     };
 
     private static string NormalizeRequired(string? value, string label, int maxLength)
@@ -528,8 +556,8 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         foreach (var item in items)
         {
             ValidateItem(item);
-            Finance.Require(item.RequirementKey is not null, "The document / requirement could not be added.");
-            Finance.Require(keys.Add(item.RequirementKey!), "Document / requirements must be unique within a checklist version.");
+            Finance.Require(item.RequirementKey is not null, "The document could not be added.");
+            Finance.Require(keys.Add(item.RequirementKey!), "Documents must be unique within a checklist version.");
         }
     }
 
@@ -552,11 +580,11 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
     {
         Finance.Require(!isDefault || isActive, "A default checklist must be active.");
         if (isActive || isDefault)
-            Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document / requirement.");
+            Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document.");
     }
 
     private static void ValidateOperationalItems(IReadOnlyCollection<DocumentRequirementTemplateItem> items) =>
-        Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document / requirement.");
+        Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document.");
 
     private static void EnsureItemActiveChangeAllowed(
         DocumentRequirementTemplate template,
@@ -565,7 +593,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
     {
         if (template.IsActive && item.IsActive && !requestedActive)
             Finance.Require(template.Items.Any(x => x.Id != item.Id && x.IsActive),
-                "An active checklist must retain at least one active document / requirement.");
+                "An active checklist must retain at least one active document.");
     }
 
     private static DocumentRequirementTemplateItem ToEntity(DocumentRequirementTemplateItemInput input) => new()
@@ -609,7 +637,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                     DocumentChecklistKeyGenerator.Slugify(item.Name, "requirement"),
                     usedKeys)
                 : NormalizeRequired(item.RequirementKey, "Requirement key", 100);
-            Finance.Require(usedKeys.Add(key), "Document / requirements must be unique within a checklist version.");
+            Finance.Require(usedKeys.Add(key), "Documents must be unique within a checklist version.");
             result.Add(item with { RequirementKey = key });
         }
 

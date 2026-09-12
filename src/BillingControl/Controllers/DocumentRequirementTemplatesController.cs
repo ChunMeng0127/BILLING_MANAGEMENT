@@ -44,7 +44,7 @@ public sealed class DocumentRequirementTemplatesController(
         ViewBag.Services = await ServiceOptionsAsync();
         return View(new DocumentRequirementTemplateCreateViewModel
         {
-            Items = [new() { Wave = DocumentRequirementWave.Normal, IsActive = true }]
+            Items = [new() { IncludeInNewRequests = true }]
         });
     }
 
@@ -52,7 +52,6 @@ public sealed class DocumentRequirementTemplatesController(
     public async Task<IActionResult> Create(DocumentRequirementTemplateCreateViewModel form)
     {
         form.Items ??= [];
-        ValidateWaves(form.Items, "Items");
         if (!ModelState.IsValid)
         {
             ViewBag.Services = await ServiceOptionsAsync();
@@ -108,13 +107,12 @@ public sealed class DocumentRequirementTemplatesController(
     {
         var template = await templates.GetAsync(form.TemplateId);
         if (template is null) return NotFound();
-        ValidateWave(form, "NewItem");
         if (!ModelState.IsValid) return await DetailViewAsync(form.TemplateId, newItem: form);
 
         try
         {
             await templates.AddItemAsync(form.TemplateId, ToServiceInput(form));
-            TempData["Success"] = "Document / requirement added.";
+            TempData["Success"] = "Document added.";
             return RedirectToAction(nameof(Edit), new { id = form.TemplateId });
         }
         catch (BusinessException ex)
@@ -129,13 +127,16 @@ public sealed class DocumentRequirementTemplatesController(
     {
         var template = await templates.GetAsync(form.TemplateId);
         if (template is null || !template.Items.Any(x => x.Id == form.Id)) return NotFound();
-        ValidateWave(form, "EditingItem");
         if (!ModelState.IsValid) return await DetailViewAsync(form.TemplateId, editingItem: form);
 
         try
         {
-            await templates.UpdateItemAsync(form.Id, new(form.Name, form.Description, form.IsRequired, form.Wave, 0, form.IsActive));
-            TempData["Success"] = "Document / requirement saved.";
+            await templates.UpdateItemForStaffAsync(
+                form.Id,
+                DocumentChecklistDocumentOptions.ResolveDocumentName(form.DocumentSelection, form.OtherDocumentName),
+                form.Description,
+                form.IncludeInNewRequests);
+            TempData["Success"] = "Document saved.";
             return RedirectToAction(nameof(Edit), new { id = form.TemplateId });
         }
         catch (BusinessException ex)
@@ -153,7 +154,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.SetItemActiveAsync(itemId, isActive);
-            TempData["Success"] = isActive ? "Document / requirement activated." : "Document / requirement deactivated.";
+            TempData["Success"] = isActive ? "Document included in new requests." : "Document excluded from new requests.";
         }
         catch (BusinessException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Edit), new { id = templateId });
@@ -243,8 +244,7 @@ public sealed class DocumentRequirementTemplatesController(
         var defaultNewItem = new DocumentRequirementTemplateItemForm
         {
             TemplateId = template.Id,
-            Wave = DocumentRequirementWave.Normal,
-            IsActive = true
+            IncludeInNewRequests = true
         };
         return View("Edit", new DocumentRequirementTemplateDetailViewModel
         {
@@ -270,28 +270,13 @@ public sealed class DocumentRequirementTemplatesController(
             .Select(x => new DocumentRequirementTemplateServiceOption(x.Id, x.Name, x.IsActive))
             .ToListAsync();
 
-    private void ValidateWaves(IEnumerable<DocumentRequirementTemplateItemForm> items, string prefix)
-    {
-        var index = 0;
-        foreach (var item in items)
-        {
-            ValidateWave(item, $"{prefix}[{index}]");
-            index++;
-        }
-    }
-
-    private void ValidateWave(DocumentRequirementTemplateItemForm item, string prefix)
-    {
-        if (!Enum.IsDefined(item.Wave)) ModelState.AddModelError($"{prefix}.Wave", "Select a valid request priority.");
-    }
-
     private static DocumentRequirementTemplateItemInput ToServiceInput(DocumentRequirementTemplateItemForm item) => new(
         null,
-        item.Name,
+        DocumentChecklistDocumentOptions.ResolveDocumentName(item.DocumentSelection, item.OtherDocumentName),
         item.Description,
-        item.IsRequired,
-        item.Wave,
+        true,
+        DocumentRequirementWave.Normal,
         0,
-        item.IsActive);
+        item.IncludeInNewRequests);
 
 }

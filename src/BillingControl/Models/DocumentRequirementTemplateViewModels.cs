@@ -72,15 +72,16 @@ public sealed class DocumentRequirementTemplateItemForm
     public int Id { get; set; }
     public int TemplateId { get; set; }
 
-    [Required, StringLength(160)]
-    public string Name { get; set; } = "";
+    [Required(ErrorMessage = "Select a document.")]
+    public string? DocumentSelection { get; set; }
+
+    [StringLength(160, ErrorMessage = "Document name must be 160 characters or fewer.")]
+    public string? OtherDocumentName { get; set; }
 
     [StringLength(2000)]
     public string? Description { get; set; }
 
-    public bool IsRequired { get; set; }
-    public DocumentRequirementWave Wave { get; set; } = DocumentRequirementWave.Normal;
-    public bool IsActive { get; set; } = true;
+    public bool IncludeInNewRequests { get; set; } = true;
 }
 
 public sealed record DocumentRequirementTemplateItemDisplayViewModel(

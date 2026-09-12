@@ -102,6 +102,34 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task TemplateService_StaffItemEditsPreserveLegacyRequiredAndWaveValues()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-staff-item-edit");
+        var service = new DocumentRequirementTemplateService(db);
+        var created = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            DocumentToken("staff-item-edit"),
+            "Staff item edit",
+            null,
+            [new("legacy-document", "Legacy document", "Before", false, DocumentRequirementWave.Later, 0)]));
+
+        var updated = await service.UpdateItemForStaffAsync(
+            created.Items[0].Id,
+            "Bank Statement",
+            "Maybank and CIMB",
+            false);
+
+        Assert.Equal("Bank Statement", updated.Name);
+        Assert.Equal("Maybank and CIMB", updated.Description);
+        Assert.False(updated.IsActive);
+        Assert.False(updated.IsRequired);
+        Assert.Equal(DocumentRequirementWave.Later, updated.Wave);
+        Assert.Equal("legacy-document", updated.RequirementKey);
+        Assert.Equal(0, updated.DisplayOrder);
+    }
+
+    [PostgresFact]
     public async Task TemplateService_DefaultSwitchAndActivationRulesAreExplicit()
     {
         await using var db = await Fresh();

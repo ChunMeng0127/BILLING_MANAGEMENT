@@ -1528,10 +1528,12 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 
 ### Phase 2 Manual-UAT usability correction record
 
+- The previous Phase 2 wording cleanup is approved against `b69864b904c9fb23adb6b830786af61bdcd64932`; CI run `34694209294` passed. Repeat Phase 2 manual UI acceptance remains pending.
 - The staff-facing Document Templates surface is corrected to use **Document Checklists** terminology, with Checklist name/description labels, clearer default and Request priority wording, and concise helpers that explain the operational meaning without exposing implementation details.
 - Checklist family keys and requirement keys are generated server-side from names with stable collision suffixes, while existing explicit keys remain compatible for legacy/internal callers. Staff forms no longer ask for TemplateKey, RequirementKey, or manual numeric DisplayOrder values.
 - Initial requirement rows define their sequence, new requirements append automatically, and existing Move Up/Down operations remain available. Checklist versioning, default/active/used immutability, document-request snapshots, and Phase 3 behavior are preserved.
-- No migration or schema change was introduced, and no Phase 3 UI was modified. Phase 2 repeat manual acceptance remains pending; Phase 3 manual UI testing is paused until this bounded correction is accepted.
+- This second bounded Phase 2 correction simplifies checklist item entry with a shared standard-document dropdown and an **Other Documents** custom-name option, retains Description, defaults new items to stored `IsRequired = true` and `Wave = Normal`, preserves legacy stored `IsRequired`/`Wave` values during edits, and presents `IsActive` as **Include in new requests**. The existing schema/domain, generated keys, version lineage, ordering, and Phase 3 request snapshot behavior remain compatible and unchanged.
+- No migration or schema change was introduced, and no Phase 3 or Phase 4 implementation was modified. Phase 2 repeat manual acceptance remains pending; Phase 3 manual UI acceptance remains pending and paused; Phase 4 technical implementation and manual acceptance status remain unchanged; Phase 5 has not started.
 
 ### Phase 3A document request service record
 

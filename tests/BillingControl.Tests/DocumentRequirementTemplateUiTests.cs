@@ -99,31 +99,50 @@ public partial class IntegrationTests
         Assert.Contains("Version 1 is created automatically. Add the documents normally required for this service.", createPage);
         Assert.Contains("Documents will appear in the order shown below. You can change the order later.", createPage);
         Assert.Contains("Use as default checklist for this service", createPage);
-        Assert.Contains("Request priority", createPage);
+        Assert.Contains("Bank Statement", createPage);
+        Assert.Contains("Other Documents", createPage);
+        Assert.Contains("Include in new requests", createPage);
+        Assert.DoesNotContain("Request priority", createPage);
+        Assert.DoesNotContain("Required?", createPage);
         Assert.DoesNotContain("stable internal keys", createPage);
         Assert.DoesNotContain("Internal keys", createPage);
         Assert.DoesNotContain("TemplateKey", createPage);
         Assert.DoesNotContain("RequirementKey", createPage);
         Assert.DoesNotContain("DisplayOrder", createPage);
 
-        static Dictionary<string, string> CreateFields(int service, string name, bool isDefault = false) => new()
+        static Dictionary<string, string> CreateFields(
+            int service,
+            string name,
+            bool isDefault = false,
+            bool checklistActive = true,
+            string documentSelection = "Bank Statement",
+            string? otherDocumentName = null,
+            bool includeInNewRequests = true) => new()
         {
             ["ServiceId"] = service.ToString(),
             ["Name"] = name,
             ["Description"] = $"{name} description",
-            ["IsActive"] = "true",
+            ["IsActive"] = checklistActive ? "true" : "false",
             ["IsDefault"] = isDefault ? "true" : "false",
-            ["Items[0].Name"] = "Bank statement",
+            ["Items[0].DocumentSelection"] = documentSelection,
             ["Items[0].Description"] = "Latest bank statement",
-            ["Items[0].IsRequired"] = "true",
-            ["Items[0].Wave"] = DocumentRequirementWave.StartWork.ToString(),
-            ["Items[0].IsActive"] = "true"
+            ["Items[0].IncludeInNewRequests"] = includeInNewRequests ? "true" : "false",
+            ["Items[0].OtherDocumentName"] = otherDocumentName ?? ""
         };
 
         var invalidCreate = CreateFields(serviceId, "");
         var invalidResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", invalidCreate, "/DocumentRequirementTemplates/Create");
         Assert.Equal(HttpStatusCode.OK, invalidResponse.StatusCode);
         Assert.Contains("The Name field is required.", await invalidResponse.Content.ReadAsStringAsync());
+
+        var invalidOther = CreateFields(
+            serviceId,
+            "Invalid custom checklist",
+            documentSelection: DocumentChecklistDocumentOptions.OtherDocuments,
+            otherDocumentName: "  ");
+        var invalidOtherResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", invalidOther, "/DocumentRequirementTemplates/Create");
+        Assert.Equal(HttpStatusCode.OK, invalidOtherResponse.StatusCode);
+        Assert.Contains("Enter the document name when Other Documents is selected.", await invalidOtherResponse.Content.ReadAsStringAsync());
 
         var firstResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "Monthly checklist", isDefault: true));
         Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
@@ -132,6 +151,35 @@ public partial class IntegrationTests
 
         var secondResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "Annual checklist"));
         Assert.Equal(HttpStatusCode.Redirect, secondResponse.StatusCode);
+
+        var customCreate = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(
+            serviceId,
+            "Custom checklist",
+            documentSelection: DocumentChecklistDocumentOptions.OtherDocuments,
+            otherDocumentName: "  Loan Statement  "));
+        Assert.Equal(HttpStatusCode.Redirect, customCreate.StatusCode);
+        db.ChangeTracker.Clear();
+        var customItem = await db.DocumentRequirementTemplateItems
+            .Where(x => x.DocumentRequirementTemplate!.Name == "Custom checklist")
+            .SingleAsync();
+        Assert.Equal("Loan Statement", customItem.Name);
+        Assert.True(customItem.IsRequired);
+        Assert.Equal(DocumentRequirementWave.Normal, customItem.Wave);
+        Assert.True(customItem.IsActive);
+
+        var excludedCreate = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(
+            serviceId,
+            "Excluded checklist",
+            checklistActive: false,
+            includeInNewRequests: false));
+        Assert.Equal(HttpStatusCode.Redirect, excludedCreate.StatusCode);
+        db.ChangeTracker.Clear();
+        var excludedItem = await db.DocumentRequirementTemplateItems
+            .Where(x => x.DocumentRequirementTemplate!.Name == "Excluded checklist")
+            .SingleAsync();
+        Assert.True(excludedItem.IsRequired);
+        Assert.Equal(DocumentRequirementWave.Normal, excludedItem.Wave);
+        Assert.False(excludedItem.IsActive);
 
         db.ChangeTracker.Clear();
         var firstId = await db.DocumentRequirementTemplates.Where(x => x.TemplateKey == "monthly-checklist").Select(x => x.Id).SingleAsync();
@@ -147,7 +195,11 @@ public partial class IntegrationTests
         Assert.Contains("This checklist can be reused when requesting documents for this service.", secondEditPage);
         Assert.Contains("You can rename an unused checklist without affecting how its versions are tracked.", secondEditPage);
         Assert.Contains("Use as default checklist for this service", secondEditPage);
-        Assert.Contains("Request priority", secondEditPage);
+        Assert.Contains("Include in new requests", secondEditPage);
+        Assert.DoesNotContain("Request priority", secondEditPage);
+        Assert.DoesNotContain("Required?", secondEditPage);
+        Assert.DoesNotContain("Start Work", secondEditPage);
+        Assert.DoesNotContain("Wave", secondEditPage);
         Assert.DoesNotContain("Version numbers and internal identifiers are managed automatically.", secondEditPage);
         Assert.DoesNotContain("stable internal identity", secondEditPage);
         Assert.DoesNotContain("TemplateKey", secondEditPage);
@@ -156,31 +208,63 @@ public partial class IntegrationTests
 
         var addPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Name"] = "Payroll report",
-            ["Description"] = "Monthly payroll", ["IsRequired"] = "false", ["Wave"] = DocumentRequirementWave.Normal.ToString(),
-            ["IsActive"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["DocumentSelection"] = "Payroll Report",
+            ["Description"] = "Monthly payroll", ["IncludeInNewRequests"] = "true"
         });
         Assert.Equal(HttpStatusCode.Redirect, addPayroll.StatusCode);
         db.ChangeTracker.Clear();
-        var payrollItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId && x.RequirementKey == "payroll-report").Select(x => x.Id).SingleAsync();
+        var payrollItem = await db.DocumentRequirementTemplateItems.SingleAsync(x => x.DocumentRequirementTemplateId == secondId && x.RequirementKey == "payroll-report");
+        var payrollItemId = payrollItem.Id;
+        Assert.True(payrollItem.IsRequired);
+        Assert.Equal(DocumentRequirementWave.Normal, payrollItem.Wave);
+        Assert.True(payrollItem.IsActive);
 
         var addTax = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Name"] = "Tax report",
-            ["Description"] = "Annual tax report", ["IsRequired"] = "false", ["Wave"] = DocumentRequirementWave.Later.ToString(),
-            ["IsActive"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["DocumentSelection"] = DocumentChecklistDocumentOptions.OtherDocuments,
+            ["OtherDocumentName"] = "  Tax report  ", ["Description"] = "Annual tax report", ["IncludeInNewRequests"] = "true"
         });
         Assert.Equal(HttpStatusCode.Redirect, addTax.StatusCode);
         db.ChangeTracker.Clear();
         var taxItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId && x.RequirementKey == "tax-report").Select(x => x.Id).SingleAsync();
 
+        var customMappingPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}");
+        Assert.Contains("value=\"Tax report\"", customMappingPage);
+        Assert.Contains("Other Documents", customMappingPage);
+
+        var legacyItem = await db.DocumentRequirementTemplateItems.SingleAsync(x => x.Id == secondItemId);
+        legacyItem.IsRequired = false;
+        legacyItem.Wave = DocumentRequirementWave.Later;
+        await db.SaveChangesAsync();
+
         var editPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Id"] = payrollItemId.ToString(), ["Name"] = "Payroll register",
-            ["Description"] = "Edited payroll register", ["IsRequired"] = "true", ["Wave"] = DocumentRequirementWave.StartWork.ToString(),
-            ["IsActive"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["Id"] = payrollItemId.ToString(), ["DocumentSelection"] = "Payroll Report",
+            ["Description"] = "Edited payroll register", ["IncludeInNewRequests"] = "true"
         });
         Assert.Equal(HttpStatusCode.Redirect, editPayroll.StatusCode);
+
+        var editLegacyItem = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = secondItemId.ToString(), ["DocumentSelection"] = "Sales Invoice",
+            ["Description"] = "Edited legacy document", ["IncludeInNewRequests"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, editLegacyItem.StatusCode);
+        db.ChangeTracker.Clear();
+        var preservedLegacyItem = await db.DocumentRequirementTemplateItems.SingleAsync(x => x.Id == secondItemId);
+        Assert.Equal("Sales Invoice", preservedLegacyItem.Name);
+        Assert.Equal("Edited legacy document", preservedLegacyItem.Description);
+        Assert.False(preservedLegacyItem.IsRequired);
+        Assert.Equal(DocumentRequirementWave.Later, preservedLegacyItem.Wave);
+
+        var editCustomToStandard = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = taxItemId.ToString(), ["DocumentSelection"] = "Payment / Receipt",
+            ["Description"] = "Annual tax receipt", ["IncludeInNewRequests"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, editCustomToStandard.StatusCode);
+        db.ChangeTracker.Clear();
+        Assert.Equal("Payment / Receipt", await db.DocumentRequirementTemplateItems.Where(x => x.Id == taxItemId).Select(x => x.Name).SingleAsync());
 
         var deactivatePayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
         {
@@ -213,11 +297,11 @@ public partial class IntegrationTests
             .Select(x => x.Id)
             .ToListAsync();
         Assert.Equal([taxItemId, payrollItemId, secondItemId], orderedItemIds);
-        Assert.Equal("Payroll register", await db.DocumentRequirementTemplateItems.Where(x => x.Id == payrollItemId).Select(x => x.Name).SingleAsync());
+        Assert.Equal("Payroll Report", await db.DocumentRequirementTemplateItems.Where(x => x.Id == payrollItemId).Select(x => x.Name).SingleAsync());
 
         Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Id"] = firstItemId.ToString(), ["Name"] = "Forged", ["Wave"] = DocumentRequirementWave.Normal.ToString(), ["DisplayOrder"] = "0", ["IsActive"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["Id"] = firstItemId.ToString(), ["DocumentSelection"] = "Other Documents", ["OtherDocumentName"] = "Forged", ["IncludeInNewRequests"] = "true"
         })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
         {
@@ -227,7 +311,7 @@ public partial class IntegrationTests
         {
             ["templateId"] = secondId.ToString(), ["itemId"] = firstItemId.ToString(), ["direction"] = "up"
         })).StatusCode);
-        Assert.Equal("Bank statement", await db.DocumentRequirementTemplateItems.Where(x => x.Id == firstItemId).Select(x => x.Name).SingleAsync());
+        Assert.Equal("Bank Statement", await db.DocumentRequirementTemplateItems.Where(x => x.Id == firstItemId).Select(x => x.Name).SingleAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync("/DocumentRequirementTemplates/Edit/999999")).StatusCode);
 
         var setDefault = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetDefault", new() { ["id"] = secondId.ToString() });
