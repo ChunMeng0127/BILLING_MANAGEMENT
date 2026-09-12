@@ -64,7 +64,7 @@ public sealed record DocumentRequirementTemplateReadModel(
 /// </summary>
 public sealed class DocumentRequirementTemplateService(AppDbContext db)
 {
-    private const string TemplateConflictMessage = "Another template change completed first. Refresh and retry the template operation.";
+    private const string TemplateConflictMessage = "The checklist changed while this operation was in progress. Refresh and try again.";
 
     public async Task<DocumentRequirementTemplateReadModel> CreateFirstVersionAsync(
         DocumentRequirementTemplateCreateInput input,
@@ -88,7 +88,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 x => x.ServiceId == normalized.ServiceId && x.TemplateKey == templateKey,
                 cancellationToken);
             Finance.Require(!alreadyExists,
-                "A template with this key already exists for the selected service. Create a new template version instead.");
+                "A checklist with this name already exists for the selected service. Create a new checklist instead.");
 
             var template = new DocumentRequirementTemplate
             {
@@ -115,7 +115,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         int sourceTemplateId,
         CancellationToken cancellationToken = default)
     {
-        Finance.Require(sourceTemplateId > 0, "A valid source template is required.");
+        Finance.Require(sourceTemplateId > 0, "A valid source checklist is required.");
 
         return await InSerializableTransactionAsync(async () =>
         {
@@ -123,13 +123,13 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Where(x => x.Id == sourceTemplateId)
                 .Select(x => new { x.ServiceId, x.TemplateKey })
                 .SingleOrDefaultAsync(cancellationToken)
-                ?? throw new BusinessException("The source document requirement template was not found.");
+                ?? throw new BusinessException("The source checklist was not found.");
 
             await LockServiceAsync(sourceIdentity.ServiceId, cancellationToken);
             var source = await db.DocumentRequirementTemplates
                 .Include(x => x.Items)
                 .SingleOrDefaultAsync(x => x.Id == sourceTemplateId, cancellationToken)
-                ?? throw new BusinessException("The source document requirement template was not found.");
+                ?? throw new BusinessException("The source checklist was not found.");
 
             if (source.IsActive)
                 ValidateOperationalItems(source.Items);
@@ -137,7 +137,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             var maximumVersion = await db.DocumentRequirementTemplates
                 .Where(x => x.ServiceId == source.ServiceId && x.TemplateKey == source.TemplateKey)
                 .MaxAsync(x => (int?)x.TemplateVersion, cancellationToken) ?? 0;
-            Finance.Require(maximumVersion < int.MaxValue, "No further template versions can be allocated for this template key.");
+            Finance.Require(maximumVersion < int.MaxValue, "No further checklist versions can be created for this checklist.");
 
             var clone = new DocumentRequirementTemplate
             {
@@ -174,8 +174,8 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         DocumentRequirementTemplateUpdateInput input,
         CancellationToken cancellationToken = default)
     {
-        var name = NormalizeRequired(input.Name, "Template name", 160);
-        var description = NormalizeOptional(input.Description, "Template description", 2000);
+        var name = NormalizeRequired(input.Name, "Checklist name", 160);
+        var description = NormalizeOptional(input.Description, "Checklist description", 2000);
 
         var template = await GetTrackedTemplateAsync(templateId, cancellationToken);
         await EnsureUnusedAsync(template.Id, cancellationToken);
@@ -205,7 +205,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                     template.Items.Select(x => x.RequirementKey))
                 : NormalizeRequired(normalized.RequirementKey, "Requirement key", 100);
             Finance.Require(!template.Items.Any(x => string.Equals(x.RequirementKey, requirementKey, StringComparison.OrdinalIgnoreCase)),
-                "The requirement key is already used by this template version.");
+                "This document / requirement is already used by this checklist version.");
             var nextDisplayOrder = template.Items.Count == 0
                 ? 0
                 : template.Items.Max(x => x.DisplayOrder) == int.MaxValue
@@ -237,7 +237,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Include(x => x.DocumentRequirementTemplate)
                 .ThenInclude(x => x.Items)
                 .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken)
-                ?? throw new BusinessException("The document requirement template item was not found.");
+                ?? throw new BusinessException("The checklist document / requirement was not found.");
             await EnsureUnusedAsync(item.DocumentRequirementTemplateId, cancellationToken);
             EnsureItemActiveChangeAllowed(item.DocumentRequirementTemplate, item, normalized.IsActive);
 
@@ -262,7 +262,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Include(x => x.DocumentRequirementTemplate)
                 .ThenInclude(x => x.Items)
                 .SingleOrDefaultAsync(x => x.Id == itemId, cancellationToken)
-                ?? throw new BusinessException("The document requirement template item was not found.");
+                ?? throw new BusinessException("The checklist document / requirement was not found.");
             await EnsureUnusedAsync(item.DocumentRequirementTemplateId, cancellationToken);
             EnsureItemActiveChangeAllowed(item.DocumentRequirementTemplate, item, isActive);
             item.IsActive = isActive;
@@ -276,16 +276,16 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         IReadOnlyList<int> orderedItemIds,
         CancellationToken cancellationToken = default)
     {
-        if (orderedItemIds is null) throw new BusinessException("An item order is required.");
+        if (orderedItemIds is null) throw new BusinessException("A document order is required.");
 
         return await InSerializableTransactionAsync(async () =>
         {
             var template = await GetTrackedTemplateWithItemsAsync(templateId, cancellationToken);
             await EnsureUnusedAsync(template.Id, cancellationToken);
             Finance.Require(orderedItemIds.Count == template.Items.Count && orderedItemIds.Distinct().Count() == orderedItemIds.Count,
-                "The reorder list must contain each template item exactly once.");
+                "The checklist order must include each document / requirement exactly once.");
             var itemsById = template.Items.ToDictionary(x => x.Id);
-            Finance.Require(orderedItemIds.All(itemsById.ContainsKey), "The reorder list contains an item from another template.");
+            Finance.Require(orderedItemIds.All(itemsById.ContainsKey), "The reorder list contains a document / requirement from another checklist.");
             for (var index = 0; index < orderedItemIds.Count; index++)
                 itemsById[orderedItemIds[index]].DisplayOrder = index;
 
@@ -303,7 +303,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         {
             var template = await GetTrackedTemplateWithItemsAsync(templateId, cancellationToken);
             if (!isActive && template.IsDefault)
-                throw new BusinessException("The current default template cannot be deactivated. Set another active default first.");
+                throw new BusinessException("The current default checklist cannot be deactivated. Set another active checklist as the default first.");
             if (isActive)
                 ValidateOperationalItems(template.Items);
 
@@ -323,10 +323,10 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                 .Where(x => x.Id == templateId)
                 .Select(x => new { x.ServiceId })
                 .SingleOrDefaultAsync(cancellationToken)
-                ?? throw new BusinessException("The document requirement template was not found.");
+                ?? throw new BusinessException("The checklist was not found.");
             await LockServiceAsync(identity.ServiceId, cancellationToken);
             var template = await GetTrackedTemplateWithItemsAsync(templateId, cancellationToken);
-            Finance.Require(template.IsActive, "Only an active template can be the service default.");
+            Finance.Require(template.IsActive, "Only an active checklist can be the default for this service.");
             ValidateOperationalItems(template.Items);
             await SwitchDefaultWithinTransactionAsync(template, cancellationToken);
             return ToReadModel(template, await IsUsedAsync(template.Id, cancellationToken));
@@ -375,28 +375,28 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
     private async Task<DocumentRequirementTemplateReadModel> GetRequiredAsync(int templateId, CancellationToken cancellationToken)
     {
         return await GetAsync(templateId, cancellationToken)
-            ?? throw new BusinessException("The document requirement template was not found.");
+            ?? throw new BusinessException("The checklist was not found.");
     }
 
     private async Task<DocumentRequirementTemplate> GetTrackedTemplateAsync(int templateId, CancellationToken cancellationToken) =>
         await db.DocumentRequirementTemplates.SingleOrDefaultAsync(x => x.Id == templateId, cancellationToken)
-        ?? throw new BusinessException("The document requirement template was not found.");
+        ?? throw new BusinessException("The checklist was not found.");
 
     private async Task<DocumentRequirementTemplate> GetTrackedTemplateWithItemsAsync(int templateId, CancellationToken cancellationToken) =>
         await db.DocumentRequirementTemplates.Include(x => x.Items).SingleOrDefaultAsync(x => x.Id == templateId, cancellationToken)
-        ?? throw new BusinessException("The document requirement template was not found.");
+        ?? throw new BusinessException("The checklist was not found.");
 
     private async Task EnsureUnusedAsync(int templateId, CancellationToken cancellationToken)
     {
         Finance.Require(!await db.DocumentRequests.AsNoTracking().AnyAsync(x => x.DocumentRequirementTemplateId == templateId, cancellationToken),
-            "This template version is already used by a document request and is immutable. Create a new template version instead.");
+            "This checklist version has already been used in a document request and can no longer be changed. Create a new version to make changes.");
     }
 
     private async Task SwitchDefaultWithinTransactionAsync(
         DocumentRequirementTemplate target,
         CancellationToken cancellationToken)
     {
-        Finance.Require(target.IsActive, "Only an active template can be the service default.");
+        Finance.Require(target.IsActive, "Only an active checklist can be the default for this service.");
         ValidateOperationalItems(target.Items);
 
         var existingDefaults = await db.DocumentRequirementTemplates
@@ -438,7 +438,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         catch (DbUpdateConcurrencyException ex)
         {
             db.ChangeTracker.Clear();
-            throw new BusinessException("The template changed while this operation was in progress. Refresh and retry.", ex);
+            throw new BusinessException("The checklist changed while this operation was in progress. Refresh and try again.", ex);
         }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
@@ -461,7 +461,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         catch (DbUpdateConcurrencyException ex)
         {
             db.ChangeTracker.Clear();
-            throw new BusinessException("The template changed while this operation was in progress. Refresh and retry.", ex);
+            throw new BusinessException("The checklist changed while this operation was in progress. Refresh and try again.", ex);
         }
     }
 
@@ -471,12 +471,12 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
 
     private static DocumentRequirementTemplateCreateInput NormalizeCreateInput(DocumentRequirementTemplateCreateInput input)
     {
-        var items = input.Items ?? throw new BusinessException("Template items are required.");
+        var items = input.Items ?? throw new BusinessException("Checklist documents / requirements are required.");
         return input with
         {
             TemplateKey = NormalizeOptional(input.TemplateKey, "Template key", 100),
-            Name = NormalizeRequired(input.Name, "Template name", 160),
-            Description = NormalizeOptional(input.Description, "Template description", 2000),
+            Name = NormalizeRequired(input.Name, "Checklist name", 160),
+            Description = NormalizeOptional(input.Description, "Checklist description", 2000),
             Items = items
                 .Select(NormalizeItemInput)
                 .Select((item, index) => item with { DisplayOrder = index })
@@ -489,15 +489,15 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         return input with
         {
             RequirementKey = NormalizeOptional(input.RequirementKey, "Requirement key", 100),
-            Name = NormalizeRequired(input.Name, "Requirement name", 160),
-            Description = NormalizeOptional(input.Description, "Requirement description", 2000)
+            Name = NormalizeRequired(input.Name, "Document / requirement name", 160),
+            Description = NormalizeOptional(input.Description, "Document / requirement description", 2000)
         };
     }
 
     private static DocumentRequirementTemplateItemUpdateInput NormalizeItemUpdateInput(DocumentRequirementTemplateItemUpdateInput input) => input with
     {
-        Name = NormalizeRequired(input.Name, "Requirement name", 160),
-        Description = NormalizeOptional(input.Description, "Requirement description", 2000)
+        Name = NormalizeRequired(input.Name, "Document / requirement name", 160),
+        Description = NormalizeOptional(input.Description, "Document / requirement description", 2000)
     };
 
     private static string NormalizeRequired(string? value, string label, int maxLength)
@@ -528,21 +528,21 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         foreach (var item in items)
         {
             ValidateItem(item);
-            Finance.Require(item.RequirementKey is not null, "A requirement key could not be generated.");
-            Finance.Require(keys.Add(item.RequirementKey!), "Requirement keys must be unique within a template version.");
+            Finance.Require(item.RequirementKey is not null, "The document / requirement could not be added.");
+            Finance.Require(keys.Add(item.RequirementKey!), "Document / requirements must be unique within a checklist version.");
         }
     }
 
     private static void ValidateItem(DocumentRequirementTemplateItemInput item)
     {
-        Finance.Require(Enum.IsDefined(item.Wave), "Select a valid document requirement wave.");
-        Finance.Require(item.DisplayOrder >= 0, "Document requirement display order cannot be negative.");
+        Finance.Require(Enum.IsDefined(item.Wave), "Select a valid request priority.");
+        Finance.Require(item.DisplayOrder >= 0, "Document order cannot be negative.");
     }
 
     private static void ValidateItem(DocumentRequirementTemplateItemUpdateInput item)
     {
-        Finance.Require(Enum.IsDefined(item.Wave), "Select a valid document requirement wave.");
-        Finance.Require(item.DisplayOrder >= 0, "Document requirement display order cannot be negative.");
+        Finance.Require(Enum.IsDefined(item.Wave), "Select a valid request priority.");
+        Finance.Require(item.DisplayOrder >= 0, "Document order cannot be negative.");
     }
 
     private static void ValidateOperationalState(
@@ -550,13 +550,13 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         bool isDefault,
         IReadOnlyList<DocumentRequirementTemplateItemInput> items)
     {
-        Finance.Require(!isDefault || isActive, "A default template must be active.");
+        Finance.Require(!isDefault || isActive, "A default checklist must be active.");
         if (isActive || isDefault)
-            Finance.Require(items.Any(x => x.IsActive), "An active or default template must contain at least one active requirement item.");
+            Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document / requirement.");
     }
 
     private static void ValidateOperationalItems(IReadOnlyCollection<DocumentRequirementTemplateItem> items) =>
-        Finance.Require(items.Any(x => x.IsActive), "An active or default template must contain at least one active requirement item.");
+        Finance.Require(items.Any(x => x.IsActive), "An active or default checklist must contain at least one active document / requirement.");
 
     private static void EnsureItemActiveChangeAllowed(
         DocumentRequirementTemplate template,
@@ -565,7 +565,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
     {
         if (template.IsActive && item.IsActive && !requestedActive)
             Finance.Require(template.Items.Any(x => x.Id != item.Id && x.IsActive),
-                "An active template must retain at least one active requirement item.");
+                "An active checklist must retain at least one active document / requirement.");
     }
 
     private static DocumentRequirementTemplateItem ToEntity(DocumentRequirementTemplateItemInput input) => new()
@@ -609,7 +609,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
                     DocumentChecklistKeyGenerator.Slugify(item.Name, "requirement"),
                     usedKeys)
                 : NormalizeRequired(item.RequirementKey, "Requirement key", 100);
-            Finance.Require(usedKeys.Add(key), "Requirement keys must be unique within a template version.");
+            Finance.Require(usedKeys.Add(key), "Document / requirements must be unique within a checklist version.");
             result.Add(item with { RequirementKey = key });
         }
 
@@ -621,7 +621,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
             .Where(x => x.Id == templateId)
             .Select(x => (int?)x.ServiceId)
             .SingleOrDefaultAsync(cancellationToken)
-        ?? throw new BusinessException("The document requirement template was not found.");
+        ?? throw new BusinessException("The checklist was not found.");
 
     private static DocumentRequirementTemplateItemReadModel ToReadModel(DocumentRequirementTemplateItem item) => new(
         item.Id,

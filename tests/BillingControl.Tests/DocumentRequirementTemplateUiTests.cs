@@ -96,8 +96,12 @@ public partial class IntegrationTests
         var createPage = await admin.GetStringAsync("/DocumentRequirementTemplates/Create");
         Assert.Contains("Checklist name", createPage);
         Assert.Contains("Checklist description", createPage);
+        Assert.Contains("Version 1 is created automatically. Add the documents normally required for this service.", createPage);
+        Assert.Contains("Documents will appear in the order shown below. You can change the order later.", createPage);
         Assert.Contains("Use as default checklist for this service", createPage);
         Assert.Contains("Request priority", createPage);
+        Assert.DoesNotContain("stable internal keys", createPage);
+        Assert.DoesNotContain("Internal keys", createPage);
         Assert.DoesNotContain("TemplateKey", createPage);
         Assert.DoesNotContain("RequirementKey", createPage);
         Assert.DoesNotContain("DisplayOrder", createPage);
@@ -121,6 +125,12 @@ public partial class IntegrationTests
         Assert.Equal(HttpStatusCode.OK, invalidResponse.StatusCode);
         Assert.Contains("The Name field is required.", await invalidResponse.Content.ReadAsStringAsync());
 
+        var invalidWave = CreateFields(serviceId, "Invalid priority");
+        invalidWave["Items[0].Wave"] = "999";
+        var invalidWaveResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", invalidWave, "/DocumentRequirementTemplates/Create");
+        Assert.Equal(HttpStatusCode.OK, invalidWaveResponse.StatusCode);
+        Assert.Contains("Select a valid request priority.", await invalidWaveResponse.Content.ReadAsStringAsync());
+
         var firstResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "Monthly checklist", isDefault: true));
         Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
         var firstLocation = firstResponse.Headers.Location!.ToString();
@@ -140,8 +150,12 @@ public partial class IntegrationTests
         Assert.Contains("Annual checklist", secondEditPage);
         Assert.Contains("Checklist details", secondEditPage);
         Assert.Contains("Checklist status", secondEditPage);
+        Assert.Contains("This checklist can be reused when requesting documents for this service.", secondEditPage);
+        Assert.Contains("You can rename an unused checklist without affecting how its versions are tracked.", secondEditPage);
         Assert.Contains("Use as default checklist for this service", secondEditPage);
         Assert.Contains("Request priority", secondEditPage);
+        Assert.DoesNotContain("Version numbers and internal identifiers are managed automatically.", secondEditPage);
+        Assert.DoesNotContain("stable internal identity", secondEditPage);
         Assert.DoesNotContain("TemplateKey", secondEditPage);
         Assert.DoesNotContain("RequirementKey", secondEditPage);
         Assert.DoesNotContain("type=\"number\"", secondEditPage);
@@ -230,10 +244,12 @@ public partial class IntegrationTests
 
         var deactivateDefault = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetActive", new() { ["id"] = secondId.ToString(), ["isActive"] = "false" });
         Assert.Equal(HttpStatusCode.Redirect, deactivateDefault.StatusCode);
-        Assert.Contains("current default template cannot be deactivated", await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}"));
+        Assert.Contains("current default checklist cannot be deactivated", await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}"));
 
         var newVersion = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/CreateVersion", new() { ["id"] = secondId.ToString() });
         Assert.Equal(HttpStatusCode.Redirect, newVersion.StatusCode);
+        Assert.Contains("The new version was copied from the previous checklist. The previous version was not changed.",
+            await admin.GetStringAsync(newVersion.Headers.Location!.ToString()));
         db.ChangeTracker.Clear();
         var versions = await db.DocumentRequirementTemplates
             .Where(x => x.ServiceId == serviceId && x.TemplateKey == "annual-checklist")

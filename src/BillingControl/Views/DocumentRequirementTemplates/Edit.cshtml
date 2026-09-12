@@ -10,7 +10,7 @@
     <div>
         <p class="eyebrow">DOCUMENT CHECKLIST</p>
         <h1>@Model.Definition.Name <span class="text-muted">· Version @Model.TemplateVersion</span></h1>
-        <p>@Model.ServiceName · reusable checklist for document requests. Version numbers and internal identifiers are managed automatically.</p>
+        <p>@Model.ServiceName · This checklist can be reused when requesting documents for this service.</p>
     </div>
     <div class="form-actions">
         <form asp-action="CreateVersion" method="post">
@@ -60,7 +60,7 @@
                     <textarea id="definition-description" name="Description" class="form-control" rows="2" maxlength="2000" placeholder="Standard documents normally required from clients for yearly bookkeeping.">@Model.Definition.Description</textarea>
                 </div>
             </div>
-            <p class="hint">This checklist can be reused for customers using the selected service. Changing the name does not change its stable internal identity.</p>
+            <p class="hint">You can rename an unused checklist without affecting how its versions are tracked.</p>
             <div class="form-actions"><button class="btn btn-outline-primary">Save checklist details</button></div>
         </form>
     }

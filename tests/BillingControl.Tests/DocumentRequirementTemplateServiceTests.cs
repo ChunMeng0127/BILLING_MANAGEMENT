@@ -86,7 +86,8 @@ public partial class IntegrationTests
         var fixture = await AddDocumentFixtureAsync(db, "template-service-used", serviceMaster.Id);
         await AddDocumentRequestAsync(db, fixture.WorkItemId, created.Id);
 
-        await Assert.ThrowsAsync<BusinessException>(() => service.UpdateUnusedVersionAsync(created.Id, new("Should fail", null)));
+        var usedVersionError = await Assert.ThrowsAsync<BusinessException>(() => service.UpdateUnusedVersionAsync(created.Id, new("Should fail", null)));
+        Assert.Equal("This checklist version has already been used in a document request and can no longer be changed. Create a new version to make changes.", usedVersionError.Message);
         await Assert.ThrowsAsync<BusinessException>(() => service.SetItemActiveAsync(created.Items[0].Id, false));
         await Assert.ThrowsAsync<BusinessException>(() => service.AddItemAsync(created.Id,
             new("new-item", "New item", null, false, DocumentRequirementWave.Later, 1)));
@@ -113,9 +114,11 @@ public partial class IntegrationTests
         Assert.False((await service.GetAsync(first.Id))!.IsDefault);
         Assert.Equal(1, (await service.GetTemplatesAsync(serviceMaster.Id)).Count(x => x.IsActive && x.IsDefault));
 
-        await Assert.ThrowsAsync<BusinessException>(() => service.SetTemplateActiveAsync(second.Id, false));
+        var deactivateError = await Assert.ThrowsAsync<BusinessException>(() => service.SetTemplateActiveAsync(second.Id, false));
+        Assert.Equal("The current default checklist cannot be deactivated. Set another active checklist as the default first.", deactivateError.Message);
         await service.SetTemplateActiveAsync(first.Id, false);
-        await Assert.ThrowsAsync<BusinessException>(() => service.SetDefaultAsync(first.Id));
+        var defaultError = await Assert.ThrowsAsync<BusinessException>(() => service.SetDefaultAsync(first.Id));
+        Assert.Equal("Only an active checklist can be the default for this service.", defaultError.Message);
         Assert.False((await service.GetAsync(first.Id))!.IsActive);
         Assert.True((await service.GetAsync(second.Id))!.IsDefault);
     }

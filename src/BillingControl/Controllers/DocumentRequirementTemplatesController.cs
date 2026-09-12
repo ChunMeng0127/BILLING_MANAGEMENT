@@ -114,7 +114,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.AddItemAsync(form.TemplateId, ToServiceInput(form));
-            TempData["Success"] = "Requirement added.";
+            TempData["Success"] = "Document / requirement added.";
             return RedirectToAction(nameof(Edit), new { id = form.TemplateId });
         }
         catch (BusinessException ex)
@@ -135,7 +135,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.UpdateItemAsync(form.Id, new(form.Name, form.Description, form.IsRequired, form.Wave, 0, form.IsActive));
-            TempData["Success"] = "Requirement saved.";
+            TempData["Success"] = "Document / requirement saved.";
             return RedirectToAction(nameof(Edit), new { id = form.TemplateId });
         }
         catch (BusinessException ex)
@@ -153,7 +153,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             await templates.SetItemActiveAsync(itemId, isActive);
-            TempData["Success"] = isActive ? "Requirement activated." : "Requirement deactivated.";
+            TempData["Success"] = isActive ? "Document / requirement activated." : "Document / requirement deactivated.";
         }
         catch (BusinessException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Edit), new { id = templateId });
@@ -188,7 +188,7 @@ public sealed class DocumentRequirementTemplatesController(
         try
         {
             var created = await templates.CreateNewVersionAsync(id);
-            TempData["Success"] = $"Checklist version {created.TemplateVersion} created; stable keys and requirements were copied, and the prior version was not changed.";
+            TempData["Success"] = $"Checklist version {created.TemplateVersion} created. The new version was copied from the previous checklist. The previous version was not changed.";
             return RedirectToAction(nameof(Edit), new { id = created.Id });
         }
         catch (BusinessException ex)
@@ -282,7 +282,7 @@ public sealed class DocumentRequirementTemplatesController(
 
     private void ValidateWave(DocumentRequirementTemplateItemForm item, string prefix)
     {
-        if (!Enum.IsDefined(item.Wave)) ModelState.AddModelError($"{prefix}.Wave", "Select a valid document requirement wave.");
+        if (!Enum.IsDefined(item.Wave)) ModelState.AddModelError($"{prefix}.Wave", "Select a valid request priority.");
     }
 
     private static DocumentRequirementTemplateItemInput ToServiceInput(DocumentRequirementTemplateItemForm item) => new(
