@@ -211,7 +211,7 @@ public partial class IntegrationTests
         var histories = await requestService.GetByIdAsync(request.Id);
         Assert.NotNull(histories);
         Assert.Equal(7, histories!.StatusHistory.Count);
-        Assert.Equal(5, histories.Items.Single().StatusHistory.Count);
+        Assert.Equal(5, histories.Items.Single(x => x.Id == item.Id).StatusHistory.Count);
         Assert.All(histories.StatusHistory, x =>
         {
             Assert.False(string.IsNullOrWhiteSpace(x.Actor));
