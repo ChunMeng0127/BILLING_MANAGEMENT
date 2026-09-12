@@ -253,8 +253,8 @@ public partial class IntegrationTests
         var draftResponse = await admin.GetAsync(detailsPath);
         Assert.Equal(HttpStatusCode.OK, draftResponse.StatusCode);
         var draftPage = await draftResponse.Content.ReadAsStringAsync();
-        Assert.Contains("name=\"request-reason\"", draftPage);
-        Assert.Equal(1, Occurrences(draftPage, "name=\"request-reason\""));
+        Assert.Contains("id=\"request-reason\"", draftPage);
+        Assert.Equal(1, Occurrences(draftPage, "id=\"request-reason\""));
         Assert.Contains("name=\"targetStatus\" value=\"ReadyToSend\"", draftPage);
         Assert.Contains("name=\"targetStatus\" value=\"Paused\"", draftPage);
         Assert.Contains("name=\"targetStatus\" value=\"Cancelled\"", draftPage);
@@ -364,7 +364,7 @@ public partial class IntegrationTests
         var notRequiredPage = await admin.GetStringAsync(detailsPath);
         Assert.Contains("Restore to Missing", notRequiredPage);
         Assert.Equal(1, Occurrences(notRequiredPage, "name=\"targetStatus\" value=\"NotRequired\""));
-        Assert.DoesNotContain("name=\"targetStatus\" value=\"Waived\"", notRequiredPage);
+        Assert.Equal(1, Occurrences(notRequiredPage, "name=\"targetStatus\" value=\"Waived\""));
 
         var restored = await PostWithToken(admin, detailsPath, "/DocumentRequests/TransitionItem", new()
         {
