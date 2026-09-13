@@ -37,6 +37,7 @@ builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<DocumentRequirementTemplateService>();
 builder.Services.AddScoped<DocumentRequestService>();
 builder.Services.AddScoped<ContactService>();
+builder.Services.AddScoped<WhatsAppConversationService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<BusinessClock>();
