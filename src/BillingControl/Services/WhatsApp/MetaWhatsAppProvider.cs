@@ -72,7 +72,7 @@ public sealed class MetaWhatsAppProvider : IWhatsAppProvider
         try
         {
             messagesEndpoint = CreateMessagesEndpoint();
-            payload = CreatePayload(request.Content, GetRecipient(request.Destination));
+            payload = CreatePayload(request.Destination, request.Content);
         }
         catch (UriFormatException)
         {
@@ -146,24 +146,36 @@ public sealed class MetaWhatsAppProvider : IWhatsAppProvider
             ? destination.ProviderRecipientKey ?? destination.NormalizedE164 ?? destination.ProviderDestinationKey
             : destination.ProviderDestinationKey;
 
-    private static object CreatePayload(WhatsAppOutboundContent content, string recipient) => content switch
+    private static object CreatePayload(WhatsAppDestination destination, WhatsAppOutboundContent content)
     {
-        WhatsAppTextContent text => new Dictionary<string, object?>
+        var recipient = GetRecipient(destination);
+        var recipientType = destination.Kind switch
         {
-            ["messaging_product"] = "whatsapp",
-            ["to"] = recipient,
-            ["type"] = "text",
-            ["text"] = new Dictionary<string, object?>
-            {
-                ["body"] = text.Text,
-                ["preview_url"] = false
-            }
-        },
-        WhatsAppTemplateContent template => CreateTemplatePayload(template, recipient),
-        _ => throw new InvalidOperationException("Unsupported WhatsApp outbound content.")
-    };
+            WhatsAppDestinationKind.Direct => "individual",
+            WhatsAppDestinationKind.Group => "group",
+            _ => throw new InvalidOperationException("Unsupported WhatsApp destination kind.")
+        };
 
-    private static object CreateTemplatePayload(WhatsAppTemplateContent content, string recipient)
+        return content switch
+        {
+            WhatsAppTextContent text => new Dictionary<string, object?>
+            {
+                ["messaging_product"] = "whatsapp",
+                ["recipient_type"] = recipientType,
+                ["to"] = recipient,
+                ["type"] = "text",
+                ["text"] = new Dictionary<string, object?>
+                {
+                    ["body"] = text.Text,
+                    ["preview_url"] = false
+                }
+            },
+            WhatsAppTemplateContent template => CreateTemplatePayload(template, recipient, recipientType),
+            _ => throw new InvalidOperationException("Unsupported WhatsApp outbound content.")
+        };
+    }
+
+    private static object CreateTemplatePayload(WhatsAppTemplateContent content, string recipient, string recipientType)
     {
         var template = new Dictionary<string, object?>
         {
@@ -193,6 +205,7 @@ public sealed class MetaWhatsAppProvider : IWhatsAppProvider
         return new Dictionary<string, object?>
         {
             ["messaging_product"] = "whatsapp",
+            ["recipient_type"] = recipientType,
             ["to"] = recipient,
             ["type"] = "template",
             ["template"] = template

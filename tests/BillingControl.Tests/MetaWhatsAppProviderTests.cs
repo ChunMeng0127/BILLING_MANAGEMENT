@@ -41,6 +41,7 @@ public sealed class MetaWhatsAppProviderTests
         using var body = JsonDocument.Parse(captured.Body);
         var root = body.RootElement;
         Assert.Equal("whatsapp", root.GetProperty("messaging_product").GetString());
+        Assert.Equal("individual", root.GetProperty("recipient_type").GetString());
         Assert.Equal("meta-recipient-key", root.GetProperty("to").GetString());
         Assert.Equal("text", root.GetProperty("type").GetString());
         Assert.Equal("Hello from the provider adapter.", root.GetProperty("text").GetProperty("body").GetString());
@@ -66,6 +67,7 @@ public sealed class MetaWhatsAppProviderTests
         Assert.Equal("wamid.test-template-001", result.ProviderMessageId);
 
         using var body = JsonDocument.Parse(Assert.Single(handler.Requests).Body);
+        Assert.Equal("individual", body.RootElement.GetProperty("recipient_type").GetString());
         var template = body.RootElement.GetProperty("template");
         Assert.Equal("document-request", template.GetProperty("name").GetString());
         Assert.Equal("en_US", template.GetProperty("language").GetProperty("code").GetString());
@@ -129,6 +131,7 @@ public sealed class MetaWhatsAppProviderTests
         Assert.True(result.IsAccepted);
         Assert.Equal("wamid.test-group-001", result.ProviderMessageId);
         using var body = JsonDocument.Parse(Assert.Single(handler.Requests).Body);
+        Assert.Equal("group", body.RootElement.GetProperty("recipient_type").GetString());
         Assert.Equal("configured-group-key", body.RootElement.GetProperty("to").GetString());
     }
 
