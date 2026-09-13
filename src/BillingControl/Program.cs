@@ -1,6 +1,7 @@
 using BillingControl.Data;
 using BillingControl.Models;
 using BillingControl.Services;
+using BillingControl.Services.WhatsApp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.DataProtection;
@@ -42,6 +43,9 @@ builder.Services.AddSingleton<BusinessClock>();
 builder.Services.AddScoped<ProgressReportService>();
 builder.Services.AddScoped<AssignmentWorkflowService>();
 builder.Services.AddScoped<IAuthorizationHandler, ValidAccessProfileHandler>();
+builder.Services.Configure<MetaWhatsAppOptions>(builder.Configuration.GetSection(MetaWhatsAppOptions.SectionName));
+builder.Services.AddHttpClient<MetaWhatsAppProvider>();
+builder.Services.AddTransient<IWhatsAppProvider>(services => services.GetRequiredService<MetaWhatsAppProvider>());
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
