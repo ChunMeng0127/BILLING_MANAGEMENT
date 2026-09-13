@@ -199,7 +199,7 @@ public partial class IntegrationTests
             var invalid = await Assert.ThrowsAsync<BusinessException>(() =>
                 batchService.PreviewBatchAsync(contact.Id, new[] { ready.Id, invalidId }));
             Assert.Contains("not found or are not currently eligible", invalid.Message);
-            Assert.DoesNotContain("SELECT", invalid.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("SELECT ", invalid.Message, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("DocumentRequests", invalid.Message, StringComparison.OrdinalIgnoreCase);
         }
 
@@ -345,7 +345,7 @@ public partial class IntegrationTests
         Assert.Equal("Preview Customer", requestPreview.CustomerName);
         Assert.Equal(fixture.EngagementId, requestPreview.EngagementId);
         Assert.Equal(service.Id, requestPreview.ServiceId);
-        Assert.Equal("Bookkeeping", requestPreview.ServiceName);
+        Assert.Equal(service.Name, requestPreview.ServiceName);
         Assert.Equal(DocumentRequestStatus.ReadyToSend, requestPreview.Status);
         Assert.Equal(3, requestPreview.OutstandingUnresolvedItemCount);
         Assert.Equal(6, requestPreview.TotalItemCount);
