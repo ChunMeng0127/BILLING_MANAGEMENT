@@ -62,19 +62,20 @@
 - Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.
 - Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.
 - Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete against `1bacdcce5ad9e517cce9504bd611cf57de238597`; authoritative final Phase 4C CI run `34691387968` passed. Phase 4 manual UI acceptance remains pending. Phase 5A, Phase 7A, and Phase 8A are technically complete in the approved integration wave; later sub-phases remain open.
-- Approved Parallel Wave 1 is staged on `codex/integration-wave1` from the unchanged stable base `84ccd0e81a5321f8feaafb8697646232994270b6`; Phase 5A, Phase 7A, and Phase 8A are technically complete only. Their later sub-phases remain open and require separate approval.
+- Approved Parallel Wave 1 was promoted from its `codex/integration-wave1` checkpoint into stable `codex/accounting-mvp` at `575afe9eda4ac0281d4b6a73f2a67ec92430eb8`; Phase 5A, Phase 7A, and Phase 8A are technically complete only. Their later sub-phases remain open and require separate approval.
+- Approved Parallel Wave 2 is integrated on `codex/integration-wave2` from stable `575afe9eda4ac0281d4b6a73f2a67ec92430eb8` using normal non-squashed merges in the requested order: Lane A Phase 6 (`910be9ad5b7e9f6d81eb365a3f88c45384413090`) merged as `72a203197cb36de85a9162417768a891ed6da99e`, Lane B Phase 7B (`01f78e746abad9ddd4c0cca745737a35e1beb29c`) merged as `6f14f155c5d41a17811d514c51273c86ee61c2fd`, and Lane C Phase 8B (`6ced3ecd7f8f9090c57fffab8126e2d5b5ef1861`) merged as `458bc5661dde5a95284eca5b07dc965733d6b563`. The final post-merge code integration SHA is `458bc5661dde5a95284eca5b07dc965733d6b563`; GitHub Actions run `34737418075` passed JavaScript tests, the Release build, the full PostgreSQL-backed .NET suite, the Docker image build, and the production Compose HTTPS smoke. The three technical units preserve the manual-UAT, provider-credential, production-sending, webhook, inbox/outbox, workflow, and financial boundaries below.
 
 ### Outstanding
 
 - Repeat manual user UI acceptance for the Phase 2 Document Checklists correction remains outstanding. Phase 2 is not yet marked fully approved/closed.
 - Phase 3 technical regression/review is complete; final manual Phase 3 UI acceptance remains outstanding and paused until Phase 2 is accepted.
 - Phase 4 technical work is complete through 4C, but final manual Phase 4 UI acceptance remains outstanding until the user can access the system.
-- Phase 5A, Phase 7A, and Phase 8A technical units are complete in the approved integration wave; Phase 5, Phase 7, and Phase 8 are not fully complete, and the later provider/integration work remains outstanding.
+- Phase 5A, Phase 6, Phase 7A, Phase 7B, Phase 8A, and Phase 8B technical units are complete in the approved integration waves; Phase 5, Phase 7, and Phase 8 are not fully complete, and later authorization, operational, webhook, conversation, and automation work remains outstanding.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Complete repeat manual Phase 2 acceptance for the Document Checklists correction first, then resume Phase 3 manual UI acceptance and later Phase 4 manual UI acceptance when the user can access the application. Do not mark manual acceptance fully closed by technical checks alone, do not mark Phase 4 fully closed before that acceptance, do not mark Phases 5, 7, or 8 fully complete from these sub-phases, and do not implement Phase 6 in this integration checkpoint.
+Complete repeat manual Phase 2 acceptance for the Document Checklists correction first, then resume Phase 3 manual UI acceptance and later Phase 4 manual UI acceptance when the user can access the application. Review `codex/integration-wave2` before any promotion into stable. Do not mark manual acceptance fully closed by technical checks alone, do not mark Phase 4 fully closed before that acceptance, do not mark Phases 5, 7, or 8 fully complete from these sub-phases, and do not treat provider adapters as production-tenant/account verified. Do not start Phase 9 or later work.
 
 ---
 
@@ -1337,15 +1338,15 @@ Select approximately 3–5 unresolved client-facing documents primarily from:
 3. current request/item state;
 4. applicable hold/snooze/conversation rules when those later exist.
 
-Do not require staff to maintain a separate request-priority field. `DocumentRequirementWave` remains retained internally for historical/schema compatibility unless separately removed later, but it is not the normal staff sequencing mechanism. Do not implement Phase 6 in this integration checkpoint.
+Do not require staff to maintain a separate request-priority field. `DocumentRequirementWave` remains retained internally for historical/schema compatibility unless separately removed later, but it is not the normal staff sequencing mechanism. **Phase 6 — Client Workload / Next-Action Selection — is technically complete** against approved Lane A SHA `910be9ad5b7e9f6d81eb365a3f88c45384413090`. The read-only selector uses current Phase 5A-eligible `ReadyToSend` requests, excludes resolved items, makes checklist `DisplayOrder` the primary signal, applies a bounded default limit of five, and preserves deterministic tie-breaking without using wave values. It persists no batch and performs no workflow, document, or financial mutation.
 
 ### Phase 7 — SharePoint Integration Foundation
 
-Phase 7 is split into bounded sub-phases. **Phase 7A — Storage abstraction and deterministic fake foundation — technically complete** against approved Lane B SHA `399ed3f266557841e3ba01392266c5326535c3e5`. It provides provider-neutral `IDocumentStorage`, immutable store/reference models, caller-owned streams, `ContainerId` + `ObjectId` identity, idempotent `LogicalStorageKey` behavior, a deterministic fake, and Exists/Missing/reconciliation testing. It adds no Graph/provider implementation, persistence, or migration. Later SharePoint provider and operational sub-phases remain deferred.
+Phase 7 is split into bounded sub-phases. **Phase 7A — Storage abstraction and deterministic fake foundation — technically complete** against approved Lane B SHA `399ed3f266557841e3ba01392266c5326535c3e5`. It provides provider-neutral `IDocumentStorage`, immutable store/reference models, caller-owned streams, `ContainerId` + `ObjectId` identity, idempotent `LogicalStorageKey` behavior, a deterministic fake, and Exists/Missing/reconciliation testing. **Phase 7B — Microsoft Graph SharePoint/OneDrive storage provider — is technically complete** against approved Lane B SHA `01f78e746abad9ddd4c0cca745737a35e1beb29c`. It adds the explicit Site/Drive/container Graph adapter, client-credential token provider, immutable/idempotent logical-key handling, metadata/read/verification, simple and resumable uploads, safe transient/throttling classification, and mocked HTTP coverage. It adds no database persistence, migration, ReceivedDocument workflow integration, or production-tenant verification. Later SharePoint operational sub-phases remain deferred.
 
 ### Phase 8 — WhatsApp Infrastructure
 
-Phase 8 is split into bounded sub-phases. **Phase 8A — Provider abstraction and deterministic fake — technically complete** against approved Lane C SHA `93583981c1d15b50a2eee128128d26e3ac11d1cd`. It provides the `IWhatsAppProvider` boundary, Direct/Group destinations, runtime capability model, immutable text/template content, Accepted/DefinitelyRejected/Ambiguous outcomes, `RetryAfter` support, and a deterministic fake that deliberately does not deduplicate `LogicalMessageKey`. It adds no Meta HTTP, webhook, inbox/outbox, persistent conversation model, persistence, or migration. Later WhatsApp infrastructure and conversation sub-phases remain deferred.
+Phase 8 is split into bounded sub-phases. **Phase 8A — Provider abstraction and deterministic fake — technically complete** against approved Lane C SHA `93583981c1d15b50a2eee128128d26e3ac11d1cd`. It provides the `IWhatsAppProvider` boundary, Direct/Group destinations, runtime capability model, immutable text/template content, Accepted/DefinitelyRejected/Ambiguous outcomes, `RetryAfter` support, and a deterministic fake that deliberately does not deduplicate `LogicalMessageKey`. **Phase 8B — Meta WhatsApp Cloud API provider adapter — is technically complete** against approved Lane C SHA `6ced3ecd7f8f9090c57fffab8126e2d5b5ef1861`. It adds configuration-driven HttpClient transport for explicit business endpoint identifiers, approved text/template payloads, runtime capabilities with Group safely unsupported, provider result classification, retry metadata, and mocked HTTP coverage. It adds no production sending, webhook, inbox/outbox, background sender, persistent conversation model, persistence, or migration. Later WhatsApp infrastructure and conversation sub-phases remain deferred.
 
 ### Phase 9 — WhatsApp Group / Direct Conversation Management
 
@@ -1433,7 +1434,7 @@ Rules:
 - `codex/accounting-mvp` remains the stable integration branch.
 - Parallel lane branches do not merge themselves.
 - ChatGPT reviews lane outputs before integration.
-- One staging integration branch combines an approved wave.
+- A named integration branch combines an approved wave before stable promotion.
 - Only one lane/integration step may modify EF migrations/model snapshot at a time.
 - External integration, security, and concurrency boundaries remain separately reviewed.
 
@@ -1611,12 +1612,24 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `tests/BillingControl.Tests/DocumentRequestBatchServiceTests.cs` covers active Contact/link eligibility, current ReadyToSend filtering, multi-customer PIC grouping, deterministic ordering, informational WhatsApp/consent facts, authorization remaining required, missing/inactive cases, and read-only/financial isolation.
 - Phase 5A is technically complete against approved Lane A SHA `402b67307609677b0662611d07e9bc9315a41f55`. Phase 5 remains open for later authorization, persistence, provider, and send sub-phases.
 
+### Phase 6 client workload / next-action selection record
+
+- `src/BillingControl/Services/DocumentRequestBatchService.cs` adds a read-only next-action selector over the existing Phase 5A eligibility boundary. It considers only current `ReadyToSend` requests reachable through an active ContactCustomerLink, excludes `Received`, `NotRequired`, and `Waived` items, orders by checklist `DisplayOrder` first, and applies a bounded default limit of five with deterministic tie-breakers.
+- `tests/BillingControl.Tests/DocumentRequestNextActionTests.cs` covers DisplayOrder selection, status filtering, limits, fewer-than-limit results, multiple customers/requests, historical revisions, inactive links, wave-neutral ordering, and zero-mutation reads. No UI, persistence, migration, batch creation, send authorization, or workflow/financial behavior was added.
+- Phase 6 is technically complete against approved Lane A SHA `910be9ad5b7e9f6d81eb365a3f88c45384413090`.
+
 ### Phase 7A document storage abstraction record
 
 - `src/BillingControl/Storage/IDocumentStorage.cs`, `DocumentStorageModels.cs`, `DocumentStorageExceptions.cs`, and `src/BillingControl/Services/DeterministicInMemoryDocumentStorage.cs` provide the provider-neutral storage boundary, immutable store/reference models, caller-owned streams, `ContainerId` + `ObjectId` identity, idempotent `LogicalStorageKey` behavior, and deterministic fake behavior.
 - The abstraction supports `Exists`/`Missing` and reconciliation-oriented metadata checks while retaining caller ownership of input streams. A reused logical key with different immutable content or metadata is a deterministic conflict; the fake does not perform external storage calls.
 - `tests/BillingControl.Tests/DocumentStorageTests.cs` covers validation, caller-owned streams, store/reference immutability, idempotent logical-key reuse, conflict detection, Exists/Missing results, metadata mismatch, and deterministic reconciliation behavior.
 - Phase 7A is technically complete against approved Lane B SHA `399ed3f266557841e3ba01392266c5326535c3e5`. It contains no Microsoft Graph/provider implementation, persistence, migration, or registration change. Phase 7 remains open for later SharePoint integration and operational sub-phases.
+
+### Phase 7B Microsoft Graph SharePoint/OneDrive provider record
+
+- `src/BillingControl/Storage/SharePoint/GraphSharePointDocumentStorage.cs`, `SharePointDocumentStorageOptions.cs`, `GraphClientCredentialsAccessTokenProvider.cs`, and the access-token/DI support files add the production adapter behind `IDocumentStorage`. The adapter uses explicit Site/Drive/container identifiers, immutable logical-key identity, metadata/read/verification, simple upload and resumable upload-session transport, caller-owned streams, and safe transient/throttling error metadata without anonymous sharing links.
+- `tests/BillingControl.Tests/GraphSharePointDocumentStorageTests.cs` covers successful store, resumable upload, metadata/read/verify, missing objects, authentication failures, throttling/Retry-After, transient server errors, immutable logical-key conflicts, malformed Graph responses, cancellation, and caller stream ownership. No database persistence, migration, ReceivedDocument integration, or live tenant access was added.
+- Phase 7B is technically complete against approved Lane B SHA `01f78e746abad9ddd4c0cca745737a35e1beb29c`.
 
 ### Phase 8A WhatsApp provider abstraction record
 
@@ -1625,11 +1638,24 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `tests/BillingControl.Tests/WhatsAppProviderTests.cs` covers destination/content validation, runtime capabilities, deterministic outcomes, retry metadata, immutable snapshots, and the deliberate non-deduplication behavior.
 - Phase 8A is technically complete against approved Lane C SHA `93583981c1d15b50a2eee128128d26e3ac11d1cd`. It contains no Meta HTTP integration, webhook, inbox/outbox, persistent conversation model, persistence, or migration. Phase 8 remains open for later infrastructure and conversation sub-phases.
 
+### Phase 8B Meta WhatsApp Cloud API provider record
+
+- `src/BillingControl/Services/WhatsApp/MetaWhatsAppProvider.cs` and `MetaWhatsAppOptions.cs` add configuration-driven HttpClient transport behind `IWhatsAppProvider` for explicit business endpoint identifiers. Text and supported template payloads map provider responses to `Accepted`, `DefinitelyRejected`, or `Ambiguous`; 429/5xx retry metadata is preserved; Group capability is reported unsupported and no provider-layer LogicalMessageKey deduplication is performed.
+- `tests/BillingControl.Tests/MetaWhatsAppProviderTests.cs` covers accepted text/template, explicit rejection, 401/403, 429/Retry-After, 5xx ambiguity, timeout/network ambiguity, malformed responses, unsupported Group, cancellation, duplicate LogicalMessageKey pass-through, and no domain mutation. No webhook, inbox/outbox, background sender, persistent conversation model, production sending, persistence, or migration was added.
+- Phase 8B is technically complete against approved Lane C SHA `6ced3ecd7f8f9090c57fffab8126e2d5b5ef1861`.
+
 ### Approved Parallel Wave 1 integration checkpoint
 
 - `codex/integration-wave1` was created from stable `codex/accounting-mvp` at `84ccd0e81a5321f8feaafb8697646232994270b6` after origin verification. Lane A, Lane B, and Lane C were merged in that order with normal `--no-ff` branch merges and no substantive merge conflict.
 - The combined wave preserves the boundaries above: no new migration, `AppDbContext` schema change, EF model snapshot change, `Program.cs` provider/storage registration, SharePoint Graph implementation, Meta network integration, webhook, inbox/outbox, persistent conversation model, persistent `DocumentRequestBatch` behavior, or Phase 9+ implementation was introduced.
-- `codex/accounting-mvp` remains the stable branch and is not merged or updated by this checkpoint. The integration branch requires review before any merge into stable.
+- At the Wave 1 checkpoint, `codex/accounting-mvp` remained the stable branch and was not merged or updated by that checkpoint. Wave 1 was subsequently promoted into stable commit `575afe9eda4ac0281d4b6a73f2a67ec92430eb8e`.
+
+### Approved Parallel Wave 2 integration checkpoint
+
+- `codex/integration-wave2` was created in an isolated worktree from the exact approved stable base `575afe9eda4ac0281d4b6a73f2a67ec92430eb8e` after fetching origin and verifying that `origin/codex/accounting-mvp` was unchanged. The three approved lane heads were reachable from that base and merged with normal non-squashed merge commits in the requested order: Lane A Phase 6 (`910be9ad5b7e9f6d81eb365a3f88c45384413090`) as `72a203197cb36de85a9162417768a891ed6da99e`, Lane B Phase 7B (`01f78e746abad9ddd4c0cca745737a35e1beb29c`) as `6f14f155c5d41a17811d514c51273c86ee61c2fd`, and Lane C Phase 8B (`6ced3ecd7f8f9090c57fffab8126e2d5b5ef1861`) as `458bc5661dde5a95284eca5b07dc965733d6b563`.
+- The final post-merge code integration SHA before this documentation record is `458bc5661dde5a95284eca5b07dc965733d6b563`. GitHub Actions run `34737418075` passed the complete repository validation workflow. No substantive merge conflict occurred.
+- The integrated wave preserves the boundaries above: Phase 2 repeat manual UAT, Phase 3 manual UI acceptance, and Phase 4 manual UI acceptance remain pending; provider adapters are not production-tenant/account verified; no production SharePoint credentials, production WhatsApp credentials or sending, webhook, inbox/outbox, background sender, classification, follow-up/AI, ReceivedDocument storage integration, Phase 9/10/12 implementation, migration, or financial/workflow behavior change was introduced.
+- `codex/accounting-mvp` remains unchanged by this checkpoint and is not merged or updated by the integration operation. Review is required before any future stable promotion.
 
 ---
 
