@@ -39,6 +39,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<DocumentRequestItemEvidence> DocumentRequestItemEvidences => Set<DocumentRequestItemEvidence>();
     public DbSet<DocumentRequestBatch> DocumentRequestBatches => Set<DocumentRequestBatch>();
     public DbSet<DocumentRequestBatchMember> DocumentRequestBatchMembers => Set<DocumentRequestBatchMember>();
+    public DbSet<DocumentRequestBatchStatusHistory> DocumentRequestBatchStatusHistories => Set<DocumentRequestBatchStatusHistory>();
     public DbSet<DocumentRequestStatusHistory> DocumentRequestStatusHistories => Set<DocumentRequestStatusHistory>();
     public DbSet<DocumentRequestItemStatusHistory> DocumentRequestItemStatusHistories => Set<DocumentRequestItemStatusHistory>();
     public DbSet<ReceivedDocumentStatusHistory> ReceivedDocumentStatusHistories => Set<ReceivedDocumentStatusHistory>();
@@ -55,6 +56,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<WhatsAppConversationHistory> WhatsAppConversationHistories => Set<WhatsAppConversationHistory>();
     public DbSet<WhatsAppConversationParticipantHistory> WhatsAppConversationParticipantHistories => Set<WhatsAppConversationParticipantHistory>();
     public DbSet<WhatsAppConversationEngagementScopeHistory> WhatsAppConversationEngagementScopeHistories => Set<WhatsAppConversationEngagementScopeHistory>();
+    public DbSet<WhatsAppOutboundBatchSnapshot> WhatsAppOutboundBatchSnapshots => Set<WhatsAppOutboundBatchSnapshot>();
+    public DbSet<WhatsAppOutboundRequestSnapshot> WhatsAppOutboundRequestSnapshots => Set<WhatsAppOutboundRequestSnapshot>();
+    public DbSet<WhatsAppOutboundItemSnapshot> WhatsAppOutboundItemSnapshots => Set<WhatsAppOutboundItemSnapshot>();
+    public DbSet<WhatsAppOutboundParticipantSnapshot> WhatsAppOutboundParticipantSnapshots => Set<WhatsAppOutboundParticipantSnapshot>();
+    public DbSet<WhatsAppOutboundEngagementScopeSnapshot> WhatsAppOutboundEngagementScopeSnapshots => Set<WhatsAppOutboundEngagementScopeSnapshot>();
+    public DbSet<WhatsAppOutboundMessage> WhatsAppOutboundMessages => Set<WhatsAppOutboundMessage>();
+    public DbSet<WhatsAppOutboundMessageAttempt> WhatsAppOutboundMessageAttempts => Set<WhatsAppOutboundMessageAttempt>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -248,6 +256,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             .HasForeignKey(x => x.DocumentRequestBatchId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DocumentRequestBatchMember>().HasOne(x => x.DocumentRequest).WithMany(x => x.BatchMemberships)
             .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<DocumentRequestBatch>().Property(x => x.Status).HasDefaultValue(DocumentRequestBatchStatus.Draft);
+        b.Entity<DocumentRequestBatch>().HasIndex(x => x.Status);
+        b.Entity<DocumentRequestBatch>().ToTable(t =>
+            t.HasCheckConstraint("CK_DocumentRequestBatch_Status", "\"Status\" IN (0, 1, 2, 3, 4, 5, 6)"));
+
+        b.Entity<DocumentRequestBatchStatusHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<DocumentRequestBatchStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<DocumentRequestBatchStatusHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<DocumentRequestBatchStatusHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<DocumentRequestBatchStatusHistory>().Property(x => x.CorrelationId).HasMaxLength(254);
+        b.Entity<DocumentRequestBatchStatusHistory>().HasIndex(x => new { x.DocumentRequestBatchId, x.OccurredAt, x.Id });
+        b.Entity<DocumentRequestBatchStatusHistory>().HasOne(x => x.DocumentRequestBatch).WithMany(x => x.StatusHistory)
+            .HasForeignKey(x => x.DocumentRequestBatchId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DocumentRequestBatchStatusHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_DocumentRequestBatchStatusHistory_Values", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2, 3, 4, 5, 6)) AND \"NewStatus\" IN (0, 1, 2, 3, 4, 5, 6)");
+            t.HasCheckConstraint("CK_DocumentRequestBatchStatusHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
 
         b.Entity<DocumentRequestStatusHistory>().Property(x => x.Action).HasMaxLength(80);
         b.Entity<DocumentRequestStatusHistory>().Property(x => x.Reason).HasMaxLength(2000);
@@ -530,6 +557,161 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
         });
 
+        b.Entity<WhatsAppOutboundBatchSnapshot>().Property(x => x.ParticipantSetHash).HasMaxLength(64).IsRequired();
+        b.Entity<WhatsAppOutboundBatchSnapshot>().Property(x => x.QueuedByActor).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundBatchSnapshot>().Property(x => x.CorrelationId).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundBatchSnapshot>().HasIndex(x => x.DocumentRequestBatchId).IsUnique();
+        b.Entity<WhatsAppOutboundBatchSnapshot>().HasIndex(x => new { x.WhatsAppConversationId, x.QueuedAt, x.Id });
+        b.Entity<WhatsAppOutboundBatchSnapshot>().HasOne(x => x.DocumentRequestBatch).WithOne(x => x.WhatsAppOutboundBatchSnapshot)
+            .HasForeignKey<WhatsAppOutboundBatchSnapshot>(x => x.DocumentRequestBatchId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundBatchSnapshot>().HasOne(x => x.Contact).WithMany()
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundBatchSnapshot>().HasOne(x => x.WhatsAppConversation).WithMany()
+            .HasForeignKey(x => x.WhatsAppConversationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundBatchSnapshot>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundBatchSnapshot_AuthorizationVersion", "\"ConversationAuthorizationVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundBatchSnapshot_ParticipantSetHash", "\"ParticipantSetHash\" ~ '^[0-9A-Fa-f]{64}$'");
+            t.HasCheckConstraint("CK_WhatsAppOutboundBatchSnapshot_Text", "length(btrim(\"QueuedByActor\")) > 0 AND length(btrim(\"CorrelationId\")) > 0");
+        });
+
+        b.Entity<WhatsAppOutboundRequestSnapshot>().Property(x => x.CustomerNameSnapshot).HasMaxLength(160).IsRequired();
+        b.Entity<WhatsAppOutboundRequestSnapshot>().Property(x => x.ServiceNameSnapshot).HasMaxLength(160).IsRequired();
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.DocumentRequestId }).IsUnique();
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasIndex(x => x.DocumentRequestId);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasOne(x => x.WhatsAppOutboundBatchSnapshot).WithMany(x => x.Requests)
+            .HasForeignKey(x => x.WhatsAppOutboundBatchSnapshotId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasOne(x => x.DocumentRequest).WithMany()
+            .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasOne(x => x.Engagement).WithMany()
+            .HasForeignKey(x => x.EngagementId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasOne(x => x.Customer).WithMany()
+            .HasForeignKey(x => x.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().HasOne(x => x.Service).WithMany()
+            .HasForeignKey(x => x.ServiceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundRequestSnapshot>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundRequestSnapshot_Revision", "\"RequestRevision\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundRequestSnapshot_Version", "\"RequestVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundRequestSnapshot_Text", "length(btrim(\"CustomerNameSnapshot\")) > 0 AND length(btrim(\"ServiceNameSnapshot\")) > 0");
+        });
+
+        b.Entity<WhatsAppOutboundItemSnapshot>().Property(x => x.RequirementNameSnapshot).HasMaxLength(160).IsRequired();
+        b.Entity<WhatsAppOutboundItemSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.DocumentRequestItemId }).IsUnique();
+        b.Entity<WhatsAppOutboundItemSnapshot>().HasIndex(x => x.DocumentRequestItemId);
+        b.Entity<WhatsAppOutboundItemSnapshot>().HasOne(x => x.WhatsAppOutboundBatchSnapshot).WithMany(x => x.Items)
+            .HasForeignKey(x => x.WhatsAppOutboundBatchSnapshotId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundItemSnapshot>().HasOne(x => x.DocumentRequest).WithMany()
+            .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundItemSnapshot>().HasOne(x => x.DocumentRequestItem).WithMany()
+            .HasForeignKey(x => new { x.DocumentRequestId, x.DocumentRequestItemId })
+            .HasPrincipalKey(x => new { x.DocumentRequestId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundItemSnapshot>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundItemSnapshot_Revision", "\"RequestRevision\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundItemSnapshot_DisplayOrder", "\"DisplayOrder\" >= 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundItemSnapshot_Status", "\"ItemStatusSnapshot\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundItemSnapshot_Text", "length(btrim(\"RequirementNameSnapshot\")) > 0");
+        });
+
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().Property(x => x.ProviderParticipantKey).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().Property(x => x.NormalizedE164).HasMaxLength(16);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().Property(x => x.DisplayNameSnapshot).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.WhatsAppConversationParticipantId }).IsUnique();
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.ParticipantKind });
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.WhatsAppOutboundBatchSnapshot).WithMany(x => x.Participants)
+            .HasForeignKey(x => x.WhatsAppOutboundBatchSnapshotId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.WhatsAppConversationParticipant).WithMany()
+            .HasForeignKey(x => x.WhatsAppConversationParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.Contact).WithMany()
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.ContactWhatsAppAddress).WithMany()
+            .HasPrincipalKey(x => new { x.ContactId, x.Id })
+            .HasForeignKey(x => new { x.ContactId, x.ContactWhatsAppAddressId })
+            .OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.BusinessParty).WithMany()
+            .HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.Manager).WithMany()
+            .HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().HasOne(x => x.AppUser).WithMany()
+            .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundParticipantSnapshot>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundParticipantSnapshot_Kind", "\"ParticipantKind\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundParticipantSnapshot_Identity", "(\"ParticipantKind\" = 0 AND \"ContactId\" IS NOT NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 1 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 2 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NOT NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 3 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NOT NULL) OR ((\"ParticipantKind\" = 4 OR \"ParticipantKind\" = 5) AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundParticipantSnapshot_References", "\"ProviderParticipantKey\" IS NULL OR length(btrim(\"ProviderParticipantKey\")) > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundParticipantSnapshot_NormalizedE164", "\"NormalizedE164\" IS NULL OR \"NormalizedE164\" ~ '^\\+[1-9][0-9]{0,14}$'");
+            t.HasCheckConstraint("CK_WhatsAppOutboundParticipantSnapshot_DisplayName", "\"DisplayNameSnapshot\" IS NULL OR length(btrim(\"DisplayNameSnapshot\")) > 0");
+        });
+
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.WhatsAppConversationEngagementScopeId }).IsUnique();
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().HasIndex(x => new { x.WhatsAppOutboundBatchSnapshotId, x.EngagementId }).IsUnique();
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().HasOne(x => x.WhatsAppOutboundBatchSnapshot).WithMany(x => x.EngagementScopes)
+            .HasForeignKey(x => x.WhatsAppOutboundBatchSnapshotId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().HasOne(x => x.WhatsAppConversationEngagementScope).WithMany()
+            .HasForeignKey(x => x.WhatsAppConversationEngagementScopeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().HasOne(x => x.Engagement).WithMany()
+            .HasForeignKey(x => x.EngagementId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundEngagementScopeSnapshot>().ToTable(t =>
+            t.HasCheckConstraint("CK_WhatsAppOutboundEngagementScopeSnapshot_ApprovedVersion", "\"ApprovedAuthorizationVersion\" > 0"));
+
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.LogicalMessageKey).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.CorrelationId).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.ProviderName).HasMaxLength(80).IsRequired();
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.BusinessEndpointKey).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.ProviderAccountReference).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.ProviderDestinationKey).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.NormalizedE164).HasMaxLength(16);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.ProviderRecipientKey).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TextBody).HasColumnType("text");
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TextBody).Metadata.SetMaxLength(null);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TemplateName).HasMaxLength(512);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TemplateLanguage).HasMaxLength(35);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TemplateParametersSnapshot).HasColumnType("text");
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.TemplateParametersSnapshot).Metadata.SetMaxLength(null);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.ProviderMessageId).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.LastErrorCategory).HasMaxLength(80);
+        b.Entity<WhatsAppOutboundMessage>().Property(x => x.LastErrorCode).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessage>().HasIndex(x => x.LogicalMessageKey).IsUnique();
+        b.Entity<WhatsAppOutboundMessage>().HasIndex(x => x.DocumentRequestBatchId).IsUnique();
+        b.Entity<WhatsAppOutboundMessage>().HasIndex(x => x.WhatsAppOutboundBatchSnapshotId).IsUnique();
+        b.Entity<WhatsAppOutboundMessage>().HasIndex(x => x.State);
+        b.Entity<WhatsAppOutboundMessage>().HasIndex(x => x.ProviderMessageId).HasFilter("\"ProviderMessageId\" IS NOT NULL");
+        b.Entity<WhatsAppOutboundMessage>().HasOne(x => x.DocumentRequestBatch).WithOne(x => x.WhatsAppOutboundMessage)
+            .HasForeignKey<WhatsAppOutboundMessage>(x => x.DocumentRequestBatchId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundMessage>().HasOne(x => x.WhatsAppOutboundBatchSnapshot).WithOne(x => x.WhatsAppOutboundMessage)
+            .HasForeignKey<WhatsAppOutboundMessage>(x => x.WhatsAppOutboundBatchSnapshotId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundMessage>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_DestinationKind", "\"DestinationKind\" IN (0, 1)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_ContentKind", "\"ContentKind\" IN (0, 1)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_State", "\"State\" IN (0, 1, 2, 3, 4)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_AttemptCount", "\"AttemptCount\" >= 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_References", "length(btrim(\"LogicalMessageKey\")) > 0 AND length(btrim(\"CorrelationId\")) > 0 AND length(btrim(\"ProviderName\")) > 0 AND length(btrim(\"BusinessEndpointKey\")) > 0 AND length(btrim(\"ProviderDestinationKey\")) > 0 AND (\"ProviderAccountReference\" IS NULL OR length(btrim(\"ProviderAccountReference\")) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_DirectRecipientFacts", "\"DestinationKind\" <> 1 OR (\"NormalizedE164\" IS NULL AND \"ProviderRecipientKey\" IS NULL)");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_NormalizedE164", "\"NormalizedE164\" IS NULL OR \"NormalizedE164\" ~ '^\\+[1-9][0-9]{0,14}$'");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessage_ContentShape", "(\"ContentKind\" = 0 AND \"TextBody\" IS NOT NULL AND length(btrim(\"TextBody\")) > 0 AND \"TemplateName\" IS NULL AND \"TemplateLanguage\" IS NULL AND \"TemplateParametersSnapshot\" IS NULL) OR (\"ContentKind\" = 1 AND \"TextBody\" IS NULL AND \"TemplateName\" IS NOT NULL AND length(btrim(\"TemplateName\")) > 0 AND \"TemplateLanguage\" IS NOT NULL AND length(btrim(\"TemplateLanguage\")) > 0)");
+        });
+
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.Disposition).HasMaxLength(80);
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.ProviderMessageId).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.ErrorCategory).HasMaxLength(80);
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.ErrorCode).HasMaxLength(254);
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.CorrelationId).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.Actor).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppOutboundMessageAttempt>().Property(x => x.Source).HasMaxLength(80).IsRequired();
+        b.Entity<WhatsAppOutboundMessageAttempt>().HasIndex(x => new { x.WhatsAppOutboundMessageId, x.AttemptNumber }).IsUnique();
+        b.Entity<WhatsAppOutboundMessageAttempt>().HasIndex(x => new { x.WhatsAppOutboundMessageId, x.AttemptNumber, x.Id });
+        b.Entity<WhatsAppOutboundMessageAttempt>().HasOne(x => x.WhatsAppOutboundMessage).WithMany(x => x.Attempts)
+            .HasForeignKey(x => x.WhatsAppOutboundMessageId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppOutboundMessageAttempt>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessageAttempt_Number", "\"AttemptNumber\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessageAttempt_Dates", "\"CompletedAt\" IS NULL OR \"CompletedAt\" >= \"StartedAt\"");
+            t.HasCheckConstraint("CK_WhatsAppOutboundMessageAttempt_Text", "length(btrim(\"CorrelationId\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
     }
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -572,6 +754,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         WeeklyProgressUpdateHistory => [],
                         DocumentRequest => ["Status"],
                         DocumentRequestItem => ["Status"],
+                        DocumentRequestBatch => ["Status"],
                         ReceivedDocument => duplicateClassificationLinkChanged
                             ? ["Status", "DuplicateOfReceivedDocumentId"]
                             : ["Status"],
@@ -579,6 +762,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         DocumentRequestBatchMember => ["IsActive"],
                         DocumentRequestStatusHistory => [],
                         DocumentRequestItemStatusHistory => [],
+                        DocumentRequestBatchStatusHistory => [],
                         ReceivedDocumentStatusHistory => [],
                         DocumentRequestItemEvidenceHistory => [],
                         Contact => ["Name", "PreferredLanguage", "IsActive"],
@@ -593,6 +777,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         WhatsAppConversationHistory => [],
                         WhatsAppConversationParticipantHistory => [],
                         WhatsAppConversationEngagementScopeHistory => [],
+                        WhatsAppOutboundBatchSnapshot => [],
+                        WhatsAppOutboundRequestSnapshot => [],
+                        WhatsAppOutboundItemSnapshot => [],
+                        WhatsAppOutboundParticipantSnapshot => [],
+                        WhatsAppOutboundEngagementScopeSnapshot => [],
+                        WhatsAppOutboundMessage => ["State", "AttemptCount", "NextAttemptAt", "ProviderMessageId", "LastErrorCategory", "LastErrorCode", "ProviderRetryAfterUntil", "ProviderTimestamp"],
+                        WhatsAppOutboundMessageAttempt => [],
                         WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                         WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                         CustomerReceipt => allowReceiptAllocationCorrection
