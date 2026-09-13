@@ -20,6 +20,17 @@ public enum DocumentRequestStatus
     Superseded
 }
 
+public enum DocumentRequestBatchStatus
+{
+    Draft,
+    Ready,
+    Queued,
+    Sent,
+    Failed,
+    Cancelled,
+    Invalidated
+}
+
 public enum DocumentRequestItemStatus
 {
     Missing,
@@ -143,7 +154,11 @@ public class DocumentRequestItemEvidence : Record
 
 public class DocumentRequestBatch : Record
 {
+    public DocumentRequestBatchStatus Status { get; set; } = DocumentRequestBatchStatus.Draft;
     public List<DocumentRequestBatchMember> Members { get; set; } = [];
+    public List<DocumentRequestBatchStatusHistory> StatusHistory { get; set; } = [];
+    public WhatsAppOutboundBatchSnapshot? WhatsAppOutboundBatchSnapshot { get; set; }
+    public WhatsAppOutboundMessage? WhatsAppOutboundMessage { get; set; }
 }
 
 public class DocumentRequestBatchMember : Record
@@ -153,6 +168,20 @@ public class DocumentRequestBatchMember : Record
     public int DocumentRequestId { get; set; }
     public DocumentRequest DocumentRequest { get; set; } = null!;
     public bool IsActive { get; set; } = true;
+}
+
+public class DocumentRequestBatchStatusHistory : Record
+{
+    public int DocumentRequestBatchId { get; set; }
+    public DocumentRequestBatch DocumentRequestBatch { get; set; } = null!;
+    public DocumentRequestBatchStatus? PreviousStatus { get; set; }
+    public DocumentRequestBatchStatus NewStatus { get; set; }
+    public string Action { get; set; } = "";
+    public string? Reason { get; set; }
+    public string Actor { get; set; } = "system";
+    public string Source { get; set; } = "System";
+    public string? CorrelationId { get; set; }
+    public DateTime OccurredAt { get; set; }
 }
 
 public class DocumentRequestStatusHistory : Record
