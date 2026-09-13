@@ -139,6 +139,11 @@ namespace BillingControl.Data.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.AddUniqueConstraint(
+                name: "AK_DocumentRequestItems_DocumentRequestId_Id",
+                table: "DocumentRequestItems",
+                columns: new[] { "DocumentRequestId", "Id" });
+
             migrationBuilder.CreateTable(
                 name: "WhatsAppOutboundItemSnapshots",
                 columns: table => new
@@ -168,9 +173,9 @@ namespace BillingControl.Data.Migrations
                     table.CheckConstraint("CK_WhatsAppOutboundItemSnapshot_Text", "length(btrim(\"RequirementNameSnapshot\")) > 0");
                     table.ForeignKey(
                         name: "FK_WhatsAppOutboundItemSnapshots_DocumentRequestItems_Document~",
-                        column: x => x.DocumentRequestItemId,
+                        columns: x => new { x.DocumentRequestId, x.DocumentRequestItemId },
                         principalTable: "DocumentRequestItems",
-                        principalColumn: "Id",
+                        principalColumns: new[] { "DocumentRequestId", "Id" },
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_WhatsAppOutboundItemSnapshots_DocumentRequests_DocumentRequ~",
@@ -474,9 +479,9 @@ namespace BillingControl.Data.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_WhatsAppOutboundItemSnapshots_DocumentRequestId",
+                name: "IX_WhatsAppOutboundItemSnapshots_DocumentRequestId_DocumentReq~",
                 table: "WhatsAppOutboundItemSnapshots",
-                column: "DocumentRequestId");
+                columns: new[] { "DocumentRequestId", "DocumentRequestItemId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_WhatsAppOutboundItemSnapshots_DocumentRequestItemId",
@@ -618,6 +623,10 @@ namespace BillingControl.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "WhatsAppOutboundBatchSnapshots");
+
+            migrationBuilder.DropUniqueConstraint(
+                name: "AK_DocumentRequestItems_DocumentRequestId_Id",
+                table: "DocumentRequestItems");
 
             migrationBuilder.DropIndex(
                 name: "IX_DocumentRequestBatches_Status",

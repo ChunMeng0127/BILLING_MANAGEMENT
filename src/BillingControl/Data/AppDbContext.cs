@@ -604,7 +604,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<WhatsAppOutboundItemSnapshot>().HasOne(x => x.DocumentRequest).WithMany()
             .HasForeignKey(x => x.DocumentRequestId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<WhatsAppOutboundItemSnapshot>().HasOne(x => x.DocumentRequestItem).WithMany()
-            .HasForeignKey(x => x.DocumentRequestItemId).OnDelete(DeleteBehavior.Restrict);
+            .HasForeignKey(x => new { x.DocumentRequestId, x.DocumentRequestItemId })
+            .HasPrincipalKey(x => new { x.DocumentRequestId, x.Id })
+            .OnDelete(DeleteBehavior.Restrict);
         b.Entity<WhatsAppOutboundItemSnapshot>().ToTable(t =>
         {
             t.HasCheckConstraint("CK_WhatsAppOutboundItemSnapshot_Revision", "\"RequestRevision\" > 0");

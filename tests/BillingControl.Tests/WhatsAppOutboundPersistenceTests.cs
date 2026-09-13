@@ -313,6 +313,51 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task OutboundItemSnapshotCannotCrossDocumentRequestOwnershipBoundary()
+    {
+        await using var db = await Fresh();
+        var fixture = await AddOutboundFixtureAsync(db, "item-ownership");
+
+        var itemForeignKey = db.Model.FindEntityType(typeof(WhatsAppOutboundItemSnapshot))!
+            .GetForeignKeys()
+            .Single(x => x.PrincipalEntityType.ClrType == typeof(DocumentRequestItem));
+        Assert.Equal(DeleteBehavior.Restrict, itemForeignKey.DeleteBehavior);
+        Assert.Equal(
+            new[] { "DocumentRequestId", "DocumentRequestItemId" },
+            itemForeignKey.Properties.Select(x => x.Name).ToArray());
+        Assert.Equal(
+            new[] { "DocumentRequestId", "Id" },
+            itemForeignKey.PrincipalKey.Properties.Select(x => x.Name).ToArray());
+
+        var template = await AddDocumentTemplateAsync(db, fixture.ServiceId, DocumentToken("outbound-foreign-template"), 1);
+        var templateItem = await AddDocumentTemplateItemAsync(db, template.Id, DocumentToken("outbound-foreign-requirement"));
+        var documentFixture = await AddDocumentFixtureAsync(db, "outbound-foreign-request", fixture.ServiceId);
+        var requestForeign = await AddDocumentRequestAsync(db, documentFixture.WorkItemId, template.Id);
+        var itemForeign = await AddDocumentRequestItemAsync(db, requestForeign.Id, templateItem.Id, DocumentToken("outbound-foreign-item"));
+
+        var matching = await db.WhatsAppOutboundItemSnapshots.AsNoTracking()
+            .SingleAsync(x => x.WhatsAppOutboundBatchSnapshotId == fixture.BatchSnapshotId);
+        Assert.Equal(fixture.RequestId, matching.DocumentRequestId);
+        Assert.Equal(fixture.ItemId, matching.DocumentRequestItemId);
+
+        await using var invalid = Db();
+        invalid.WhatsAppOutboundItemSnapshots.Add(new WhatsAppOutboundItemSnapshot
+        {
+            WhatsAppOutboundBatchSnapshotId = fixture.BatchSnapshotId,
+            DocumentRequestId = fixture.RequestId,
+            DocumentRequestItemId = itemForeign.Id,
+            RequestRevision = 1,
+            RequirementNameSnapshot = "Cross-request item",
+            IsRequired = true,
+            DisplayOrder = 2,
+            ItemStatusSnapshot = DocumentRequestItemStatus.Missing
+        });
+
+        var exception = await Assert.ThrowsAsync<DbUpdateException>(() => invalid.SaveChangesAsync());
+        Assert.IsType<PostgresException>(exception.InnerException);
+    }
+
+    [PostgresFact]
     public async Task OutboundItemSnapshotIsUniquePerBatchAndItem()
     {
         await using var db = await Fresh();

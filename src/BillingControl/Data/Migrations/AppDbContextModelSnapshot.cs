@@ -3201,9 +3201,9 @@ namespace BillingControl.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DocumentRequestId");
-
                     b.HasIndex("DocumentRequestItemId");
+
+                    b.HasIndex("DocumentRequestId", "DocumentRequestItemId");
 
                     b.HasIndex("WhatsAppOutboundBatchSnapshotId", "DocumentRequestItemId")
                         .IsUnique();
@@ -4747,15 +4747,16 @@ namespace BillingControl.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BillingControl.Models.DocumentRequestItem", "DocumentRequestItem")
-                        .WithMany()
-                        .HasForeignKey("DocumentRequestItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("BillingControl.Models.WhatsAppOutboundBatchSnapshot", "WhatsAppOutboundBatchSnapshot")
                         .WithMany("Items")
                         .HasForeignKey("WhatsAppOutboundBatchSnapshotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("BillingControl.Models.DocumentRequestItem", "DocumentRequestItem")
+                        .WithMany()
+                        .HasForeignKey("DocumentRequestId", "DocumentRequestItemId")
+                        .HasPrincipalKey("DocumentRequestId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
