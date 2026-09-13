@@ -1,0 +1,565 @@
+@model WhatsAppConversationDetailsViewModel
+@using BillingControl.Services
+@{
+    var conversation = Model.Conversation;
+    var options = Model.Options;
+    var existingEngagementIds = conversation.EngagementScopes.Select(x => x.EngagementId).ToHashSet();
+    var newEngagementOptions = options.ActiveEngagementApprovalOptions
+        .Where(x => !existingEngagementIds.Contains(x.Id))
+        .ToArray();
+    ViewData["Title"] = $"Conversation #{conversation.Id}";
+
+    string StatusClass(WhatsAppConversationStatus status) => status switch
+    {
+        WhatsAppConversationStatus.Active => "status-active",
+        WhatsAppConversationStatus.Inactive => "status-inactive",
+        _ => "status-needsauthorizationreview"
+    };
+
+    string ParticipantIdentity(WhatsAppConversationParticipantReadModel participant) => participant.ParticipantKind switch
+    {
+        WhatsAppParticipantKind.Contact => participant.ContactName ?? $"Contact #{participant.ContactId}",
+        WhatsAppParticipantKind.BusinessParty => participant.BusinessPartyName ?? $"Business Party #{participant.BusinessPartyId}",
+        WhatsAppParticipantKind.Manager => participant.ManagerName ?? $"Manager #{participant.ManagerId}",
+        WhatsAppParticipantKind.AppUser => participant.AppUserName ?? participant.AppUserId ?? "AppUser",
+        WhatsAppParticipantKind.BusinessSender => "Business sender (no typed mapping)",
+        WhatsAppParticipantKind.UnknownExternal => "Unknown external (no typed mapping)",
+        _ => "—"
+    };
+}
+
+<a class="back-link" href="/WhatsAppConversations">← WhatsApp Conversations</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">WHATSAPP CONVERSATION · @Finance.Label(conversation.Kind).ToUpperInvariant()</p>
+        <h1>Conversation #@conversation.Id</h1>
+        <p>Staff-only management and authorization review. Provider identity is immutable; participant and Engagement-scope changes remain explicit and audited.</p>
+    </div>
+    <span class="badge @StatusClass(conversation.Status)">@Finance.Label(conversation.Status)</span>
+</div>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Conversation summary</h2>
+            <p>Routing identity and authorization-version facts are displayed separately from later consent, provider, and send-window decisions.</p>
+        </div>
+        <span class="badge @StatusClass(conversation.Status)">@Finance.Label(conversation.Status)</span>
+    </div>
+    <div class="form-grid thirds">
+        <div><span class="hint d-block">Conversation kind</span><strong>@Finance.Label(conversation.Kind)</strong></div>
+        <div><span class="hint d-block">Status</span><strong>@Finance.Label(conversation.Status)</strong></div>
+        <div><span class="hint d-block">Authorization Version</span><strong>@conversation.AuthorizationVersion</strong></div>
+        <div><span class="hint d-block">Optimistic record Version</span><strong>@conversation.Version</strong></div>
+        <div><span class="hint d-block">Created</span><strong>@conversation.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</strong></div>
+        <div><span class="hint d-block">Updated</span><strong>@conversation.UpdatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</strong></div>
+    </div>
+
+    <h3 class="section-title">Provider identity</h3>
+    <div class="form-grid thirds">
+        <div><span class="hint d-block">Provider</span><strong>@conversation.ProviderName</strong></div>
+        <div><span class="hint d-block">Business endpoint</span><strong>@conversation.BusinessEndpointKey</strong></div>
+        <div><span class="hint d-block">Provider conversation key</span><strong>@conversation.ProviderConversationKey</strong></div>
+        <div><span class="hint d-block">Provider account reference</span><strong>@(conversation.ProviderAccountReference ?? "—")</strong><small class="hint d-block">Routing metadata only; no credentials are shown.</small></div>
+        <div class="grid-span-2">
+            <span class="hint d-block">Direct anchor</span>
+            @if (conversation.Kind == WhatsAppConversationKind.Direct)
+            {
+                <strong>@(conversation.DirectContactWhatsAppAddressNumber ?? "Missing address")</strong>
+                <span class="badge @(conversation.DirectContactWhatsAppAddressIsActive == true ? "status-active" : "status-inactive") ms-2">@(conversation.DirectContactWhatsAppAddressIsActive == true ? "Active" : "Inactive / unavailable")</span>
+            }
+            else
+            {
+                <strong>Not applicable to Group</strong>
+            }
+        </div>
+    </div>
+
+    @if (conversation.Status == WhatsAppConversationStatus.NeedsAuthorizationReview)
+    {
+        <div class="panel-note authorization-warning mt-4">
+            <strong>Authorization review required</strong>
+            <p class="mb-1">Participant or membership facts changed. Existing active Engagement scopes may be stale.</p>
+            <p class="mb-0">Review the participant set and explicitly reapprove each required active Engagement scope. Authorization-version state is not a send decision.</p>
+        </div>
+    }
+    @if (conversation.Status == WhatsAppConversationStatus.Inactive)
+    {
+        <div class="panel-note mt-4">
+            <strong>Conversation inactive</strong>
+            <p class="mb-0">Participant and scope approval/reactivation controls are restricted by the service while this conversation is inactive. Reactivation returns the service-determined actual state: Active or NeedsAuthorizationReview.</p>
+        </div>
+    }
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Engagement authorization scopes</h2>
+            <p>All durable scopes are shown, including inactive rows. CURRENT / STALE is authorization-version state only, not a send decision.</p>
+        </div>
+        <span class="hint">@conversation.EngagementScopes.Count scope@(conversation.EngagementScopes.Count == 1 ? "" : "s")</span>
+    </div>
+
+    @if (conversation.Status != WhatsAppConversationStatus.Inactive && newEngagementOptions.Length > 0)
+    {
+        <form method="post" action="/WhatsAppConversations/ApproveScope" class="border rounded p-3 mb-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+            <h3 class="section-title mt-0">Approve a new Engagement scope</h3>
+            <p class="hint">Staff explicitly chooses the Engagement. ContactCustomerLink is not used to infer eligibility.</p>
+            <div class="form-grid thirds">
+                <div>
+                    <label class="form-label" for="new-scope-engagement">Engagement</label>
+                    <select id="new-scope-engagement" name="EngagementId" class="form-select" required>
+                        <option value="">Select an active Engagement</option>
+                        @foreach (var engagement in newEngagementOptions)
+                        {
+                            <option value="@engagement.Id">@engagement.CustomerName · @engagement.ServiceName</option>
+                        }
+                    </select>
+                </div>
+                <div class="grid-span-2">
+                    <label class="form-label" for="new-scope-reason">Audited reason</label>
+                    <input id="new-scope-reason" name="Reason" class="form-control" maxlength="2000" required placeholder="Why this Engagement is explicitly in scope" />
+                </div>
+            </div>
+            <button class="btn btn-outline-primary mt-3" type="submit">Approve scope</button>
+        </form>
+    }
+    else if (conversation.Status == WhatsAppConversationStatus.Inactive)
+    {
+        <p class="hint">Reactivate the conversation before approving, reapproving, or reactivating a scope.</p>
+    }
+    else
+    {
+        <p class="hint">There are no active Engagements available for a new scope, or every active Engagement is already represented below.</p>
+    }
+
+    @if (conversation.EngagementScopes.Count == 0)
+    {
+        <p class="hint">No Engagement scopes have been recorded.</p>
+    }
+    else
+    {
+        @foreach (var scope in conversation.EngagementScopes)
+        {
+            <article class="border rounded p-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
+                    <div>
+                        <h3 class="mb-1">@(scope.CustomerName ?? "Unknown customer") · @(scope.ServiceName ?? "Unknown service")</h3>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge @(scope.IsActive ? "status-active" : "status-inactive")">@(scope.IsActive ? "Active" : "Inactive")</span>
+                            <span class="badge @(scope.EngagementStatus == EngagementStatus.Active ? "status-active" : "status-muted")">Engagement @Finance.Label(scope.EngagementStatus)</span>
+                            <span class="badge @(scope.IsAuthorizationCurrent ? "status-active" : "status-needsauthorizationreview")">Authorization version: @scope.AuthorizationVersionState</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <span class="hint d-block">Scope Version</span>
+                        <strong>@scope.Version</strong>
+                    </div>
+                </div>
+
+                <div class="form-grid thirds mt-3">
+                    <div><span class="hint d-block">Approved authorization version</span>@scope.ApprovedAuthorizationVersion</div>
+                    <div><span class="hint d-block">Current conversation authorization version</span>@scope.CurrentAuthorizationVersion</div>
+                    <div><span class="hint d-block">Approved date / by</span>@scope.ApprovedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")<br />@scope.ApprovedByActor</div>
+                    <div class="grid-span-2"><span class="hint d-block">Approval reason</span>@(scope.ApprovalReason ?? "—")</div>
+                    <div><span class="hint d-block">Revoke facts</span>@(scope.RevokedAt is { } revokedAt ? $"{revokedAt.ToLocalTime():dd MMM yyyy HH:mm} · {scope.RevokedByActor}" : "—")</div>
+                    @if (scope.RevokedAt is not null)
+                    {
+                        <div class="grid-span-3"><span class="hint d-block">Revocation reason</span>@(scope.RevocationReason ?? "—")</div>
+                    }
+                </div>
+
+                <div class="form-actions mt-3">
+                    @if (scope.EngagementStatus != EngagementStatus.Active)
+                    {
+                        <span class="hint">Approval, reapproval, and reactivation are unavailable while this Engagement is not Active.</span>
+                    }
+                    else if (scope.IsActive && scope.IsAuthorizationStale)
+                    {
+                        @if (conversation.Status != WhatsAppConversationStatus.Inactive)
+                        {
+                            <form method="post" action="/WhatsAppConversations/ApproveScope" class="d-flex flex-wrap gap-2 align-items-end">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ConversationId" value="@conversation.Id" />
+                                <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+                                <input type="hidden" name="EngagementId" value="@scope.EngagementId" />
+                                <input type="hidden" name="ExpectedScopeVersion" value="@scope.Version" />
+                                <div><label class="visually-hidden" for="reapprove-reason-@scope.Id">Reason to reapprove scope</label><input id="reapprove-reason-@scope.Id" name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason to reapprove" /></div>
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Reapprove stale scope</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="hint">Reactivate the conversation before reapproving this stale scope.</span>
+                        }
+                    }
+                    else if (!scope.IsActive)
+                    {
+                        @if (conversation.Status != WhatsAppConversationStatus.Inactive)
+                        {
+                            <form method="post" action="/WhatsAppConversations/ApproveScope" class="d-flex flex-wrap gap-2 align-items-end">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="ConversationId" value="@conversation.Id" />
+                                <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+                                <input type="hidden" name="EngagementId" value="@scope.EngagementId" />
+                                <input type="hidden" name="ExpectedScopeVersion" value="@scope.Version" />
+                                <div><label class="visually-hidden" for="reactivate-scope-reason-@scope.Id">Reason to reactivate scope</label><input id="reactivate-scope-reason-@scope.Id" name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason to reactivate" /></div>
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Reactivate scope</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="hint">Reactivate the conversation before reactivating this scope.</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="hint">Authorization version: CURRENT. No reapproval is needed for this scope at the current version.</span>
+                    }
+                    @if (scope.IsActive)
+                    {
+                        <form method="post" action="/WhatsAppConversations/RevokeScope" class="d-flex flex-wrap gap-2 align-items-end">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+                            <input type="hidden" name="ScopeId" value="@scope.Id" />
+                            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+                            <input type="hidden" name="ExpectedScopeVersion" value="@scope.Version" />
+                            <div><label class="visually-hidden" for="revoke-scope-reason-@scope.Id">Reason to revoke scope</label><input id="revoke-scope-reason-@scope.Id" name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason to revoke" /></div>
+                            <button class="btn btn-sm btn-outline-danger" type="submit">Revoke scope</button>
+                        </form>
+                    }
+                </div>
+
+                <details class="mt-3">
+                    <summary>Scope history (@scope.History.Count)</summary>
+                    @if (scope.History.Count == 0)
+                    {
+                        <p class="hint mt-2">No scope history recorded.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive mt-2">
+                            <table class="table data-grid">
+                                <thead><tr><th>When</th><th>Action</th><th>Active</th><th>Authorization version</th><th>Approval facts</th><th>Revoke facts</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                                <tbody>
+                                @foreach (var history in scope.History)
+                                {
+                                    <tr>
+                                        <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                        <td>@history.Action</td>
+                                        <td>@(history.PreviousIsActive is null ? "—" : (history.PreviousIsActive.Value ? "Active" : "Inactive")) → @(history.NewIsActive ? "Active" : "Inactive")</td>
+                                        <td>@(history.PreviousApprovedAuthorizationVersion?.ToString() ?? "—") → @history.NewApprovedAuthorizationVersion</td>
+                                        <td>@history.NewApprovedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")<br />@history.NewApprovedByActor<br /><span class="hint">@(history.NewApprovalReason ?? "—")</span></td>
+                                        <td>@(history.NewRevokedAt is { } newRevokedAt ? newRevokedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "—")<br /><span class="hint">@(history.NewRevokedByActor ?? "—") · @(history.NewRevocationReason ?? "—")</span></td>
+                                        <td>@(history.Reason ?? "—")</td>
+                                        <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </details>
+            </article>
+        }
+    }
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Participants</h2>
+            <p>All durable participant rows are shown, including inactive participants. Membership changes are authorization-review events.</p>
+        </div>
+        <span class="hint">@conversation.Participants.Count participant@(conversation.Participants.Count == 1 ? "" : "s")</span>
+    </div>
+
+    @if (conversation.Status != WhatsAppConversationStatus.Inactive)
+    {
+        <form method="post" action="/WhatsAppConversations/AddParticipant" data-whatsapp-participant-form class="border rounded p-3 mb-4">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+            <h3 class="section-title mt-0">Add participant</h3>
+            <p class="hint">The service validates the selected identity, ownership and evidence. Do not use this form to invent mappings or authorization.</p>
+
+            <div class="form-grid thirds">
+                <div>
+                    <label class="form-label" for="ParticipantKind">Participant kind</label>
+                    <select id="ParticipantKind" name="ParticipantKind" class="form-select" data-whatsapp-participant-kind>
+                        @foreach (var kind in Enum.GetValues<WhatsAppParticipantKind>())
+                        {
+                            <option value="@kind">@Finance.Label(kind)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div data-whatsapp-participant-identity="Contact">
+                <div class="form-grid thirds">
+                    <div>
+                        <label class="form-label" for="ContactId">Contact</label>
+                        <select id="ContactId" name="ContactId" class="form-select" data-whatsapp-contact-id>
+                            <option value="">Select Contact</option>
+                            @foreach (var option in options.ContactParticipantOptions)
+                            {
+                                <option value="@option.Id">@option.Name · @(option.IsActive ? "Active" : "Inactive")</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="ContactWhatsAppAddressId">Contact WhatsApp address <span class="hint">(optional)</span></label>
+                        <select id="ContactWhatsAppAddressId" name="ContactWhatsAppAddressId" class="form-select" data-whatsapp-contact-address-id>
+                            <option value="">No address snapshot</option>
+                            @foreach (var option in options.ContactWhatsAppAddressOptions)
+                            {
+                                <option value="@option.Id" data-contact-id="@option.ContactId">@option.ContactName · @option.NormalizedE164 · @(option.IsActive ? "Active" : "Inactive")</option>
+                            }
+                        </select>
+                        <p class="hint">The address must belong to the selected Contact. The service rechecks ownership and any phone snapshot.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div data-whatsapp-participant-identity="BusinessParty" hidden>
+                <label class="form-label" for="BusinessPartyId">Business Party</label>
+                <select id="BusinessPartyId" name="BusinessPartyId" class="form-select">
+                    <option value="">Select Business Party</option>
+                    @foreach (var option in options.BusinessPartyParticipantOptions)
+                    {
+                        <option value="@option.Id">@option.Name · @(option.IsActive ? "Active" : "Inactive")</option>
+                    }
+                </select>
+            </div>
+
+            <div data-whatsapp-participant-identity="Manager" hidden>
+                <label class="form-label" for="ManagerId">Manager</label>
+                <select id="ManagerId" name="ManagerId" class="form-select">
+                    <option value="">Select Manager</option>
+                    @foreach (var option in options.ManagerParticipantOptions)
+                    {
+                        <option value="@option.Id">@option.Name · @(option.IsActive ? "Active" : "Inactive")</option>
+                    }
+                </select>
+            </div>
+
+            <div data-whatsapp-participant-identity="AppUser" hidden>
+                <label class="form-label" for="AppUserId">AppUser</label>
+                <select id="AppUserId" name="AppUserId" class="form-select">
+                    <option value="">Select AppUser</option>
+                    @foreach (var option in options.AppUserParticipantOptions)
+                    {
+                        <option value="@option.Id">@option.DisplayName · @(option.IsActive ? "Active" : "Inactive")</option>
+                    }
+                </select>
+            </div>
+
+            <div data-whatsapp-participant-identity="BusinessSender" hidden>
+                <p class="hint mt-3 mb-0">BusinessSender has no typed identity mapping. Add provider or snapshot evidence below when available.</p>
+            </div>
+            <div data-whatsapp-participant-identity="UnknownExternal" hidden>
+                <p class="hint mt-3 mb-0">UnknownExternal has no typed identity mapping. At least one provider key, phone/E164 evidence, or display-name snapshot is required by the service.</p>
+            </div>
+
+            <h4 class="section-title">Provider and snapshot evidence</h4>
+            <div class="form-grid thirds">
+                <div><label class="form-label" for="ProviderParticipantKey">Provider participant key <span class="hint">(optional)</span></label><input id="ProviderParticipantKey" name="ProviderParticipantKey" class="form-control" maxlength="254" /></div>
+                <div><label class="form-label" for="NormalizedE164">Phone / E164 evidence <span class="hint">(optional)</span></label><input id="NormalizedE164" name="NormalizedE164" class="form-control" maxlength="80" placeholder="+60123456789" /></div>
+                <div><label class="form-label" for="DisplayNameSnapshot">Display-name snapshot <span class="hint">(optional)</span></label><input id="DisplayNameSnapshot" name="DisplayNameSnapshot" class="form-control" maxlength="254" /></div>
+            </div>
+            <div>
+                <label class="form-label" for="participant-reason">Audited reason</label>
+                <textarea id="participant-reason" name="Reason" class="form-control" rows="2" maxlength="2000" required placeholder="Why this participant membership is being recorded"></textarea>
+            </div>
+            <button class="btn btn-outline-primary mt-3" type="submit">Add participant</button>
+        </form>
+    }
+    else
+    {
+        <p class="hint">Reactivate the conversation before changing participants.</p>
+    }
+
+    @if (conversation.Participants.Count == 0)
+    {
+        <p class="hint">No participants have been recorded.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table data-grid">
+                <thead><tr><th>Kind</th><th>Mapped identity / name</th><th>Contact address</th><th>Provider participant key</th><th>E164 snapshot</th><th>Display-name snapshot</th><th>State</th><th>Joined / left</th><th>Version</th><th data-nosort>Actions / history</th></tr></thead>
+                <tbody>
+                @foreach (var participant in conversation.Participants)
+                {
+                    <tr>
+                        <td>@Finance.Label(participant.ParticipantKind)</td>
+                        <td><strong>@ParticipantIdentity(participant)</strong><br /><span class="hint">@(participant.ContactId is { } contactId ? $"Contact #{contactId}" : participant.BusinessPartyId is { } businessPartyId ? $"Business Party #{businessPartyId}" : participant.ManagerId is { } managerId ? $"Manager #{managerId}" : participant.AppUserId is not null ? $"AppUser {participant.AppUserId}" : "No typed identity mapping")</span></td>
+                        <td>@(participant.ContactWhatsAppAddressNumber ?? "—")</td>
+                        <td>@(participant.ProviderParticipantKey ?? "—")</td>
+                        <td>@(participant.NormalizedE164 ?? "—")</td>
+                        <td>@(participant.DisplayNameSnapshot ?? "—")</td>
+                        <td><span class="badge @(participant.IsActive ? "status-active" : "status-inactive")">@(participant.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>@participant.JoinedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")<br /><span class="hint">@(participant.LeftAt is { } leftAt ? $"Left {leftAt.ToLocalTime():dd MMM yyyy HH:mm}" : "Still active")</span></td>
+                        <td>@participant.Version</td>
+                        <td>
+                            @if (conversation.Status != WhatsAppConversationStatus.Inactive)
+                            {
+                                <form method="post" action="/WhatsAppConversations/@(participant.IsActive ? "DeactivateParticipant" : "ReactivateParticipant")" class="d-flex flex-wrap gap-2 align-items-end mb-2">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="ConversationId" value="@conversation.Id" />
+                                    <input type="hidden" name="ParticipantId" value="@participant.Id" />
+                                    <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+                                    <input type="hidden" name="ExpectedParticipantVersion" value="@participant.Version" />
+                                    <div><label class="visually-hidden" for="participant-reason-@participant.Id">Reason for participant state change</label><input id="participant-reason-@participant.Id" name="Reason" class="form-control form-control-sm" maxlength="2000" required placeholder="Reason" /></div>
+                                    <button class="btn btn-sm @(participant.IsActive ? "btn-outline-danger" : "btn-outline-primary")" type="submit">@(participant.IsActive ? "Deactivate" : "Reactivate")</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="hint">Conversation inactive; participant change restricted.</span>
+                            }
+                            <details>
+                                <summary>Participant history (@participant.History.Count)</summary>
+                                @if (participant.History.Count == 0)
+                                {
+                                    <p class="hint mt-2">No participant history recorded.</p>
+                                }
+                                else
+                                {
+                                    <div class="table-responsive mt-2">
+                                        <table class="table data-grid">
+                                            <thead><tr><th>When</th><th>Action</th><th>Active</th><th>Joined / left</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                                            <tbody>
+                                            @foreach (var history in participant.History)
+                                            {
+                                                <tr>
+                                                    <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                                                    <td>@history.Action</td>
+                                                    <td>@(history.PreviousIsActive is null ? "—" : (history.PreviousIsActive.Value ? "Active" : "Inactive")) → @(history.NewIsActive ? "Active" : "Inactive")</td>
+                                                    <td>@(history.PreviousJoinedAt is { } previousJoinedAt ? previousJoinedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm") : "—") → @history.NewJoinedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")<br /><span class="hint">@(history.NewLeftAt is { } newLeftAt ? $"Left {newLeftAt.ToLocalTime():dd MMM yyyy HH:mm}" : "Active")</span></td>
+                                                    <td>@(history.Reason ?? "—")</td>
+                                                    <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                                                </tr>
+                                            }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
+                            </details>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Record unknown membership change</h2>
+            <p>Use this when provider/group membership changed but the exact participant cannot yet be mapped.</p>
+        </div>
+    </div>
+    <div class="panel-note authorization-warning mb-3">
+        <strong>Review consequence</strong>
+        <p class="mb-0">This increments AuthorizationVersion, moves the conversation to NeedsAuthorizationReview, and makes previously approved active Engagement scopes stale. It does not create an UnknownExternal participant automatically.</p>
+    </div>
+    @if (conversation.Status == WhatsAppConversationStatus.Inactive)
+    {
+        <p class="hint">Reactivate the conversation before recording membership changes.</p>
+    }
+    else
+    {
+        <form method="post" action="/WhatsAppConversations/RecordUnknownMembershipChange">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+            <div class="form-grid thirds">
+                <div class="grid-span-2"><label class="form-label" for="unknown-membership-reason">Reason</label><textarea id="unknown-membership-reason" name="Reason" class="form-control" rows="2" maxlength="2000" required placeholder="What membership change is known but not yet mapped"></textarea></div>
+            </div>
+            <button class="btn btn-outline-danger mt-3" type="submit">Record unknown membership change</button>
+        </form>
+    }
+</section>
+
+<section class="panel form-panel wide mb-4">
+    <div class="panel-heading">
+        <div>
+            <h2>Conversation lifecycle</h2>
+            <p>Only the existing Phase 9B lifecycle operations are available. Arbitrary status selection is not exposed.</p>
+        </div>
+    </div>
+    @if (conversation.Status == WhatsAppConversationStatus.Inactive)
+    {
+        <form method="post" action="/WhatsAppConversations/Reactivate">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+            <label class="form-label" for="reactivate-conversation-reason">Reason to reactivate</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input id="reactivate-conversation-reason" name="Reason" class="form-control" maxlength="2000" required placeholder="Reason to reactivate" />
+                <button class="btn btn-outline-primary" type="submit">Reactivate conversation</button>
+            </div>
+        </form>
+        <p class="hint mt-3 mb-0">The service determines the returned actual state: Active or NeedsAuthorizationReview. The UI does not force Active.</p>
+    }
+    else
+    {
+        <form method="post" action="/WhatsAppConversations/Deactivate">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ConversationId" value="@conversation.Id" />
+            <input type="hidden" name="ExpectedConversationVersion" value="@conversation.Version" />
+            <label class="form-label" for="deactivate-conversation-reason">Reason to deactivate</label>
+            <div class="d-flex flex-wrap gap-2">
+                <input id="deactivate-conversation-reason" name="Reason" class="form-control" maxlength="2000" required placeholder="Reason to deactivate" />
+                <button class="btn btn-outline-danger" type="submit">Deactivate conversation</button>
+            </div>
+        </form>
+        <p class="hint mt-3 mb-0">Deactivation does not delete the conversation, participants, or scopes. Reactivation remains service-determined.</p>
+    }
+</section>
+
+<section class="panel form-panel wide">
+    <div class="panel-heading">
+        <div>
+            <h2>Conversation history</h2>
+            <p>Append-only audit history for lifecycle, membership, and authorization-version changes.</p>
+        </div>
+        <span class="hint">@conversation.History.Count event@(conversation.History.Count == 1 ? "" : "s")</span>
+    </div>
+    @if (conversation.History.Count == 0)
+    {
+        <p class="hint">No conversation history recorded.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table data-grid">
+                <thead><tr><th>When</th><th>Action</th><th>Status</th><th>Authorization version</th><th>Reason</th><th>Actor / source</th></tr></thead>
+                <tbody>
+                @foreach (var history in conversation.History)
+                {
+                    <tr>
+                        <td>@history.OccurredAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</td>
+                        <td>@history.Action</td>
+                        <td>@(history.PreviousStatus is { } previousStatus ? Finance.Label(previousStatus) : "Created") → @Finance.Label(history.NewStatus)</td>
+                        <td>@(history.PreviousAuthorizationVersion?.ToString() ?? "—") → @history.NewAuthorizationVersion</td>
+                        <td>@(history.Reason ?? "—")</td>
+                        <td>@history.Actor<br /><span class="hint">@history.Source</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <script src="~/js/whatsapp-conversations.js" asp-append-version="true"></script>
+}

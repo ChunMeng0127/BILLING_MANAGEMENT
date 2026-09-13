@@ -209,6 +209,52 @@ public sealed record WhatsAppConversationDetailsReadModel(
     IReadOnlyList<WhatsAppConversationEngagementScopeReadModel> EngagementScopes,
     IReadOnlyList<WhatsAppConversationHistoryReadModel> History);
 
+public sealed record WhatsAppDirectContactWhatsAppAddressOptionReadModel(
+    int Id,
+    string ContactName,
+    string NormalizedE164);
+
+public sealed record WhatsAppContactParticipantOptionReadModel(
+    int Id,
+    string Name,
+    bool IsActive);
+
+public sealed record WhatsAppContactWhatsAppAddressOptionReadModel(
+    int Id,
+    int ContactId,
+    string ContactName,
+    string NormalizedE164,
+    bool IsActive);
+
+public sealed record WhatsAppBusinessPartyParticipantOptionReadModel(
+    int Id,
+    string Name,
+    bool IsActive);
+
+public sealed record WhatsAppManagerParticipantOptionReadModel(
+    int Id,
+    string Name,
+    bool IsActive);
+
+public sealed record WhatsAppAppUserParticipantOptionReadModel(
+    string Id,
+    string DisplayName,
+    bool IsActive);
+
+public sealed record WhatsAppEngagementApprovalOptionReadModel(
+    int Id,
+    string CustomerName,
+    string ServiceName);
+
+public sealed record WhatsAppConversationManagementOptionsReadModel(
+    IReadOnlyList<WhatsAppDirectContactWhatsAppAddressOptionReadModel> DirectContactWhatsAppAddressOptions,
+    IReadOnlyList<WhatsAppContactParticipantOptionReadModel> ContactParticipantOptions,
+    IReadOnlyList<WhatsAppContactWhatsAppAddressOptionReadModel> ContactWhatsAppAddressOptions,
+    IReadOnlyList<WhatsAppBusinessPartyParticipantOptionReadModel> BusinessPartyParticipantOptions,
+    IReadOnlyList<WhatsAppManagerParticipantOptionReadModel> ManagerParticipantOptions,
+    IReadOnlyList<WhatsAppAppUserParticipantOptionReadModel> AppUserParticipantOptions,
+    IReadOnlyList<WhatsAppEngagementApprovalOptionReadModel> ActiveEngagementApprovalOptions);
+
 /// <summary>
 /// Provider-neutral application operations for WhatsApp conversation membership
 /// and Engagement confidentiality scope. A conversation row is the lock and
@@ -289,6 +335,97 @@ public sealed class WhatsAppConversationService(AppDbContext db, BusinessClock c
             ? details.EngagementScopes
             : details.EngagementScopes.Where(x => x.IsActive).ToArray();
     }
+
+    public async Task<IReadOnlyList<WhatsAppDirectContactWhatsAppAddressOptionReadModel>>
+        GetActiveDirectContactWhatsAppAddressOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.ContactWhatsAppAddresses
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Contact.Name)
+            .ThenBy(x => x.NormalizedE164)
+            .Select(x => new WhatsAppDirectContactWhatsAppAddressOptionReadModel(
+                x.Id,
+                x.Contact.Name,
+                x.NormalizedE164))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppContactParticipantOptionReadModel>>
+        GetContactParticipantOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.Contacts
+            .AsNoTracking()
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Select(x => new WhatsAppContactParticipantOptionReadModel(x.Id, x.Name, x.IsActive))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppContactWhatsAppAddressOptionReadModel>>
+        GetContactWhatsAppAddressOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.ContactWhatsAppAddresses
+            .AsNoTracking()
+            .OrderBy(x => x.Contact.Name)
+            .ThenBy(x => x.NormalizedE164)
+            .Select(x => new WhatsAppContactWhatsAppAddressOptionReadModel(
+                x.Id,
+                x.ContactId,
+                x.Contact.Name,
+                x.NormalizedE164,
+                x.IsActive))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppBusinessPartyParticipantOptionReadModel>>
+        GetBusinessPartyParticipantOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.BusinessParties
+            .AsNoTracking()
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Select(x => new WhatsAppBusinessPartyParticipantOptionReadModel(x.Id, x.Name, x.IsActive))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppManagerParticipantOptionReadModel>>
+        GetManagerParticipantOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.Managers
+            .AsNoTracking()
+            .OrderBy(x => x.Name)
+            .ThenBy(x => x.Id)
+            .Select(x => new WhatsAppManagerParticipantOptionReadModel(x.Id, x.Name, x.IsActive))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppAppUserParticipantOptionReadModel>>
+        GetAppUserParticipantOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.Users
+            .AsNoTracking()
+            .OrderBy(x => x.UserName)
+            .ThenBy(x => x.Id)
+            .Select(x => new WhatsAppAppUserParticipantOptionReadModel(
+                x.Id,
+                x.UserName ?? x.Id,
+                x.IsActive))
+            .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<WhatsAppEngagementApprovalOptionReadModel>>
+        GetActiveEngagementApprovalOptionsAsync(CancellationToken cancellationToken = default) =>
+        await db.Engagements
+            .AsNoTracking()
+            .Where(x => x.Status == EngagementStatus.Active)
+            .OrderBy(x => x.Customer.Name)
+            .ThenBy(x => x.Service.Name)
+            .ThenBy(x => x.Id)
+            .Select(x => new WhatsAppEngagementApprovalOptionReadModel(
+                x.Id,
+                x.Customer.Name,
+                x.Service.Name))
+            .ToListAsync(cancellationToken);
+
+    public async Task<WhatsAppConversationManagementOptionsReadModel> GetManagementOptionsAsync(
+        CancellationToken cancellationToken = default) =>
+        new(
+            await GetActiveDirectContactWhatsAppAddressOptionsAsync(cancellationToken),
+            await GetContactParticipantOptionsAsync(cancellationToken),
+            await GetContactWhatsAppAddressOptionsAsync(cancellationToken),
+            await GetBusinessPartyParticipantOptionsAsync(cancellationToken),
+            await GetManagerParticipantOptionsAsync(cancellationToken),
+            await GetAppUserParticipantOptionsAsync(cancellationToken),
+            await GetActiveEngagementApprovalOptionsAsync(cancellationToken));
 
     public async Task<WhatsAppConversationDetailsReadModel> CreateConversationAsync(
         WhatsAppConversationCreateInput input,

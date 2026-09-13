@@ -1,0 +1,95 @@
+@model WhatsAppConversationIndexViewModel
+@using BillingControl.Services
+@{
+    ViewData["Title"] = "WhatsApp Conversations";
+    string StatusClass(WhatsAppConversationStatus status) => status switch
+    {
+        WhatsAppConversationStatus.Active => "status-active",
+        WhatsAppConversationStatus.Inactive => "status-inactive",
+        _ => "status-needsauthorizationreview"
+    };
+}
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">WHATSAPP MANAGEMENT</p>
+        <h1>WhatsApp Conversations</h1>
+        <p>Staff review of provider/routing identity, durable membership, and Engagement authorization-version state. This page does not send WhatsApp messages.</p>
+    </div>
+    <a class="btn btn-primary" href="/WhatsAppConversations/Create">+ New Conversation</a>
+</div>
+
+<form class="report-filters" method="get" action="/WhatsAppConversations">
+    <div class="d-flex align-items-end">
+        <label class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="includeInactive" value="true" @(Model.IncludeInactive ? "checked" : null) />
+            <span class="form-check-label">Include inactive</span>
+        </label>
+    </div>
+    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
+    <a href="/WhatsAppConversations">Reset</a>
+</form>
+
+@if (Model.Conversations.Count == 0)
+{
+    <section class="panel empty-state p-4">
+        <h2>No WhatsApp conversations found</h2>
+        <p>Create a provider/routing identity record, or include inactive conversations in the filter.</p>
+        <a class="btn btn-primary" href="/WhatsAppConversations/Create">Create a conversation</a>
+    </section>
+}
+else
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Conversation register</h2>
+                <p>@Model.Conversations.Count conversation@(Model.Conversations.Count == 1 ? "" : "s") · inactive rows @(Model.IncludeInactive ? "included" : "hidden")</p>
+            </div>
+            <span class="hint">CURRENT / STALE describes authorization-version state only.</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table data-grid">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Direct / Group</th>
+                        <th>Status</th>
+                        <th>Provider</th>
+                        <th>Business endpoint</th>
+                        <th>Provider conversation key</th>
+                        <th>Authorization version</th>
+                        <th>Active participants</th>
+                        <th>Active Engagement scopes</th>
+                        <th>Stale active scopes</th>
+                        <th data-nosort>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var conversation in Model.Conversations)
+                {
+                    <tr>
+                        <td>@conversation.Id</td>
+                        <td><strong>@Finance.Label(conversation.Kind)</strong></td>
+                        <td>
+                            <span class="badge @StatusClass(conversation.Status)">@Finance.Label(conversation.Status)</span>
+                            @if (conversation.Status == WhatsAppConversationStatus.NeedsAuthorizationReview)
+                            {
+                                <span class="hint d-block">Review required</span>
+                            }
+                        </td>
+                        <td>@conversation.ProviderName</td>
+                        <td>@conversation.BusinessEndpointKey</td>
+                        <td>@conversation.ProviderConversationKey</td>
+                        <td>@conversation.AuthorizationVersion</td>
+                        <td>@conversation.ActiveParticipantCount</td>
+                        <td>@conversation.ActiveEngagementScopeCount</td>
+                        <td>@conversation.StaleActiveEngagementScopeCount</td>
+                        <td><a href="/WhatsAppConversations/Details/@conversation.Id">Details</a></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

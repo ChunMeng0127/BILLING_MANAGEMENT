@@ -891,6 +891,18 @@ html.sidebar-collapsed .app-shell {
   font-size: 10px;
 }
 
+.authorization-warning {
+  border: 1px solid #f1ca89;
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: #8e5b10;
+  padding: 13px 15px;
+}
+
+.authorization-warning strong {
+  color: #7c4b08;
+}
+
 .report-filters,
 .inline-form {
   display: flex;
@@ -1377,6 +1389,7 @@ input[type="checkbox"] {
 .status-inprogress,
 .status-partiallypaid,
 .status-pendingreview,
+.status-needsauthorizationreview,
 .status-queriesent,
 .status-draftmanagementreportsent,
 .status-amendmentrevision {
