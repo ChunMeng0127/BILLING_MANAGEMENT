@@ -53,6 +53,8 @@
 
 ### Current Work
 
+- Phase 9C bounded technical-review correction is complete at checkpoint `8e2f791f6d46731c11a02588a97c8cb891221fc2`: participant-kind changes now clear and disable non-selected typed identity controls while preserving evidence fields and Contact-address filtering. Technical review and manual staff UI acceptance remain pending; Phase 9 is not complete.
+
 - Phase 0A is closed and approved.
 - Phase 0B is closed and approved.
 - Phase 0C is closed and approved.
@@ -1677,6 +1679,9 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - Phase 9B stable promotion is the approved base for Phase 9C. Phase 9C is a staff-only MVC management and authorization-review surface; technical review and manual staff UI acceptance are required before Phase 9 closure. Phase 10 remains deferred and Phase 9 is not complete.
 
 ### Phase 9C — WhatsApp conversation staff management UI record
+
+- Bounded technical-review correction at `8e2f791f6d46731c11a02588a97c8cb891221fc2` is UI-only. It adds focused JavaScript regression coverage for Contact → BusinessParty, BusinessParty → Manager, typed → BusinessSender, typed → UnknownExternal, and switching back to Contact; the Phase 9B service remains unchanged and fail-closed.
+- Correction checkpoint validation passed: JavaScript `26/26`, focused Phase 9C PostgreSQL MVC tests `4/4`, full PostgreSQL-backed .NET tests `242/242` with `0` failures and `0` skips, Release build with `0 warnings/errors`, EF pending-model check clean, and CI run `34755558036` including Docker build and production HTTPS smoke. Technical review and manual staff UI acceptance remain pending; Phase 9 is not complete.
 
 - Phase 9B stable promotion facts were recorded before this Phase 9C implementation: approved source `069f2af2d3dca0965f8dd2c2194e88bd74fcc94b`; stable promotion `6995062b624859dc04f1e315261c10805f5d2e65`; promotion tree `ef2f3175dc96448f2a092da69298df9c111288c9`; stable CI `34751911399`; stable validation of 238 PostgreSQL-backed .NET tests, 19 JavaScript tests, Release build with zero warnings/errors, Docker build and production HTTPS smoke.
 - Phase 9C adds the staff-only `/WhatsAppConversations` Index, Create and Details pages, `AppRoles.Staff` authorization, explicit POST-only audited participant/scope/membership/lifecycle controls, optimistic expected-version fields, safe BusinessException TempData handling, staff navigation, and responsive authorization-version/history presentation. Conversation provider identity remains immutable; no generic Edit/SetStatus operation is exposed.
