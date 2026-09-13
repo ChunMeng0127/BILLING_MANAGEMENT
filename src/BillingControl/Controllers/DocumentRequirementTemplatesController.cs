@@ -19,22 +19,40 @@ public sealed class DocumentRequirementTemplatesController(
         var serviceNames = await db.Services.AsNoTracking()
             .Where(x => serviceIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, x => x.Name);
+        var templateRows = readModels.Select(x => new DocumentRequirementTemplateListItemViewModel(
+            x.Id,
+            x.ServiceId,
+            serviceNames.TryGetValue(x.ServiceId, out var serviceName) ? serviceName : $"Service #{x.ServiceId}",
+            x.TemplateKey,
+            x.TemplateVersion,
+            x.Name,
+            x.IsActive,
+            x.IsDefault,
+            x.IsUsed,
+            x.Items.Count)).ToArray();
+        var families = templateRows
+            .GroupBy(x => new { x.ServiceId, x.ServiceName, x.TemplateKey })
+            .Select(group =>
+            {
+                var versions = group.OrderByDescending(x => x.TemplateVersion).ThenByDescending(x => x.Id).ToArray();
+                return new DocumentRequirementTemplateFamilyViewModel(
+                    group.Key.ServiceId,
+                    group.Key.ServiceName,
+                    group.Key.TemplateKey,
+                    versions[0],
+                    versions.Skip(1).ToArray());
+            })
+            .OrderBy(x => x.ServiceName)
+            .ThenBy(x => x.CurrentVersion.Name)
+            .ThenBy(x => x.TemplateKey)
+            .ToArray();
 
         return View(new DocumentRequirementTemplateIndexViewModel
         {
             ServiceId = serviceId,
             Services = await ServiceOptionsAsync(),
-            Templates = readModels.Select(x => new DocumentRequirementTemplateListItemViewModel(
-                x.Id,
-                x.ServiceId,
-                serviceNames.TryGetValue(x.ServiceId, out var serviceName) ? serviceName : $"Service #{x.ServiceId}",
-                x.TemplateKey,
-                x.TemplateVersion,
-                x.Name,
-                x.IsActive,
-                x.IsDefault,
-                x.IsUsed,
-                x.Items.Count)).ToArray()
+            Templates = templateRows,
+            Families = families
         });
     }
 

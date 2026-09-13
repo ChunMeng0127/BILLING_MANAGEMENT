@@ -8,6 +8,7 @@ public sealed class DocumentRequirementTemplateIndexViewModel
     public int? ServiceId { get; set; }
     public IReadOnlyList<DocumentRequirementTemplateServiceOption> Services { get; init; } = [];
     public IReadOnlyList<DocumentRequirementTemplateListItemViewModel> Templates { get; init; } = [];
+    public IReadOnlyList<DocumentRequirementTemplateFamilyViewModel> Families { get; init; } = [];
 }
 
 public sealed record DocumentRequirementTemplateServiceOption(int Id, string Name, bool IsActive);
@@ -23,6 +24,16 @@ public sealed record DocumentRequirementTemplateListItemViewModel(
     bool IsDefault,
     bool IsUsed,
     int ItemCount);
+
+public sealed record DocumentRequirementTemplateFamilyViewModel(
+    int ServiceId,
+    string ServiceName,
+    string TemplateKey,
+    DocumentRequirementTemplateListItemViewModel CurrentVersion,
+    IReadOnlyList<DocumentRequirementTemplateListItemViewModel> PreviousVersions)
+{
+    public int VersionCount => PreviousVersions.Count + 1;
+}
 
 public sealed class DocumentRequirementTemplateCreateViewModel
 {

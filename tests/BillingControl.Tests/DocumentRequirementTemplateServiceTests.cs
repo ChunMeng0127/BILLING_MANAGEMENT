@@ -102,6 +102,72 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task TemplateService_RejectsDuplicateVisibleFamilyNamesButAllowsVersionsAndOtherServices()
+    {
+        await using var db = await Fresh();
+        var serviceMaster = await AddDocumentServiceAsync(db, "template-service-family-name");
+        var otherServiceMaster = await AddDocumentServiceAsync(db, "template-service-family-name-other");
+        var service = new DocumentRequirementTemplateService(db);
+        var first = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            null,
+            "Reusable checklist",
+            null,
+            [new(null, "Bank Statement", null, true, DocumentRequirementWave.Normal, 0)]));
+
+        var duplicate = await Assert.ThrowsAsync<BusinessException>(() => service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            null,
+            "  REUSABLE CHECKLIST  ",
+            null,
+            [new(null, "Bank Statement", null, true, DocumentRequirementWave.Normal, 0)])));
+        Assert.Equal("A checklist with this name already exists for this service. Open the existing checklist and create a new version instead.", duplicate.Message);
+
+        var otherService = await service.CreateFirstVersionAsync(new(
+            otherServiceMaster.Id,
+            null,
+            "Reusable checklist",
+            null,
+            [new(null, "Bank Statement", null, true, DocumentRequirementWave.Normal, 0)]));
+        Assert.Equal("Reusable checklist", otherService.Name);
+
+        var secondVersion = await service.CreateNewVersionAsync(first.Id);
+        Assert.Equal(first.TemplateKey, secondVersion.TemplateKey);
+        Assert.Equal(2, secondVersion.TemplateVersion);
+
+        var renameTarget = await service.CreateFirstVersionAsync(new(
+            serviceMaster.Id,
+            null,
+            "Another checklist",
+            null,
+            [new(null, "Bank Statement", null, true, DocumentRequirementWave.Normal, 0)]));
+        var renameError = await Assert.ThrowsAsync<BusinessException>(() => service.UpdateUnusedVersionAsync(
+            renameTarget.Id,
+            new(" reusable checklist ", null)));
+        Assert.Equal(duplicate.Message, renameError.Message);
+        Assert.Equal("Another checklist", (await service.GetAsync(renameTarget.Id))!.Name);
+
+        db.AddRange(
+            new DocumentRequirementTemplate
+            {
+                ServiceId = serviceMaster.Id,
+                TemplateKey = DocumentToken("legacy-family-a"),
+                TemplateVersion = 1,
+                Name = "Legacy duplicate"
+            },
+            new DocumentRequirementTemplate
+            {
+                ServiceId = serviceMaster.Id,
+                TemplateKey = DocumentToken("legacy-family-b"),
+                TemplateVersion = 1,
+                Name = "Legacy duplicate"
+            });
+        await db.SaveChangesAsync();
+        var legacyDuplicates = await service.GetTemplatesAsync(serviceMaster.Id);
+        Assert.Equal(2, legacyDuplicates.Count(x => x.Name == "Legacy duplicate"));
+    }
+
+    [PostgresFact]
     public async Task TemplateService_StaffItemEditsPreserveLegacyRequiredAndWaveValues()
     {
         await using var db = await Fresh();
@@ -284,7 +350,7 @@ public partial class IntegrationTests
         var second = await service.CreateFirstVersionAsync(new(
             serviceMaster.Id,
             null,
-            "Yearly Bookkeeping - Standard Documents",
+            "Yearly Bookkeeping Standard Documents",
             null,
             [new(null, "Bank Statements", null, true, DocumentRequirementWave.Normal, 12)]));
         Assert.Equal("yearly-bookkeeping-standard-documents-2", second.TemplateKey);
@@ -339,10 +405,10 @@ public partial class IntegrationTests
             .ToListAsync();
 
         Assert.Equal(keys.Count, keys.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.Equal(results.Count(x => x.Success), keys.Count);
+        Assert.Equal(1, results.Count(x => x.Success));
+        Assert.Single(keys);
         Assert.Contains("concurrent-checklist", keys);
-        if (results.Count(x => x.Success) == 2)
-            Assert.Contains("concurrent-checklist-2", keys);
+        Assert.DoesNotContain("concurrent-checklist-2", keys);
     }
 
     [PostgresFact]

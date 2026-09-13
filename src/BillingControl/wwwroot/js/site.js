@@ -13,6 +13,8 @@
   const sidebarMode = (viewportWidth) =>
     viewportWidth < sidebarBreakpoint ? "mobile" : "desktop";
   const savedSidebarPreference = (value) => value === "true";
+  const desktopSidebarLabel = (open) =>
+    open ? "Hide navigation" : "Show navigation";
   const keepOneNavGroupOpen = (groups, selected) => {
     groups.forEach((group) => {
       if (group !== selected) group.open = false;
@@ -53,6 +55,7 @@
       savedSidebarPreference,
       navGroupNames,
       keepOneNavGroupOpen,
+      desktopSidebarLabel,
     };
   if (typeof document === "undefined") return;
 
@@ -91,9 +94,7 @@
           ? open
             ? "Close navigation"
             : "Open navigation"
-          : open
-            ? "Collapse navigation"
-            : "Expand navigation",
+          : desktopSidebarLabel(open),
       );
     });
   };

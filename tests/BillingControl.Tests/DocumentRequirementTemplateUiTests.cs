@@ -24,7 +24,7 @@ public partial class IntegrationTests
                 .UseSetting("ConnectionStrings:Default", Connection)
                 .UseSetting("DataProtection:Path", keyPath));
 
-        int serviceId, firmId, managerId, workerId;
+        int serviceId, otherServiceId, firmId, managerId, workerId;
         using (var scope = app.Services.CreateScope())
         {
             await Seed.Initialize(scope.ServiceProvider, new ConfigurationBuilder()
@@ -37,12 +37,14 @@ public partial class IntegrationTests
 
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var service = new Service { Name = "Template UI Service" };
+            var otherService = new Service { Name = "Template UI Other Service" };
             var firm = new BusinessParty { Name = "Template UI Firm" };
             var manager = new Manager { Name = "Template UI Manager" };
             var worker = new Worker { Name = "Template UI Worker" };
-            context.AddRange(service, firm, manager, worker);
+            context.AddRange(service, otherService, firm, manager, worker);
             await context.SaveChangesAsync();
             serviceId = service.Id;
+            otherServiceId = otherService.Id;
             firmId = firm.Id;
             managerId = manager.Id;
             workerId = worker.Id;
@@ -100,6 +102,7 @@ public partial class IntegrationTests
         var createPage = await admin.GetStringAsync("/DocumentRequirementTemplates/Create");
         Assert.Contains("Checklist name", createPage);
         Assert.Contains("Checklist description", createPage);
+        Assert.Contains("Use a reusable checklist name for this service, not a customer name.", createPage);
         Assert.Contains("Version 1 is created automatically. Add the documents normally required for this service.", createPage);
         Assert.Contains("Documents will appear in the order shown below. You can change the order later.", createPage);
         Assert.Contains("Use as default checklist for this service", createPage);
@@ -154,8 +157,22 @@ public partial class IntegrationTests
         var firstLocation = firstResponse.Headers.Location!.ToString();
         Assert.Contains("/DocumentRequirementTemplates/Edit/", firstLocation);
 
+        var duplicateFamily = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "  MONTHLY CHECKLIST  "), "/DocumentRequirementTemplates/Create");
+        Assert.Equal(HttpStatusCode.OK, duplicateFamily.StatusCode);
+        Assert.Contains("A checklist with this name already exists for this service. Open the existing checklist and create a new version instead.", await duplicateFamily.Content.ReadAsStringAsync());
+
+        var sameNameOtherService = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(otherServiceId, "Monthly checklist"));
+        Assert.Equal(HttpStatusCode.Redirect, sameNameOtherService.StatusCode);
+
         var secondResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(serviceId, "Annual checklist"));
         Assert.Equal(HttpStatusCode.Redirect, secondResponse.StatusCode);
+
+        var familyIndex = await admin.GetStringAsync("/DocumentRequirementTemplates");
+        Assert.Equal(3, familyIndex.Split("data-checklist-family").Length - 1);
+        Assert.Equal(1, familyIndex.Split("href=\"/DocumentRequirementTemplates/Create\"").Length - 1);
+        Assert.Contains("Current version</span><strong>1</strong>", familyIndex);
+        Assert.Contains("Versions</span><strong>1</strong>", familyIndex);
+        Assert.DoesNotContain("Previous versions", familyIndex);
 
         var customCreate = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(
             serviceId,
@@ -186,17 +203,24 @@ public partial class IntegrationTests
         Assert.False(excludedItem.IsActive);
 
         db.ChangeTracker.Clear();
-        var firstId = await db.DocumentRequirementTemplates.Where(x => x.TemplateKey == "monthly-checklist").Select(x => x.Id).SingleAsync();
+        var firstId = await db.DocumentRequirementTemplates.Where(x => x.ServiceId == serviceId && x.TemplateKey == "monthly-checklist").Select(x => x.Id).SingleAsync();
         var secondId = await db.DocumentRequirementTemplates.Where(x => x.TemplateKey == "annual-checklist").Select(x => x.Id).SingleAsync();
         var firstItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == firstId).Select(x => x.Id).SingleAsync();
         var secondItemId = await db.DocumentRequirementTemplateItems.Where(x => x.DocumentRequirementTemplateId == secondId).Select(x => x.Id).SingleAsync();
         var firstBefore = await db.DocumentRequirementTemplates.AsNoTracking().SingleAsync(x => x.Id == firstId);
         Assert.Equal(1, firstBefore.TemplateVersion);
+        var renameCollision = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditDefinition", new()
+        {
+            ["Id"] = secondId.ToString(), ["Name"] = "  monthly CHECKLIST  ", ["Description"] = "Should remain unchanged"
+        }, $"/DocumentRequirementTemplates/Edit/{secondId}");
+        Assert.Equal(HttpStatusCode.OK, renameCollision.StatusCode);
+        Assert.Contains("A checklist with this name already exists for this service. Open the existing checklist and create a new version instead.", await renameCollision.Content.ReadAsStringAsync());
         var secondEditPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}");
         Assert.Contains("Annual checklist", secondEditPage);
         Assert.Contains("Checklist details", secondEditPage);
         Assert.Contains("Checklist status", secondEditPage);
         Assert.Contains("This checklist can be reused when requesting documents for this service.", secondEditPage);
+        Assert.Contains("Use a reusable checklist name for this service, not a customer name.", secondEditPage);
         Assert.Contains("You can rename an unused checklist without affecting how its versions are tracked.", secondEditPage);
         Assert.Contains("Use as default checklist for this service", secondEditPage);
         Assert.Contains("Include in new requests", secondEditPage);
@@ -213,6 +237,9 @@ public partial class IntegrationTests
         Assert.DoesNotContain("TemplateKey", secondEditPage);
         Assert.DoesNotContain("RequirementKey", secondEditPage);
         Assert.DoesNotContain("type=\"number\"", secondEditPage);
+        Assert.Contains("Save changes", secondEditPage);
+        Assert.DoesNotContain("Save document", secondEditPage);
+        Assert.DoesNotContain("Use Save document to update", secondEditPage);
 
         var addPayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
         {
@@ -346,6 +373,14 @@ public partial class IntegrationTests
         Assert.Equal("Annual checklist", versions[1].Name);
         var secondVersionId = versions.Single(x => x.TemplateVersion == 2).Id;
         Assert.Equal(3, await db.DocumentRequirementTemplateItems.CountAsync(x => x.DocumentRequirementTemplateId == secondVersionId));
+
+        var versionedIndex = await admin.GetStringAsync("/DocumentRequirementTemplates");
+        Assert.Contains("Current version</span><strong>2</strong>", versionedIndex);
+        Assert.Contains("Versions</span><strong>2</strong>", versionedIndex);
+        Assert.Contains("Documents</span><strong>3</strong>", versionedIndex);
+        Assert.Contains("Previous versions (1)", versionedIndex);
+        Assert.Contains("Version 1", versionedIndex);
+        Assert.Equal(1, versionedIndex.Split("href=\"/DocumentRequirementTemplates/Create\"").Length - 1);
 
         Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetDefault", new() { ["id"] = secondVersionId.ToString() })).StatusCode);
         Assert.Equal(HttpStatusCode.Redirect, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetActive", new() { ["id"] = secondId.ToString(), ["isActive"] = "false" })).StatusCode);

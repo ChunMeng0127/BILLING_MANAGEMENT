@@ -61,7 +61,7 @@
                     <textarea id="definition-description" name="Description" class="form-control" rows="2" maxlength="2000" placeholder="Standard documents normally required from clients for yearly bookkeeping.">@Model.Definition.Description</textarea>
                 </div>
             </div>
-            <p class="hint">You can rename an unused checklist without affecting how its versions are tracked.</p>
+            <p class="hint">Use a reusable checklist name for this service, not a customer name. You can rename an unused checklist without affecting how its versions are tracked.</p>
             <div class="form-actions"><button class="btn btn-outline-primary">Save checklist details</button></div>
         </form>
     }
@@ -161,11 +161,11 @@
                                 </div>
                                 <div><label class="form-label" for="item-description-@item.Id">Description</label><input id="item-description-@item.Id" name="Description" class="form-control" maxlength="2000" value="@(edit?.Description ?? item.Description)" placeholder="Full financial year, all bank accounts" /></div>
                                 <label class="form-check"><input id="include-in-requests-@item.Id" name="IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(includeInNewRequests ? "checked" : null) /><span class="form-check-label">Include in new requests</span></label>
-                                <button class="btn btn-sm btn-outline-primary align-self-end">Save document</button>
+                                <button class="btn btn-sm btn-outline-primary align-self-end">Save changes</button>
                             </div>
                         </form>
                     </td>
-                    <td><span class="hint">Use Save document to update</span></td>
+                    <td></td>
                 }
                 </tr>
             }

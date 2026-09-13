@@ -77,6 +77,7 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         return await InSerializableTransactionAsync(async () =>
         {
             await LockServiceAsync(normalized.ServiceId, cancellationToken);
+            await EnsureUniqueFamilyNameAsync(normalized.ServiceId, normalized.Name, null, cancellationToken);
             var templateKey = await ResolveTemplateKeyAsync(
                 normalized.ServiceId,
                 normalized.TemplateKey,
@@ -177,12 +178,22 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
         var name = NormalizeRequired(input.Name, "Checklist name", 160);
         var description = NormalizeOptional(input.Description, "Checklist description", 2000);
 
-        var template = await GetTrackedTemplateAsync(templateId, cancellationToken);
-        await EnsureUnusedAsync(template.Id, cancellationToken);
-        template.Name = name;
-        template.Description = description;
-        await SaveSingleAsync(cancellationToken);
-        return await GetRequiredAsync(template.Id, cancellationToken);
+        return await InSerializableTransactionAsync(async () =>
+        {
+            var identity = await db.DocumentRequirementTemplates.AsNoTracking()
+                .Where(x => x.Id == templateId)
+                .Select(x => new { x.ServiceId })
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw new BusinessException("The checklist was not found.");
+            await LockServiceAsync(identity.ServiceId, cancellationToken);
+            var template = await GetTrackedTemplateAsync(templateId, cancellationToken);
+            await EnsureUnusedAsync(template.Id, cancellationToken);
+            await EnsureUniqueFamilyNameAsync(template.ServiceId, name, template.TemplateKey, cancellationToken);
+            template.Name = name;
+            template.Description = description;
+            await db.SaveChangesAsync(cancellationToken);
+            return await GetRequiredAsync(template.Id, cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task<DocumentRequirementTemplateItemReadModel> AddItemAsync(
@@ -418,6 +429,22 @@ public sealed class DocumentRequirementTemplateService(AppDbContext db)
     {
         Finance.Require(!await db.DocumentRequests.AsNoTracking().AnyAsync(x => x.DocumentRequirementTemplateId == templateId, cancellationToken),
             "This checklist version has already been used in a document request and can no longer be changed. Create a new version to make changes.");
+    }
+
+    private async Task EnsureUniqueFamilyNameAsync(
+        int serviceId,
+        string name,
+        string? excludedTemplateKey,
+        CancellationToken cancellationToken)
+    {
+        var query = db.DocumentRequirementTemplates.AsNoTracking()
+            .Where(x => x.ServiceId == serviceId);
+        if (excludedTemplateKey is not null)
+            query = query.Where(x => x.TemplateKey != excludedTemplateKey);
+
+        var existingNames = await query.Select(x => x.Name).ToListAsync(cancellationToken);
+        Finance.Require(!existingNames.Any(x => string.Equals(x.Trim(), name, StringComparison.OrdinalIgnoreCase)),
+            "A checklist with this name already exists for this service. Open the existing checklist and create a new version instead.");
     }
 
     private async Task SwitchDefaultWithinTransactionAsync(
