@@ -92,6 +92,10 @@ public partial class IntegrationTests
         await AssertStaffOnly(workerClient);
         var adminIndex = await admin.GetStringAsync("/DocumentRequirementTemplates");
         Assert.Contains("Document Checklists", adminIndex);
+        Assert.Contains("data-nav-group=\"documents\" open", adminIndex);
+        Assert.Contains("Document Collection", adminIndex);
+        Assert.Contains("Work Management", adminIndex);
+        Assert.Contains("Administration", adminIndex);
         Assert.Contains("href=\"/DocumentRequirementTemplates\"", await internalUser.GetStringAsync("/DocumentRequirementTemplates"));
         var createPage = await admin.GetStringAsync("/DocumentRequirementTemplates/Create");
         Assert.Contains("Checklist name", createPage);
@@ -101,6 +105,10 @@ public partial class IntegrationTests
         Assert.Contains("Use as default checklist for this service", createPage);
         Assert.Contains("Bank Statement", createPage);
         Assert.Contains("Other Documents", createPage);
+        Assert.Contains("list=\"checklist-document-options\"", createPage);
+        Assert.DoesNotContain("data-other-document-wrapper", createPage);
+        Assert.DoesNotContain("data-other-document-name", createPage);
+        Assert.DoesNotContain("OtherDocumentName", createPage);
         Assert.Contains("Include in new requests", createPage);
         Assert.DoesNotContain("Request priority", createPage);
         Assert.DoesNotContain("Required?", createPage);
@@ -116,7 +124,6 @@ public partial class IntegrationTests
             bool isDefault = false,
             bool checklistActive = true,
             string documentSelection = "Bank Statement",
-            string? otherDocumentName = null,
             bool includeInNewRequests = true) => new()
         {
             ["ServiceId"] = service.ToString(),
@@ -126,8 +133,7 @@ public partial class IntegrationTests
             ["IsDefault"] = isDefault ? "true" : "false",
             ["Items[0].DocumentSelection"] = documentSelection,
             ["Items[0].Description"] = "Latest bank statement",
-            ["Items[0].IncludeInNewRequests"] = includeInNewRequests ? "true" : "false",
-            ["Items[0].OtherDocumentName"] = otherDocumentName ?? ""
+            ["Items[0].IncludeInNewRequests"] = includeInNewRequests ? "true" : "false"
         };
 
         var invalidCreate = CreateFields(serviceId, "");
@@ -138,8 +144,7 @@ public partial class IntegrationTests
         var invalidOther = CreateFields(
             serviceId,
             "Invalid custom checklist",
-            documentSelection: DocumentChecklistDocumentOptions.OtherDocuments,
-            otherDocumentName: "  ");
+            documentSelection: DocumentChecklistDocumentOptions.OtherDocuments);
         var invalidOtherResponse = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", invalidOther, "/DocumentRequirementTemplates/Create");
         Assert.Equal(HttpStatusCode.OK, invalidOtherResponse.StatusCode);
         Assert.Contains("Enter the document name when Other Documents is selected.", await invalidOtherResponse.Content.ReadAsStringAsync());
@@ -155,8 +160,7 @@ public partial class IntegrationTests
         var customCreate = await PostWithToken(admin, "/DocumentRequirementTemplates/Create", "/DocumentRequirementTemplates/Create", CreateFields(
             serviceId,
             "Custom checklist",
-            documentSelection: DocumentChecklistDocumentOptions.OtherDocuments,
-            otherDocumentName: "  Loan Statement  "));
+            documentSelection: "  Loan Statement  "));
         Assert.Equal(HttpStatusCode.Redirect, customCreate.StatusCode);
         db.ChangeTracker.Clear();
         var customItem = await db.DocumentRequirementTemplateItems
@@ -196,6 +200,10 @@ public partial class IntegrationTests
         Assert.Contains("You can rename an unused checklist without affecting how its versions are tracked.", secondEditPage);
         Assert.Contains("Use as default checklist for this service", secondEditPage);
         Assert.Contains("Include in new requests", secondEditPage);
+        Assert.Contains("list=\"checklist-document-options\"", secondEditPage);
+        Assert.DoesNotContain("data-other-document-wrapper", secondEditPage);
+        Assert.DoesNotContain("data-other-document-name", secondEditPage);
+        Assert.DoesNotContain("OtherDocumentName", secondEditPage);
         Assert.DoesNotContain("Request priority", secondEditPage);
         Assert.DoesNotContain("Required?", secondEditPage);
         Assert.DoesNotContain("Start Work", secondEditPage);
@@ -221,8 +229,8 @@ public partial class IntegrationTests
 
         var addTax = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/AddItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["DocumentSelection"] = DocumentChecklistDocumentOptions.OtherDocuments,
-            ["OtherDocumentName"] = "  Tax report  ", ["Description"] = "Annual tax report", ["IncludeInNewRequests"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["DocumentSelection"] = "  Tax report  ",
+            ["Description"] = "Annual tax report", ["IncludeInNewRequests"] = "true"
         });
         Assert.Equal(HttpStatusCode.Redirect, addTax.StatusCode);
         db.ChangeTracker.Clear();
@@ -301,7 +309,7 @@ public partial class IntegrationTests
 
         Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
         {
-            ["TemplateId"] = secondId.ToString(), ["Id"] = firstItemId.ToString(), ["DocumentSelection"] = "Other Documents", ["OtherDocumentName"] = "Forged", ["IncludeInNewRequests"] = "true"
+            ["TemplateId"] = secondId.ToString(), ["Id"] = firstItemId.ToString(), ["DocumentSelection"] = "Other Documents", ["IncludeInNewRequests"] = "true"
         })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
         {

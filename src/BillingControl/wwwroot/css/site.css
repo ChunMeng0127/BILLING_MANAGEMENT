@@ -117,7 +117,7 @@ p {
   width: var(--sidebar-width);
   flex-direction: column;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
   border-right: 1px solid var(--line);
   background: #fffefa;
   padding: 22px 13px 18px;
@@ -187,6 +187,67 @@ p {
 .sidebar-nav {
   display: grid;
   gap: 3px;
+}
+
+.nav-group {
+  display: block;
+}
+
+.nav-group + .nav-group {
+  margin-top: 7px;
+}
+
+.nav-group-summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 4px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  color: #7a8799;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .85px;
+  line-height: 1.2;
+  list-style: none;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.nav-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.nav-group-summary:hover {
+  background: var(--orange-wash);
+  color: var(--orange-strong);
+}
+
+.nav-group-summary:focus-visible {
+  outline: 3px solid rgb(255 97 21 / 32%);
+  outline-offset: 2px;
+}
+
+.nav-group-chevron {
+  color: #a2adbb;
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 130ms ease, color 130ms ease;
+}
+
+.nav-group:not([open]) .nav-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.nav-group-summary:hover .nav-group-chevron {
+  color: currentColor;
+}
+
+.nav-group-links {
+  padding-top: 3px;
 }
 
 .nav-link {
@@ -430,6 +491,23 @@ html.sidebar-collapsed .brand-copy,
 html.sidebar-collapsed .nav-label,
 html.sidebar-collapsed .nav-text {
   width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.sidebar-collapsed .nav-group-summary {
+  justify-content: center;
+  gap: 0;
+  margin-right: 0;
+  margin-left: 0;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+html.sidebar-collapsed .nav-group-label,
+html.sidebar-collapsed .nav-group-chevron {
+  width: 0;
+  overflow: hidden;
   opacity: 0;
   pointer-events: none;
 }
@@ -1696,10 +1774,21 @@ textarea:focus-visible {
   }
 }
 
+@media (min-width: 901px) and (max-height: 760px) {
+  .sidebar {
+    overflow-y: auto;
+    scrollbar-color: #d9d3c8 transparent;
+    scrollbar-width: thin;
+  }
+}
+
 @media (max-width: 900px) {
   .sidebar {
     width: min(84vw, 300px);
     transform: translateX(-105%);
+    overflow-y: auto;
+    scrollbar-color: #d9d3c8 transparent;
+    scrollbar-width: thin;
     box-shadow: 20px 0 50px rgb(32 24 14 / 14%);
     padding: 22px 13px 18px;
   }

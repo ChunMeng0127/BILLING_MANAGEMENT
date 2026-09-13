@@ -133,7 +133,7 @@ public sealed class DocumentRequirementTemplatesController(
         {
             await templates.UpdateItemForStaffAsync(
                 form.Id,
-                DocumentChecklistDocumentOptions.ResolveDocumentName(form.DocumentSelection, form.OtherDocumentName),
+                DocumentChecklistDocumentOptions.ResolveDocumentName(form.DocumentSelection),
                 form.Description,
                 form.IncludeInNewRequests);
             TempData["Success"] = "Document saved.";
@@ -272,7 +272,7 @@ public sealed class DocumentRequirementTemplatesController(
 
     private static DocumentRequirementTemplateItemInput ToServiceInput(DocumentRequirementTemplateItemForm item) => new(
         null,
-        DocumentChecklistDocumentOptions.ResolveDocumentName(item.DocumentSelection, item.OtherDocumentName),
+        DocumentChecklistDocumentOptions.ResolveDocumentName(item.DocumentSelection),
         item.Description,
         true,
         DocumentRequirementWave.Normal,

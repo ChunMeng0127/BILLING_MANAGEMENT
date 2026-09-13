@@ -51,21 +51,11 @@
             <tbody data-template-rows data-next-index="@Model.Items.Count">
             @for (var i = 0; i < Model.Items.Count; i++)
             {
-                var isOtherDocument = string.Equals(Model.Items[i].DocumentSelection, DocumentChecklistDocumentOptions.OtherDocuments, StringComparison.Ordinal);
                 <tr>
                     <td>
-                        <select name="Items[@i].DocumentSelection" class="form-select" data-document-selection required>
-                            <option value="">Select document</option>
-                            @foreach (var document in standardDocuments)
-                            {
-                                <option value="@document" selected="@(Model.Items[i].DocumentSelection == document ? "selected" : null)">@document</option>
-                            }
-                            <option value="@DocumentChecklistDocumentOptions.OtherDocuments" selected="@(isOtherDocument ? "selected" : null)">@DocumentChecklistDocumentOptions.OtherDocuments</option>
-                        </select>
-                        <div class="mt-2" data-other-document-wrapper hidden="@(isOtherDocument ? null : "hidden")">
-                            <label class="form-label" for="other-document-@i">Other document name</label>
-                            <input id="other-document-@i" name="Items[@i].OtherDocumentName" class="form-control" maxlength="160" value="@Model.Items[i].OtherDocumentName" data-other-document-name disabled="@(!isOtherDocument ? "disabled" : null)" />
-                        </div>
+                        <label class="form-label visually-hidden" for="document-@i">Document</label>
+                        <input id="document-@i" name="Items[@i].DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" value="@Model.Items[i].DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
+                        <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
                     </td>
                     <td><input asp-for="Items[i].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
                     <td class="text-center"><input id="include-in-requests-@i" name="Items[@i].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(Model.Items[i].IncludeInNewRequests ? "checked" : null) /><label class="visually-hidden" for="include-in-requests-@i">Include in new requests</label></td>
@@ -80,24 +70,22 @@
     <template id="template-item-prototype">
         <tr>
             <td>
-                <select name="Items[__index__].DocumentSelection" class="form-select" data-document-selection required>
-                    <option value="">Select document</option>
-                    @foreach (var document in standardDocuments)
-                    {
-                        <option value="@document">@document</option>
-                    }
-                    <option value="@DocumentChecklistDocumentOptions.OtherDocuments">@DocumentChecklistDocumentOptions.OtherDocuments</option>
-                </select>
-                <div class="mt-2" data-other-document-wrapper hidden>
-                    <label class="form-label" for="other-document-__index__">Other document name</label>
-                    <input id="other-document-__index__" name="Items[__index__].OtherDocumentName" class="form-control" maxlength="160" data-other-document-name disabled />
-                </div>
+                <label class="form-label visually-hidden" for="document-__index__">Document</label>
+                <input id="document-__index__" name="Items[__index__].DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" placeholder="Other Documents" autocomplete="off" required />
+                <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
             </td>
             <td><input name="Items[__index__].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
             <td class="text-center"><input name="Items[__index__].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests checked /></td>
             <td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
         </tr>
     </template>
+    <datalist id="checklist-document-options">
+        @foreach (var document in standardDocuments)
+        {
+            <option value="@document"></option>
+        }
+        <option value="@DocumentChecklistDocumentOptions.OtherDocuments"></option>
+    </datalist>
     <div class="form-actions"><button class="btn btn-primary">Create document checklist</button><a class="btn btn-outline-secondary" href="/DocumentRequirementTemplates">Cancel</a></div>
 </form>
 @section Scripts { <script src="~/js/document-templates.js" asp-append-version="true"></script> }

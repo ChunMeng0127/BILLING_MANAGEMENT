@@ -8,7 +8,23 @@
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="app-body">
-@{ var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser); var firm = User.IsInRole(AppRoles.AccountingFirm); var manager = User.IsInRole(AppRoles.Manager); var worker = User.IsInRole(AppRoles.Worker); var masterKind = Context.Request.Query["kind"].ToString(); var accountName = User.Identity?.Name; var accountInitial = string.IsNullOrWhiteSpace(accountName) ? "U" : accountName[..1].ToUpperInvariant(); }
+@{
+    var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser);
+    var firm = User.IsInRole(AppRoles.AccountingFirm);
+    var manager = User.IsInRole(AppRoles.Manager);
+    var worker = User.IsInRole(AppRoles.Worker);
+    var path = Context.Request.Path.Value ?? "";
+    var masterKind = Context.Request.Query["kind"].ToString();
+    var accountName = User.Identity?.Name;
+    var accountInitial = string.IsNullOrWhiteSpace(accountName) ? "U" : accountName[..1].ToUpperInvariant();
+    var homeOpen = path == "/";
+    var billingOpen = path == "/Billing" || path == "/Billing/Schedule" || path.StartsWith("/Invoices", StringComparison.Ordinal);
+    var workOpen = path == "/Work" || path.StartsWith("/Progress", StringComparison.Ordinal) || path == "/Work/Assignments" || path == "/Payments";
+    var documentOpen = path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) || path.StartsWith("/Contacts", StringComparison.Ordinal);
+    var directoryOpen = path == "/Masters" || path.StartsWith("/Engagements", StringComparison.Ordinal);
+    var reportsOpen = path == "/Home/Reports";
+    var administrationOpen = path.StartsWith("/Users", StringComparison.Ordinal);
+}
 @if (User.Identity?.IsAuthenticated == true) {
 <div class="app-frame">
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
@@ -16,25 +32,89 @@
 <span class="brand-mark" aria-hidden="true">B</span>
 <span class="brand-copy"><strong>Billing Control</strong><small>Accounting operations, simplified.</small></span>
 </a>
-<div class="nav-label">WORKSPACE</div>
-<nav class="sidebar-nav" aria-label="Workspace">
-<a class="nav-link @(Context.Request.Path.Value == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
-@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a><a class="nav-link @(Context.Request.Path.Value == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a> }
-@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Invoices") == true ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a> }
-@if (staff || manager || worker) { <a class="nav-link @(Context.Request.Path.Value == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a> }
-@if (staff || manager || worker) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Progress") == true ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a> }
-@if (staff || worker) { <a class="nav-link @(Context.Request.Path.Value == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker assignments</span></a><a class="nav-link @(Context.Request.Path.Value == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker payments</span></a> }
-<a class="nav-link @(Context.Request.Path.Value == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
+<details class="nav-group" data-nav-group="home" @Html.Raw(homeOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Home</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Home">
+<a class="nav-link @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
 </nav>
-<div class="nav-label">DIRECTORY</div>
-<nav class="sidebar-nav" aria-label="Directory">
-@if (staff) { @foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" }) { var label = kind == "Firms" ? "Accounting firms" : kind; var icon = kind switch { "Customers" => "◎", "Services" => "◇", "Firms" => "▣", "Managers" => "◉", _ => "♙" }; <a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == kind ? "active" : "")" href="/Masters?kind=@kind" title="@label"><span class="nav-icon" aria-hidden="true">@icon</span><span class="nav-text">@label</span></a> } }
-@if (staff) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/DocumentRequirementTemplates") == true ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a> }
-@if (staff) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Contacts") == true ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a> }
-@if (firm || manager) { <a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == "Customers" ? "active" : "")" href="/Masters?kind=Customers" title="Customers"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Customers</span></a><a class="nav-link @(Context.Request.Path.Value == "/Masters" && masterKind == "Services" ? "active" : "")" href="/Masters?kind=Services" title="Services"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Services</span></a> }
-@if (staff || firm || manager) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Engagements") == true ? "active" : "")" href="/Engagements" title="Engagements"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">Engagements</span></a> }
-@if (User.IsInRole(AppRoles.Admin)) { <a class="nav-link @(Context.Request.Path.Value?.StartsWith("/Users") == true ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a> }
+</details>
+@if (staff || firm || manager)
+{
+<details class="nav-group" data-nav-group="billing" @Html.Raw(billingOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Billing</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Billing">
+<a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a>
+<a class="nav-link @(path == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a>
+<a class="nav-link @(path.StartsWith("/Invoices", StringComparison.Ordinal) ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a>
 </nav>
+</details>
+}
+@if (staff || manager || worker)
+{
+<details class="nav-group" data-nav-group="work" @Html.Raw(workOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Work Management</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Work Management">
+<a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a>
+<a class="nav-link @(path.StartsWith("/Progress", StringComparison.Ordinal) ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a>
+@if (staff || worker)
+{
+<a class="nav-link @(path == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker assignments</span></a>
+<a class="nav-link @(path == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker payments</span></a>
+}
+</nav>
+</details>
+}
+@if (staff)
+{
+<details class="nav-group" data-nav-group="documents" @Html.Raw(documentOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Document Collection</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Document Collection">
+<a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
+<a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a>
+</nav>
+</details>
+}
+@if (staff || firm || manager)
+{
+<details class="nav-group" data-nav-group="directory" @Html.Raw(directoryOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Directory</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Directory">
+@if (staff)
+{
+@foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" })
+{
+    var label = kind == "Firms" ? "Accounting firms" : kind;
+    var icon = kind switch { "Customers" => "◎", "Services" => "◇", "Firms" => "▣", "Managers" => "◉", _ => "♙" };
+    <a class="nav-link @(path == "/Masters" && masterKind == kind ? "active" : "")" href="/Masters?kind=@kind" title="@label"><span class="nav-icon" aria-hidden="true">@icon</span><span class="nav-text">@label</span></a>
+}
+}
+@if (firm || manager)
+{
+<a class="nav-link @(path == "/Masters" && masterKind == "Customers" ? "active" : "")" href="/Masters?kind=Customers" title="Customers"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Customers</span></a>
+<a class="nav-link @(path == "/Masters" && masterKind == "Services" ? "active" : "")" href="/Masters?kind=Services" title="Services"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Services</span></a>
+}
+@if (staff || firm || manager)
+{
+<a class="nav-link @(path.StartsWith("/Engagements", StringComparison.Ordinal) ? "active" : "")" href="/Engagements" title="Engagements"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">Engagements</span></a>
+}
+</nav>
+</details>
+}
+<details class="nav-group" data-nav-group="reports" @Html.Raw(reportsOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Reports</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Reports">
+<a class="nav-link @(path == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
+</nav>
+</details>
+@if (User.IsInRole(AppRoles.Admin))
+{
+<details class="nav-group" data-nav-group="administration" @Html.Raw(administrationOpen ? "open" : "")>
+<summary class="nav-group-summary"><span class="nav-group-label">Administration</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<nav class="sidebar-nav nav-group-links" aria-label="Administration">
+<a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a>
+</nav>
+</details>
+}
 <div class="sidebar-foot"><span class="live-dot"></span><span class="nav-text">Internal accounting workspace</span></div>
 </aside>
 <button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>

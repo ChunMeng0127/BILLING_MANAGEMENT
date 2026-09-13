@@ -110,18 +110,9 @@
                     <thead><tr><th>Document</th><th>Description</th><th>Include in new requests</th><th></th></tr></thead>
                     <tbody><tr>
                         <td>
-                            <select name="DocumentSelection" class="form-select" data-document-selection required>
-                                <option value="">Select document</option>
-                                @foreach (var document in standardDocuments)
-                                {
-                                    <option value="@document" selected="@(Model.NewItem.DocumentSelection == document ? "selected" : null)">@document</option>
-                                }
-                                <option value="@DocumentChecklistDocumentOptions.OtherDocuments" selected="@(Model.NewItem.DocumentSelection == DocumentChecklistDocumentOptions.OtherDocuments ? "selected" : null)">@DocumentChecklistDocumentOptions.OtherDocuments</option>
-                            </select>
-                            <div class="mt-2" data-other-document-wrapper hidden="@(Model.NewItem.DocumentSelection == DocumentChecklistDocumentOptions.OtherDocuments ? null : "hidden")">
-                                <label class="form-label" for="new-other-document">Other document name</label>
-                                <input id="new-other-document" name="OtherDocumentName" class="form-control" maxlength="160" value="@Model.NewItem.OtherDocumentName" data-other-document-name disabled="@(Model.NewItem.DocumentSelection == DocumentChecklistDocumentOptions.OtherDocuments ? null : "disabled")" />
-                            </div>
+                            <label class="form-label visually-hidden" for="new-document">Document</label>
+                            <input id="new-document" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" value="@Model.NewItem.DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
+                            <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
                         </td>
                         <td><input name="Description" class="form-control" maxlength="2000" value="@Model.NewItem.Description" placeholder="Full financial year, all bank accounts" /></td>
                         <td class="text-center"><input id="new-include-in-requests" name="IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(Model.NewItem.IncludeInNewRequests ? "checked" : null) /><label class="visually-hidden" for="new-include-in-requests">Include in new requests</label></td>
@@ -141,9 +132,7 @@
                 var edit = Model.EditingItem?.Id == item.Id ? Model.EditingItem : null;
                 var existingDocument = DocumentChecklistDocumentOptions.MapExistingDocument(item.Name);
                 var documentSelection = edit?.DocumentSelection ?? existingDocument.Selection;
-                var otherDocumentName = edit?.OtherDocumentName ?? existingDocument.OtherDocumentName;
                 var includeInNewRequests = edit?.IncludeInNewRequests ?? item.IsActive;
-                var isOtherDocument = documentSelection == DocumentChecklistDocumentOptions.OtherDocuments;
                 <tr>
                 @if (Model.IsUsed)
                 {
@@ -167,18 +156,8 @@
                             <div class="form-grid compact">
                                 <div>
                                     <label class="form-label" for="item-document-@item.Id">Document</label>
-                                    <select id="item-document-@item.Id" name="DocumentSelection" class="form-select" data-document-selection required>
-                                        <option value="">Select document</option>
-                                        @foreach (var document in standardDocuments)
-                                        {
-                                            <option value="@document" selected="@(documentSelection == document ? "selected" : null)">@document</option>
-                                        }
-                                        <option value="@DocumentChecklistDocumentOptions.OtherDocuments" selected="@(isOtherDocument ? "selected" : null)">@DocumentChecklistDocumentOptions.OtherDocuments</option>
-                                    </select>
-                                    <div class="mt-2" data-other-document-wrapper hidden="@(isOtherDocument ? null : "hidden")">
-                                        <label class="form-label" for="other-document-@item.Id">Other document name</label>
-                                        <input id="other-document-@item.Id" name="OtherDocumentName" class="form-control" maxlength="160" value="@otherDocumentName" data-other-document-name disabled="@(!isOtherDocument ? "disabled" : null)" />
-                                    </div>
+                                    <input id="item-document-@item.Id" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" value="@documentSelection" placeholder="Other Documents" autocomplete="off" required />
+                                    <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
                                 </div>
                                 <div><label class="form-label" for="item-description-@item.Id">Description</label><input id="item-description-@item.Id" name="Description" class="form-control" maxlength="2000" value="@(edit?.Description ?? item.Description)" placeholder="Full financial year, all bank accounts" /></div>
                                 <label class="form-check"><input id="include-in-requests-@item.Id" name="IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(includeInNewRequests ? "checked" : null) /><span class="form-check-label">Include in new requests</span></label>
@@ -193,5 +172,12 @@
             </tbody>
         </table>
     </div>
+    <datalist id="checklist-document-options">
+        @foreach (var document in standardDocuments)
+        {
+            <option value="@document"></option>
+        }
+        <option value="@DocumentChecklistDocumentOptions.OtherDocuments"></option>
+    </datalist>
     <p class="hint mt-2">Turn this off to keep the item for history but exclude it from future document requests.</p>
 </div>

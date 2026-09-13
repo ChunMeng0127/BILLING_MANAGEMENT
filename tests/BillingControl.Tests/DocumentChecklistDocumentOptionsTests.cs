@@ -7,19 +7,19 @@ public class DocumentChecklistDocumentOptionsTests
     [Fact]
     public void StandardDocumentIsReturnedAsThePersistedName()
     {
-        Assert.Equal("Bank Statement", DocumentChecklistDocumentOptions.ResolveDocumentName(" Bank Statement ", "Ignored"));
+        Assert.Equal("Bank Statement", DocumentChecklistDocumentOptions.ResolveDocumentName(" Bank Statement "));
         Assert.True(DocumentChecklistDocumentOptions.IsStandardDocument("Payroll Report"));
     }
 
     [Fact]
-    public void OtherDocumentNameIsTrimmedAndRequired()
+    public void CustomDocumentNameUsesTheSameFieldAndIsTrimmedAndRequired()
     {
-        Assert.Equal("Loan Statement", DocumentChecklistDocumentOptions.ResolveDocumentName("Other Documents", "  Loan Statement  "));
+        Assert.Equal("Loan Statement", DocumentChecklistDocumentOptions.ResolveDocumentName("  Loan Statement  "));
         var mapping = DocumentChecklistDocumentOptions.MapExistingDocument("Loan Statement");
-        Assert.Equal(DocumentChecklistDocumentOptions.OtherDocuments, mapping.Selection);
-        Assert.Equal("Loan Statement", mapping.OtherDocumentName);
-        Assert.Throws<BusinessException>(() => DocumentChecklistDocumentOptions.ResolveDocumentName("Other Documents", "  "));
-        Assert.Throws<BusinessException>(() => DocumentChecklistDocumentOptions.ResolveDocumentName("Other Documents", new string('x', 161)));
+        Assert.Equal("Loan Statement", mapping.Selection);
+        Assert.Null(mapping.OtherDocumentName);
+        Assert.Throws<BusinessException>(() => DocumentChecklistDocumentOptions.ResolveDocumentName(DocumentChecklistDocumentOptions.OtherDocuments));
+        Assert.Throws<BusinessException>(() => DocumentChecklistDocumentOptions.ResolveDocumentName(new string('x', 161)));
     }
 
     [Fact]

@@ -72,11 +72,9 @@ public sealed class DocumentRequirementTemplateItemForm
     public int Id { get; set; }
     public int TemplateId { get; set; }
 
-    [Required(ErrorMessage = "Select a document.")]
-    public string? DocumentSelection { get; set; }
-
+    [Required(ErrorMessage = "Enter or select a document.")]
     [StringLength(160, ErrorMessage = "Document name must be 160 characters or fewer.")]
-    public string? OtherDocumentName { get; set; }
+    public string? DocumentSelection { get; set; }
 
     [StringLength(2000)]
     public string? Description { get; set; }
