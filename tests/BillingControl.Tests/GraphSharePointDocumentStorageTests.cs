@@ -106,6 +106,100 @@ public sealed class GraphSharePointDocumentStorageTests
     }
 
     [Fact]
+    public async Task StoreImmutableAsync_recovers_accepted_chunk_after_416_by_querying_session_status()
+    {
+        var bytes = Enumerable.Range(0, 2 * ChunkSize)
+            .Select(value => (byte)(value % 251))
+            .ToArray();
+        var request = CreateRequest("ambiguous-large-content", bytes);
+        var handler = new RecordingHandler();
+        handler.Enqueue(JsonResponse(HttpStatusCode.OK, "{\"value\":[]}"));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            "{\"uploadUrl\":\"https://upload.test/session-416\"}"));
+        handler.Enqueue((_, _) => Task.FromException<HttpResponseMessage>(
+            new HttpRequestException("simulated ambiguous transport failure")));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            "{\"nextExpectedRanges\":[\"327680-\"]}"));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.Created,
+            ItemJson("item-416", "etag-upload", request.ByteLength, request.MimeType)));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            ItemJsonWithListItem("item-416", "etag-upload", request.ByteLength, request.MimeType, "24")));
+        handler.Enqueue(JsonResponse(HttpStatusCode.OK, "{}"));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            ItemJson("item-416", "etag-final", request.ByteLength, request.MimeType)));
+
+        var provider = CreateProvider(
+            handler,
+            resumableThresholdBytes: 1,
+            maxAttempts: 2);
+        var reference = await provider.StoreImmutableAsync(request);
+
+        Assert.Equal("item-416", reference.ObjectId);
+        Assert.Equal(9, handler.Requests.Count);
+        Assert.Equal("bytes 0-327679/655360", handler.Requests[2].Headers["Content-Range"]);
+        Assert.Equal("bytes 0-327679/655360", handler.Requests[3].Headers["Content-Range"]);
+        Assert.Equal(handler.Requests[2].Body, handler.Requests[3].Body);
+        Assert.Equal(HttpMethod.Get, handler.Requests[4].Method);
+        Assert.Equal("https://upload.test/session-416", handler.Requests[4].Uri.AbsoluteUri);
+        Assert.False(handler.Requests[4].Headers.ContainsKey("Authorization"));
+        Assert.Equal("bytes 327680-655359/655360", handler.Requests[5].Headers["Content-Range"]);
+        Assert.False(handler.Requests[5].Headers.ContainsKey("Authorization"));
+        Assert.Equal(
+            3,
+            handler.Requests.Count(item =>
+                item.Method == HttpMethod.Put &&
+                string.Equals(item.Uri.Host, "upload.test", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal(
+            1,
+            handler.Requests.Count(item =>
+                item.Method == HttpMethod.Post &&
+                item.Uri.AbsolutePath.Contains("createUploadSession", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("not-a-range")]
+    [InlineData("655361-")]
+    public async Task StoreImmutableAsync_rejects_malformed_or_invalid_416_session_status(
+        string nextExpectedRange)
+    {
+        var bytes = Enumerable.Range(0, 2 * ChunkSize)
+            .Select(value => (byte)(value % 251))
+            .ToArray();
+        var request = CreateRequest("invalid-416-status", bytes);
+        var handler = new RecordingHandler();
+        handler.Enqueue(JsonResponse(HttpStatusCode.OK, "{\"value\":[]}"));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            "{\"uploadUrl\":\"https://upload.test/session-invalid-416\"}"));
+        handler.Enqueue(new HttpResponseMessage(HttpStatusCode.RequestedRangeNotSatisfiable));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            JsonSerializer.Serialize(new { nextExpectedRanges = new[] { nextExpectedRange } })));
+
+        var provider = CreateProvider(
+            handler,
+            resumableThresholdBytes: 1,
+            maxAttempts: 2);
+
+        await Assert.ThrowsAsync<DocumentStorageValidationException>(() =>
+            provider.StoreImmutableAsync(request));
+
+        Assert.Equal(4, handler.Requests.Count);
+        Assert.Equal(HttpMethod.Get, handler.Requests[3].Method);
+        Assert.False(handler.Requests[3].Headers.ContainsKey("Authorization"));
+        Assert.DoesNotContain(
+            handler.Requests,
+            item => item.Uri.Host.Equals("upload.test", StringComparison.OrdinalIgnoreCase) &&
+                    item.Method == HttpMethod.Post);
+    }
+
+    [Fact]
     public async Task GetMetadataAsync_reads_immutable_metadata_from_the_selected_list_field()
     {
         var request = CreateRequest("metadata-content");
@@ -139,6 +233,82 @@ public sealed class GraphSharePointDocumentStorageTests
             "/v1.0/drives/drive-id/items/item-2",
             handler.Requests[0].Uri.AbsolutePath);
         Assert.Contains("expand=fields", handler.Requests[1].Uri.Query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetMetadataAsync_accepts_equivalent_guid_metadata_list_id_formatting()
+    {
+        var listId = "8a7e4c10-4c9b-4b55-a6b6-5a6b1b8c9d10";
+        var request = CreateRequest("guid-list-content");
+        var handler = new RecordingHandler();
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            ItemJsonWithListItem(
+                "item-guid-list",
+                "etag-guid-list",
+                request.ByteLength,
+                request.MimeType,
+                "25",
+                listId: $"{{{listId.ToUpperInvariant()}}}")));
+        handler.Enqueue(JsonResponse(HttpStatusCode.OK, FieldsJson(request)));
+
+        var provider = CreateProvider(
+            handler,
+            metadataListId: listId.ToLowerInvariant());
+        var metadata = await provider.GetMetadataAsync(
+            Reference("item-guid-list", "etag-guid-list"));
+
+        Assert.NotNull(metadata);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task GetMetadataAsync_rejects_item_from_different_metadata_list_before_field_read()
+    {
+        var request = CreateRequest("mismatched-list-content");
+        var handler = new RecordingHandler();
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            ItemJsonWithListItem(
+                "item-wrong-list",
+                "etag-wrong-list",
+                request.ByteLength,
+                request.MimeType,
+                "26",
+                listId: "different-list-id")));
+        var provider = CreateProvider(handler);
+
+        await Assert.ThrowsAsync<DocumentStorageValidationException>(() =>
+            provider.GetMetadataAsync(Reference("item-wrong-list", "etag-wrong-list")));
+
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task StoreImmutableAsync_rejects_item_from_different_metadata_list_before_patch()
+    {
+        var request = CreateRequest("mismatched-upload-list");
+        var handler = new RecordingHandler();
+        handler.Enqueue(JsonResponse(HttpStatusCode.OK, "{\"value\":[]}"));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.Created,
+            ItemJson("item-wrong-upload-list", "etag-upload", request.ByteLength, request.MimeType)));
+        handler.Enqueue(JsonResponse(
+            HttpStatusCode.OK,
+            ItemJsonWithListItem(
+                "item-wrong-upload-list",
+                "etag-upload",
+                request.ByteLength,
+                request.MimeType,
+                "27",
+                listId: "different-list-id")));
+        var provider = CreateProvider(handler);
+
+        await Assert.ThrowsAsync<DocumentStorageValidationException>(() =>
+            provider.StoreImmutableAsync(request));
+
+        Assert.Equal(3, handler.Requests.Count);
+        Assert.DoesNotContain(handler.Requests, item => item.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -421,7 +591,8 @@ public sealed class GraphSharePointDocumentStorageTests
         HttpMessageHandler handler,
         long resumableThresholdBytes = 10 * 1024 * 1024,
         int maxAttempts = 3,
-        Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
+        Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
+        string metadataListId = "list-id")
     {
         var client = new HttpClient(handler)
         {
@@ -433,7 +604,7 @@ public sealed class GraphSharePointDocumentStorageTests
             SiteId = "site-id",
             DriveId = "drive-id",
             RootFolderItemId = "folder-id",
-            MetadataListId = "list-id",
+            MetadataListId = metadataListId,
             MetadataFieldInternalName = "BillingControlMetadata",
             ResumableUploadThresholdBytes = resumableThresholdBytes,
             UploadChunkSizeBytes = ChunkSize,
@@ -512,6 +683,7 @@ public sealed class GraphSharePointDocumentStorageTests
         long size,
         string mimeType,
         string listItemId,
+        string listId = "list-id",
         string name = "billing-control-artifact-test.bin")
         => JsonSerializer.Serialize(new Dictionary<string, object?>
         {
@@ -528,7 +700,7 @@ public sealed class GraphSharePointDocumentStorageTests
             ["sharepointIds"] = new Dictionary<string, string?>
             {
                 ["listItemId"] = listItemId,
-                ["listId"] = "list-id"
+                ["listId"] = listId
             },
             ["listItem"] = new Dictionary<string, string?>
             {
@@ -581,6 +753,10 @@ public sealed class GraphSharePointDocumentStorageTests
 
         public void Enqueue(HttpResponseMessage response)
             => steps.Enqueue((_, _) => Task.FromResult(response));
+
+        public void Enqueue(
+            Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> step)
+            => steps.Enqueue(step);
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,

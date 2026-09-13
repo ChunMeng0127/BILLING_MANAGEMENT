@@ -367,6 +367,7 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
         var session = await ReadUploadSessionAsync(sessionResponse, cancellationToken);
         var uploadUrl = ValidateUploadUrl(session.UploadUrl!);
         var nextOffset = 0L;
+        var rangeRecoveryAttempts = 0;
         await using var input = spool.OpenRead();
 
         while (nextOffset < request.ByteLength)
@@ -413,22 +414,32 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
                     throw new GraphUploadSessionExpiredException();
                 }
 
+                if (chunkResponse.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
+                {
+                    if (rangeRecoveryAttempts >= configured.MaxAttempts)
+                    {
+                        throw new GraphStorageOperationException(
+                            "Microsoft Graph did not provide a stable upload-session range.",
+                            mayHaveBeenAccepted: true);
+                    }
+
+                    rangeRecoveryAttempts++;
+                    chunkResponse.Dispose();
+                    var progress = await QueryUploadSessionStatusAsync(
+                        uploadUrl,
+                        cancellationToken);
+                    nextOffset = ResolveNextExpectedOffset(
+                        progress.NextExpectedRanges!,
+                        request.ByteLength);
+                    continue;
+                }
+
                 if (chunkResponse.StatusCode == HttpStatusCode.Accepted)
                 {
                     var progress = await ReadUploadProgressAsync(chunkResponse, cancellationToken);
-                    if (progress.NextExpectedRanges!.Count == 0)
-                    {
-                        nextOffset = request.ByteLength;
-                    }
-                    else
-                    {
-                        nextOffset = ParseNextExpectedOffset(progress.NextExpectedRanges);
-                        if (nextOffset < 0 || nextOffset > request.ByteLength)
-                        {
-                            throw new DocumentStorageValidationException(
-                                "Microsoft Graph returned an invalid upload-session range.");
-                        }
-                    }
+                    nextOffset = ResolveNextExpectedOffset(
+                        progress.NextExpectedRanges!,
+                        request.ByteLength);
 
                     continue;
                 }
@@ -583,6 +594,7 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
         SerializedMetadata serializedMetadata,
         CancellationToken cancellationToken)
     {
+        EnsureConfiguredMetadataList(item);
         var listItemId = RequireListItemId(item);
         var configured = GetOptions();
         var uri = BuildGraphUri(
@@ -609,6 +621,7 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
         GraphDriveItem item,
         CancellationToken cancellationToken)
     {
+        EnsureConfiguredMetadataList(item);
         var listItemId = RequireListItemId(item);
         var configured = GetOptions();
         var uri = BuildGraphUri(
@@ -973,6 +986,24 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
         }
     }
 
+    private async Task<UploadProgress> QueryUploadSessionStatusAsync(
+        Uri uploadUrl,
+        CancellationToken cancellationToken)
+    {
+        using var response = await SendGraphRequestAsync(
+            () => new HttpRequestMessage(HttpMethod.Get, uploadUrl),
+            includeBearerToken: false,
+            mayHaveBeenAccepted: true,
+            cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw new GraphUploadSessionExpiredException();
+        }
+
+        EnsureSuccess(response);
+        return await ReadUploadProgressAsync(response, cancellationToken);
+    }
+
     private async Task<ChildrenPage> ReadChildrenPageAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
@@ -1224,20 +1255,96 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
         return listItemId.Trim();
     }
 
-    private static long ParseNextExpectedOffset(IReadOnlyList<string> ranges)
+    private void EnsureConfiguredMetadataList(GraphDriveItem item)
     {
-        var first = ranges
-            .Where(range => !string.IsNullOrWhiteSpace(range))
-            .Select(range => range.Split('-', 2)[0])
-            .FirstOrDefault();
-        if (first is null ||
-            !long.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out var offset))
+        var returnedListId = item.SharePointIds?.ListId;
+        if (string.IsNullOrWhiteSpace(returnedListId))
         {
             throw new DocumentStorageValidationException(
-            "Microsoft Graph returned an empty upload-session range.");
+                "Microsoft Graph did not return the SharePoint list ID required for metadata.");
         }
 
-        return offset;
+        var configuredListId = GetOptions().MetadataListId;
+        if (!SharePointListIdsEqual(returnedListId, configuredListId))
+        {
+            throw new DocumentStorageValidationException(
+                "The Graph item does not belong to the configured SharePoint metadata list.");
+        }
+    }
+
+    private static bool SharePointListIdsEqual(string left, string right)
+    {
+        var leftValue = left.Trim();
+        var rightValue = right.Trim();
+        if (Guid.TryParse(leftValue, out var leftGuid) &&
+            Guid.TryParse(rightValue, out var rightGuid))
+        {
+            return leftGuid == rightGuid;
+        }
+
+        return string.Equals(leftValue, rightValue, StringComparison.Ordinal);
+    }
+
+    private static long ResolveNextExpectedOffset(
+        IReadOnlyList<string> ranges,
+        long totalLength)
+    {
+        if (ranges.Count == 0)
+        {
+            return totalLength;
+        }
+
+        var nextOffset = ParseNextExpectedOffset(ranges, totalLength);
+        if (nextOffset < 0 || nextOffset > totalLength)
+        {
+            throw new DocumentStorageValidationException(
+                "Microsoft Graph returned an invalid upload-session range.");
+        }
+
+        return nextOffset;
+    }
+
+    private static long ParseNextExpectedOffset(
+        IReadOnlyList<string> ranges,
+        long totalLength)
+    {
+        long? firstOffset = null;
+        foreach (var range in ranges)
+        {
+            if (string.IsNullOrWhiteSpace(range))
+            {
+                throw new DocumentStorageValidationException(
+                    "Microsoft Graph returned an invalid upload-session range.");
+            }
+
+            var parts = range.Trim().Split('-', 2);
+            if (parts.Length != 2 ||
+                !long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var start) ||
+                start < 0)
+            {
+                throw new DocumentStorageValidationException(
+                    "Microsoft Graph returned an invalid upload-session range.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(parts[1]) &&
+                (!long.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var end) ||
+                 end < start ||
+                 end >= totalLength))
+            {
+                throw new DocumentStorageValidationException(
+                    "Microsoft Graph returned an invalid upload-session range.");
+            }
+
+            firstOffset ??= start;
+        }
+
+        if (firstOffset is null)
+        {
+            throw new DocumentStorageValidationException(
+                "Microsoft Graph returned an empty upload-session range.");
+        }
+
+        return firstOffset.Value;
     }
 
     private Uri ValidateUploadUrl(string value)
@@ -1364,6 +1471,8 @@ public sealed class GraphSharePointDocumentStorage : IDocumentStorage
 
     private sealed class GraphSharePointIds
     {
+        public string? ListId { get; set; }
+
         public string? ListItemId { get; set; }
     }
 
