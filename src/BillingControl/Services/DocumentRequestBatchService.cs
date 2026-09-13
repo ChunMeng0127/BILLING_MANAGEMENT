@@ -138,8 +138,7 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
         CancellationToken cancellationToken)
     {
         var contact = await GetActiveContactAsync(contactId, cancellationToken);
-        var candidates = await CandidateQuery(contactId)
-            .Where(x => requestIds.Contains(x.DocumentRequestId))
+        var candidates = await CandidateQuery(contactId, requestIds)
             .ToListAsync(cancellationToken);
 
         Finance.Require(candidates.Count == requestIds.Count, IneligibleSelectionMessage);
@@ -185,8 +184,11 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
         return contact;
     }
 
-    private IQueryable<DocumentBatchCandidateReadModel> CandidateQuery(int contactId) =>
-        db.DocumentRequests
+    private IQueryable<DocumentBatchCandidateReadModel> CandidateQuery(
+        int contactId,
+        IReadOnlyCollection<int>? requestIds = null)
+    {
+        var query = db.DocumentRequests
             .AsNoTracking()
             .Where(x => x.Status == DocumentRequestStatus.ReadyToSend)
             // Revision is the authoritative current-request ordering. This
@@ -195,7 +197,12 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
             .Where(x => !db.DocumentRequests.Any(later =>
                 later.WorkItemId == x.WorkItemId && later.Revision > x.Revision))
             .Where(x => x.WorkItem.BillingRecord.Engagement.Customer.ContactCustomerLinks
-                .Any(link => link.ContactId == contactId && link.IsActive))
+                .Any(link => link.ContactId == contactId && link.IsActive));
+
+        if (requestIds is not null)
+            query = query.Where(x => requestIds.Contains(x.Id));
+
+        return query
             .OrderBy(x => x.WorkItem.BillingRecord.Engagement.Customer.Name)
             .ThenBy(x => x.WorkItem.BillingRecord.EngagementId)
             .ThenBy(x => x.WorkItemId)
