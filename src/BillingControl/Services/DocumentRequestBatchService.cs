@@ -30,6 +30,29 @@ public sealed record DocumentBatchCandidateReadModel(
     int TotalItemCount);
 
 /// <summary>
+/// An unresolved client-facing item selected from the current eligible
+/// request set for a deterministic next-action workload preview.
+/// </summary>
+public sealed record DocumentBatchNextActionItemReadModel(
+    int DocumentRequestId,
+    int Revision,
+    int DocumentRequestItemId,
+    int CustomerId,
+    string CustomerName,
+    int ServiceId,
+    string ServiceName,
+    string RequirementName,
+    bool Required,
+    int DisplayOrder,
+    DocumentRequestItemStatus Status)
+{
+    // These aliases keep the read model clear to callers that use the
+    // domain's longer names without duplicating data or changing persistence.
+    public int RequestRevision => Revision;
+    public bool IsRequired => Required;
+}
+
+/// <summary>
 /// Request facts included in a pre-conversation batch preview.
 /// </summary>
 public sealed record DocumentBatchPreviewRequestReadModel(
@@ -79,6 +102,26 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
     {
         await GetActiveContactAsync(contactId, cancellationToken);
         return await CandidateQuery(contactId).ToListAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Returns up to five unresolved client-facing items from the current
+    /// Phase 5A-eligible requests. DisplayOrder is the normal workload rank;
+    /// customer/request/item identity only breaks ties. This is read-only and
+    /// does not create a batch or infer any communication authorization.
+    /// </summary>
+    public async Task<IReadOnlyList<DocumentBatchNextActionItemReadModel>> GetNextActionItemsAsync(
+        int contactId,
+        int limit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        Finance.Require(limit >= 1 && limit <= 5,
+            "The next-action item limit must be between 1 and 5.");
+
+        await GetActiveContactAsync(contactId, cancellationToken);
+        return await NextActionItemQuery(contactId)
+            .Take(limit)
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>
@@ -188,21 +231,7 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
         int contactId,
         IReadOnlyCollection<int>? requestIds = null)
     {
-        var query = db.DocumentRequests
-            .AsNoTracking()
-            .Where(x => x.Status == DocumentRequestStatus.ReadyToSend)
-            // Revision is the authoritative current-request ordering. This
-            // also keeps malformed or manually imported historical rows out of
-            // a preview even if their status was not terminalized correctly.
-            .Where(x => !db.DocumentRequests.Any(later =>
-                later.WorkItemId == x.WorkItemId && later.Revision > x.Revision))
-            .Where(x => x.WorkItem.BillingRecord.Engagement.Customer.ContactCustomerLinks
-                .Any(link => link.ContactId == contactId && link.IsActive));
-
-        if (requestIds is not null)
-            query = query.Where(x => requestIds.Contains(x.Id));
-
-        return query
+        return CurrentEligibleRequestQuery(contactId, requestIds)
             .OrderBy(x => x.WorkItem.BillingRecord.Engagement.Customer.Name)
             .ThenBy(x => x.WorkItem.BillingRecord.EngagementId)
             .ThenBy(x => x.WorkItemId)
@@ -222,6 +251,58 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
                                       item.Status != DocumentRequestItemStatus.NotRequired &&
                                       item.Status != DocumentRequestItemStatus.Waived),
                 x.Items.Count()));
+    }
+
+    private IQueryable<DocumentBatchNextActionItemReadModel> NextActionItemQuery(
+        int contactId)
+    {
+        return CurrentEligibleRequestQuery(contactId)
+            .SelectMany(request => request.Items)
+            .Where(item => item.Status != DocumentRequestItemStatus.Received &&
+                           item.Status != DocumentRequestItemStatus.NotRequired &&
+                           item.Status != DocumentRequestItemStatus.Waived)
+            // DisplayOrder is the only normal workload rank. Wave is retained
+            // on the snapshot for history but must not alter this ordering.
+            .OrderBy(item => item.DisplayOrder)
+            .ThenBy(item => item.DocumentRequest.WorkItem.BillingRecord.Engagement.Customer.Name)
+            .ThenBy(item => item.DocumentRequest.WorkItem.BillingRecord.Engagement.CustomerId)
+            .ThenBy(item => item.DocumentRequest.WorkItem.BillingRecord.EngagementId)
+            .ThenBy(item => item.DocumentRequest.WorkItemId)
+            .ThenBy(item => item.DocumentRequestId)
+            .ThenBy(item => item.Id)
+            .Select(item => new DocumentBatchNextActionItemReadModel(
+                item.DocumentRequestId,
+                item.DocumentRequest.Revision,
+                item.Id,
+                item.DocumentRequest.WorkItem.BillingRecord.Engagement.CustomerId,
+                item.DocumentRequest.WorkItem.BillingRecord.Engagement.Customer.Name,
+                item.DocumentRequest.WorkItem.BillingRecord.Engagement.ServiceId,
+                item.DocumentRequest.WorkItem.BillingRecord.Engagement.Service.Name,
+                item.RequirementName,
+                item.IsRequired,
+                item.DisplayOrder,
+                item.Status));
+    }
+
+    private IQueryable<DocumentRequest> CurrentEligibleRequestQuery(
+        int contactId,
+        IReadOnlyCollection<int>? requestIds = null)
+    {
+        var query = db.DocumentRequests
+            .AsNoTracking()
+            .Where(x => x.Status == DocumentRequestStatus.ReadyToSend)
+            // Revision is the authoritative current-request ordering. This
+            // also keeps malformed or manually imported historical rows out of
+            // a preview even if their status was not terminalized correctly.
+            .Where(x => !db.DocumentRequests.Any(later =>
+                later.WorkItemId == x.WorkItemId && later.Revision > x.Revision))
+            .Where(x => x.WorkItem.BillingRecord.Engagement.Customer.ContactCustomerLinks
+                .Any(link => link.ContactId == contactId && link.IsActive));
+
+        if (requestIds is not null)
+            query = query.Where(x => requestIds.Contains(x.Id));
+
+        return query;
     }
 
     private static int[] NormalizeRequestIds(IEnumerable<int> requestIds)
@@ -272,4 +353,5 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
         int ActiveWhatsAppAddressCount,
         int ActiveOptedInWhatsAppAddressCount,
         bool HasActiveDoNotWhatsAppAddress);
+
 }
