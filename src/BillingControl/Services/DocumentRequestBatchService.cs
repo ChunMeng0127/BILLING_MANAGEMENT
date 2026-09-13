@@ -196,6 +196,10 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
                 later.WorkItemId == x.WorkItemId && later.Revision > x.Revision))
             .Where(x => x.WorkItem.BillingRecord.Engagement.Customer.ContactCustomerLinks
                 .Any(link => link.ContactId == contactId && link.IsActive))
+            .OrderBy(x => x.WorkItem.BillingRecord.Engagement.Customer.Name)
+            .ThenBy(x => x.WorkItem.BillingRecord.EngagementId)
+            .ThenBy(x => x.WorkItemId)
+            .ThenBy(x => x.Id)
             .Select(x => new DocumentBatchCandidateReadModel(
                 x.Id,
                 x.Revision,
@@ -210,11 +214,7 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
                 x.Items.Count(item => item.Status != DocumentRequestItemStatus.Received &&
                                       item.Status != DocumentRequestItemStatus.NotRequired &&
                                       item.Status != DocumentRequestItemStatus.Waived),
-                x.Items.Count()))
-            .OrderBy(x => x.CustomerName)
-            .ThenBy(x => x.EngagementId)
-            .ThenBy(x => x.WorkItemId)
-            .ThenBy(x => x.DocumentRequestId);
+                x.Items.Count()));
 
     private static int[] NormalizeRequestIds(IEnumerable<int> requestIds)
     {
