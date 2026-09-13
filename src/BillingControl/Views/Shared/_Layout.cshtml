@@ -20,7 +20,7 @@
     var homeOpen = path == "/";
     var billingOpen = path == "/Billing" || path == "/Billing/Schedule" || path.StartsWith("/Invoices", StringComparison.Ordinal);
     var workOpen = path == "/Work" || path.StartsWith("/Progress", StringComparison.Ordinal) || path == "/Work/Assignments" || path == "/Payments";
-    var documentOpen = path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) || path.StartsWith("/Contacts", StringComparison.Ordinal);
+    var documentOpen = path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) || path.StartsWith("/Contacts", StringComparison.Ordinal) || path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal);
     var directoryOpen = path == "/Masters" || path.StartsWith("/Engagements", StringComparison.Ordinal);
     var reportsOpen = path == "/Home/Reports";
     var administrationOpen = path.StartsWith("/Users", StringComparison.Ordinal);
@@ -71,6 +71,7 @@
 <nav class="sidebar-nav nav-group-links" aria-label="Document Collection">
 <a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
 <a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a>
+<a class="nav-link @(path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal) ? "active" : "")" href="/WhatsAppConversations" title="WhatsApp Conversations"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">WhatsApp Conversations</span></a>
 </nav>
 </details>
 }
