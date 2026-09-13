@@ -11,7 +11,7 @@
 ## Current Project Status
 
 **Current Phase:** Phase 2 — Manual-UAT usability correction — Document Checklists
-**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2 technical implementation is complete, but manual UAT found terminology and usability issues in the document checklist surface; this bounded correction is technically complete and repeat Phase 2 manual acceptance remains pending. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3 is technically complete and Phase 3C is technically approved against `9abee34fed787be17d640a2d38c0b1ef8c27f645`; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending and is paused until this Phase 2 correction is accepted. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete against `1bacdcce5ad9e517cce9504bd611cf57de238597`; authoritative final Phase 4C CI run `34691387968` passed. Phase 4 manual UI acceptance remains pending. Phase 5 has not started.
+**Status:** Phase 1 is approved/closed and complete. Phase 1A and Phase 1B are approved/closed. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; its final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2 technical implementation is complete, but manual UAT found terminology and usability issues in the document checklist surface; this bounded correction is technically complete and repeat Phase 2 manual acceptance remains pending. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3 is technically complete and Phase 3C is technically approved against `9abee34fed787be17d640a2d38c0b1ef8c27f645`; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance remains pending and is paused until this Phase 2 correction is accepted. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete against `1bacdcce5ad9e517cce9504bd611cf57de238597`; authoritative final Phase 4C CI run `34691387968` passed. Phase 4 manual UI acceptance remains pending. Approved Parallel Wave 1 is integrated on `codex/integration-wave1` from stable `84ccd0e81a5321f8feaafb8697646232994270b6`: Phase 5A is technically complete against `402b67307609677b0662611d07e9bc9315a41f55`, Phase 7A is technically complete against `399ed3f266557841e3ba01392266c5326535c3e5`, and Phase 8A is technically complete against `93583981c1d15b50a2eee128128d26e3ac11d1cd`. Phases 5, 7, and 8 remain open for their later sub-phases.
 **Last Reviewed:** 2026-09-13
 
 ### Completed
@@ -43,6 +43,7 @@
 - Phase 4A Contact/PIC persistence and domain model is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. It adds the Contact, ContactWhatsAppAddress, ContactCustomerLink and append-only history entities, consent enum, restrictive EF mappings, PostgreSQL constraints/indexes, one additive migration, and focused PostgreSQL persistence/invariant tests. No ContactService, MVC UI, controller, navigation, WhatsApp provider integration, or Phase 5 work was added.
 - Phase 4B Contact/PIC application service is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. It adds deterministic E.164 and preferred-language helpers, untracked read models, audited Contact/address/customer-link operations, expected-version and PostgreSQL transaction/locking protections, and focused helper/service tests. No migration, MVC UI, controller, navigation, provider integration, conversation model, batching, or Phase 5 work was added.
 - Phase 4C Contact/PIC management UI and technical closure is complete and awaiting ChatGPT review. Authoritative CI run `34691387968` for `1bacdcce5ad9e517cce9504bd611cf57de238597` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. It adds the staff-only MVC management surface, service-backed contact/address/consent/customer-link forms, read-only audit/history presentation, staff navigation, and focused PostgreSQL-backed MVC regression coverage. No schema change, provider integration, WhatsApp send behavior, or Phase 5 work was added.
+- Approved Parallel Wave 1 is integrated on `codex/integration-wave1` from stable `84ccd0e81a5321f8feaafb8697646232994270b6` using normal `--no-ff` merges in the order Lane A (`402b67307609677b0662611d07e9bc9315a41f55`), Lane B (`399ed3f266557841e3ba01392266c5326535c3e5`), and Lane C (`93583981c1d15b50a2eee128128d26e3ac11d1cd`). The three technically complete sub-phases are recorded below; later Phase 5, 7, and 8 work remains deferred.
 
 ### Current Work
 
@@ -60,18 +61,20 @@
 - Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed. Phase 3 manual UI acceptance is paused until the Phase 2 correction is accepted.
 - Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed.
 - Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed.
-- Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete against `1bacdcce5ad9e517cce9504bd611cf57de238597`; authoritative final Phase 4C CI run `34691387968` passed. Phase 4 manual UI acceptance remains pending. Phase 5 has not started.
+- Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete against `1bacdcce5ad9e517cce9504bd611cf57de238597`; authoritative final Phase 4C CI run `34691387968` passed. Phase 4 manual UI acceptance remains pending. Phase 5A, Phase 7A, and Phase 8A are technically complete in the approved integration wave; later sub-phases remain open.
+- Approved Parallel Wave 1 is staged on `codex/integration-wave1` from the unchanged stable base `84ccd0e81a5321f8feaafb8697646232994270b6`; Phase 5A, Phase 7A, and Phase 8A are technically complete only. Their later sub-phases remain open and require separate approval.
 
 ### Outstanding
 
 - Repeat manual user UI acceptance for the Phase 2 Document Checklists correction remains outstanding. Phase 2 is not yet marked fully approved/closed.
 - Phase 3 technical regression/review is complete; final manual Phase 3 UI acceptance remains outstanding and paused until Phase 2 is accepted.
 - Phase 4 technical work is complete through 4C, but final manual Phase 4 UI acceptance remains outstanding until the user can access the system.
+- Phase 5A, Phase 7A, and Phase 8A technical units are complete in the approved integration wave; Phase 5, Phase 7, and Phase 8 are not fully complete, and the later provider/integration work remains outstanding.
 - Current Meta account eligibility, current messaging/template/service-window rules, and actual SharePoint tenant permissions still require environment verification when the relevant integration phase begins.
 
 ### Next Step
 
-Complete repeat manual Phase 2 acceptance for the Document Checklists correction first, then resume Phase 3 manual UI acceptance and later Phase 4 manual UI acceptance when the user can access the application. Do not mark manual acceptance fully closed by technical checks alone, do not mark Phase 4 fully closed before that acceptance, and do not start Phase 5.
+Complete repeat manual Phase 2 acceptance for the Document Checklists correction first, then resume Phase 3 manual UI acceptance and later Phase 4 manual UI acceptance when the user can access the application. Do not mark manual acceptance fully closed by technical checks alone, do not mark Phase 4 fully closed before that acceptance, do not mark Phases 5, 7, or 8 fully complete from these sub-phases, and do not implement Phase 6 in this integration checkpoint.
 
 ---
 
@@ -1323,19 +1326,26 @@ Phase 4A does not implement ContactService, MVC UI, controllers, navigation, Wha
 
 ### Phase 5 — Request Batching
 
-Implement deterministic batch eligibility/confidentiality and preview using Contact + conversation/scope placeholders or approved data available by that phase. No provider send yet.
+Phase 5 is split into bounded sub-phases. **Phase 5A — Deterministic pre-conversation request-batching eligibility and preview — technically complete** against approved Lane A SHA `402b67307609677b0662611d07e9bc9315a41f55`. It considers only an active Contact with an active ContactCustomerLink and current `ReadyToSend` requests, supports a PIC linked to multiple customers, and exposes informational WhatsApp/consent facts while keeping `RequiresConversationAuthorization` true. It creates no persistent batch, infers no send authorization, performs no provider integration, and performs no state mutation. Later Phase 5 sub-phases remain deferred.
 
-### Phase 6 — Request Waves / Client Workload Control
+### Phase 6 — Client Workload / Next-Action Selection
 
-Implement Start Work / Normal / Later / Optional ranking and default 3–5 client-facing next-action selection.
+Select approximately 3–5 unresolved client-facing documents primarily from:
+
+1. deterministic request eligibility;
+2. checklist `DisplayOrder`;
+3. current request/item state;
+4. applicable hold/snooze/conversation rules when those later exist.
+
+Do not require staff to maintain a separate request-priority field. `DocumentRequirementWave` remains retained internally for historical/schema compatibility unless separately removed later, but it is not the normal staff sequencing mechanism. Do not implement Phase 6 in this integration checkpoint.
 
 ### Phase 7 — SharePoint Integration Foundation
 
-Implement storage abstraction/reference model first, then SharePoint provider, then retry/reconciliation/test path as separate focused sub-phases.
+Phase 7 is split into bounded sub-phases. **Phase 7A — Storage abstraction and deterministic fake foundation — technically complete** against approved Lane B SHA `399ed3f266557841e3ba01392266c5326535c3e5`. It provides provider-neutral `IDocumentStorage`, immutable store/reference models, caller-owned streams, `ContainerId` + `ObjectId` identity, idempotent `LogicalStorageKey` behavior, a deterministic fake, and Exists/Missing/reconciliation testing. It adds no Graph/provider implementation, persistence, or migration. Later SharePoint provider and operational sub-phases remain deferred.
 
 ### Phase 8 — WhatsApp Infrastructure
 
-Implement provider abstraction/config, webhook authenticity/inbox, outbound outbox/worker and provider fakes in small sub-phases. Manual/test sending only.
+Phase 8 is split into bounded sub-phases. **Phase 8A — Provider abstraction and deterministic fake — technically complete** against approved Lane C SHA `93583981c1d15b50a2eee128128d26e3ac11d1cd`. It provides the `IWhatsAppProvider` boundary, Direct/Group destinations, runtime capability model, immutable text/template content, Accepted/DefinitelyRejected/Ambiguous outcomes, `RetryAfter` support, and a deterministic fake that deliberately does not deduplicate `LogicalMessageKey`. It adds no Meta HTTP, webhook, inbox/outbox, persistent conversation model, persistence, or migration. Later WhatsApp infrastructure and conversation sub-phases remain deferred.
 
 ### Phase 9 — WhatsApp Group / Direct Conversation Management
 
@@ -1412,6 +1422,20 @@ Rules:
 - External-integration, database, concurrency, security, migration and reliability work are split more aggressively.
 - Never combine sub-phases merely to reduce the number of Codex runs.
 - ChatGPT defines/controls architecture and reviews actual diffs; Codex implements the approved small unit; GitHub remains the source of truth.
+
+### Accelerated parallel development mode
+
+Development may use multiple isolated Git worktrees/branches for dependency-independent work.
+
+Rules:
+
+- Every parallel lane uses its own worktree.
+- `codex/accounting-mvp` remains the stable integration branch.
+- Parallel lane branches do not merge themselves.
+- ChatGPT reviews lane outputs before integration.
+- One staging integration branch combines an approved wave.
+- Only one lane/integration step may modify EF migrations/model snapshot at a time.
+- External integration, security, and concurrency boundaries remain separately reviewed.
 
 ---
 
@@ -1502,7 +1526,7 @@ The feature is mature when Billing Control can reliably do this:
 
 ## 20. Next Action
 
-**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete and awaiting ChatGPT review; Phase 4 remains pending final manual user UI acceptance. Phase 5 has not started.**
+**Phase 0 is approved and complete. Phase 1A is approved/closed. Phase 1B is approved/closed against `745ec1c7e5f69890530514209a3a7e7309cfcaf9`. Phase 1C is approved/closed against `78dd826e2d23941e59677836a9693180ae71f2fe`; Phase 1 is complete. Phase 2A is approved/closed against `f9f81bb22ab78e5986a102f071b9f7f5d03f471a`; final GitHub Actions run `34663809281` passed. Phase 2B is technically approved against `09208aba77477db413fdf31dbf387864ca2773dd`; GitHub Actions run `34667389872` passed. Phase 2C technical regression/review is approved/complete. Phase 2 remains pending final manual user UI acceptance, and the user authorized continuing development before that acceptance. Phase 3A is approved/closed against `b4153697ed225aa9374814d5beb10e0555d2fdb9`; final GitHub Actions run `34672665351` passed. Phase 3B is approved/closed against `727b90f0f4f9acd3c55095c363083668966dcc20`; final Phase 3B CI run `34680092068` passed. Phase 3C is technically approved; authoritative final GitHub Actions run `34681009278` passed, but Phase 3 remains pending final manual user UI acceptance until the user can access the system. Phase 4A is approved/closed against `d0d1372590273f79ed0e71cf9d35f82e72a0fb75`; final Phase 4A GitHub Actions run `34685185274` passed. Phase 4B is approved/closed against `ca089782b6a563adb5bed24d0436dab755f55444`; authoritative final Phase 4B GitHub Actions run `34687641605` passed. Phase 4C is technically complete and awaiting ChatGPT review; Phase 4 remains pending final manual user UI acceptance. Approved Parallel Wave 1 is integrated on `codex/integration-wave1` from stable `84ccd0e81a5321f8feaafb8697646232994270b6`: Phase 5A, Phase 7A, and Phase 8A are technically complete only; Phases 5, 7, and 8 remain open for later sub-phases.**
 
 The approved Phase 1 split is: 1A — Core Document Domain Types; 1B — EF Core persistence, relationships, constraints, indexes and migration; 1C — PostgreSQL integration, invariant and migration tests. Phase 1A, 1B and 1C are approved/closed; Phase 1 is complete.
 
@@ -1536,7 +1560,7 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - A further bounded Phase 2 manual-UAT correction keeps the existing navigation URLs, role visibility, and authorization while grouping the sidebar into collapsible sections, automatically opening the current section and allowing only short-screen/mobile overflow. Document checklist entry now uses one datalist-backed document field: standard documents remain selectable, while **Other Documents** is the hint for typing a custom name in that same field; existing standard and custom names continue to load and persist correctly.
 - This bounded Phase 2 manual-UAT polish fully hides the desktop sidebar when collapsed so the page expands without a persistent icon rail, labels the toggle **Hide navigation**/**Show navigation**, removes developer-oriented checklist-item wording, and presents one checklist family card per service/family with its latest version and compact previous-version history. A single page-level **+ New checklist** creates a family, while **Create new version** remains the versioning action. Checklist names are described as reusable service-level names rather than customer names, and the application service rejects new or unused-family-renamed duplicate visible names within the same service with a clear staff message; existing historical duplicate families remain readable and unchanged. No migration, schema, generated-key, ordering, versioning, or Phase 3/4/5 behavior changed. Phase 2 repeat manual UI acceptance remains pending.
 - Another bounded Phase 2 manual-UAT correction replaces the native datalist for checklist documents with the reusable Billing Control searchable dropdown convention. The fixed-choice **Searchable Select** foundation rejects arbitrary final values, while the **Searchable Combobox** mode supports intentional custom document names. The current value opens first with all alternatives available immediately, contains-style case-insensitive filtering and keyboard/accessibility behavior are supported, dynamic rows use the same component, and the existing server-side validation remains authoritative. Standard choices now use **Payment Voucher** and **Official Receipt** prospectively; historical **Payment / Receipt** values are not rewritten and remain readable/editable under existing version rules. No schema, migration, data update, Phase 3, Phase 4, or Phase 5 change was introduced. Phase 2 repeat manual UI acceptance remains pending.
-- No migration or schema change was introduced, and no Phase 3 or Phase 4 implementation was modified. Phase 2 repeat manual acceptance remains pending; Phase 3 manual UI acceptance remains pending and paused; Phase 4 technical implementation and manual acceptance status remain unchanged; Phase 5 has not started.
+- No migration or schema change was introduced, and no Phase 3 or Phase 4 implementation was modified. Phase 2 repeat manual acceptance remains pending; Phase 3 manual UI acceptance remains pending and paused; Phase 4 technical implementation and manual acceptance status remain unchanged. Phase 5A, Phase 7A, and Phase 8A are technically complete in the approved integration wave; later Phase 5, 7, and 8 sub-phases remain open.
 
 ### Phase 3A document request service record
 
@@ -1578,7 +1602,34 @@ Phase 2A adds only the deterministic `DocumentRequirementTemplateService` and it
 - `src/BillingControl/Models/ContactViewModels.cs` adds focused MVC form/read-page models. `src/BillingControl/Views/Contacts/Index.cshtml`, `Create.cshtml`, `Edit.cshtml`, and `Details.cshtml` provide active-by-default search, contact profile editing, address/primary/active operations, separate consent actions, customer relationships, ordered histories, safe concurrency feedback, and concise non-authorization wording. ProviderWaId is displayed read-only when present.
 - `src/BillingControl/Views/Shared/_Layout.cshtml` adds the Contacts / PICs entry only for Admin and InternalUser; `src/BillingControl/Services/Finance.cs` adds the approved human-friendly consent labels. No new frontend framework, JavaScript dependency, migration, or schema change was introduced.
 - `tests/BillingControl.Tests/ContactUiTests.cs` adds focused PostgreSQL-backed MVC coverage for staff authorization/navigation, service-backed contact/address/primary/consent/link operations, canonical phone search and presentation formatting, consent evidence/history retention, inactive opt-out safety, durable link reuse, stale versions, CSRF, GET non-mutation, malformed/foreign IDs, ProviderWaId read-only presentation, and child/financial isolation.
-- No Phase 4A or Phase 4B defect was found. GitHub Actions run `34691387968` for `1bacdcce5ad9e517cce9504bd611cf57de238597` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 4C is technically complete and awaiting ChatGPT review; Phase 4 remains pending final manual UI acceptance. Phase 5 has not started. Phase 2 repeat manual user UI acceptance remains pending and Phase 3 manual UI acceptance is paused until Phase 2 is accepted.
+- No Phase 4A or Phase 4B defect was found. GitHub Actions run `34691387968` for `1bacdcce5ad9e517cce9504bd611cf57de238597` passed the PostgreSQL 17 suite, JavaScript checks, Docker image build, and production Compose HTTPS smoke. Phase 4C is technically complete and awaiting ChatGPT review; Phase 4 remains pending final manual UI acceptance. Phase 5A is technically complete in the approved Parallel Wave 1; later Phase 5 work remains open. Phase 2 repeat manual user UI acceptance remains pending and Phase 3 manual UI acceptance is paused until Phase 2 is accepted.
+
+### Phase 5A request-batching eligibility and preview record
+
+- `src/BillingControl/Services/DocumentRequestBatchService.cs` adds deterministic, read-only pre-conversation request-batching eligibility and preview. It considers only an active Contact with an active ContactCustomerLink and current `ReadyToSend` requests, supports a PIC linked to multiple customers, and returns informational WhatsApp/consent facts without treating them as authorization.
+- The preview keeps `RequiresConversationAuthorization` true, creates no persistent `DocumentRequestBatch`, infers no send authorization, performs no provider integration, and does not mutate request, item, contact, consent, conversation, or financial/workflow state.
+- `tests/BillingControl.Tests/DocumentRequestBatchServiceTests.cs` covers active Contact/link eligibility, current ReadyToSend filtering, multi-customer PIC grouping, deterministic ordering, informational WhatsApp/consent facts, authorization remaining required, missing/inactive cases, and read-only/financial isolation.
+- Phase 5A is technically complete against approved Lane A SHA `402b67307609677b0662611d07e9bc9315a41f55`. Phase 5 remains open for later authorization, persistence, provider, and send sub-phases.
+
+### Phase 7A document storage abstraction record
+
+- `src/BillingControl/Storage/IDocumentStorage.cs`, `DocumentStorageModels.cs`, `DocumentStorageExceptions.cs`, and `src/BillingControl/Services/DeterministicInMemoryDocumentStorage.cs` provide the provider-neutral storage boundary, immutable store/reference models, caller-owned streams, `ContainerId` + `ObjectId` identity, idempotent `LogicalStorageKey` behavior, and deterministic fake behavior.
+- The abstraction supports `Exists`/`Missing` and reconciliation-oriented metadata checks while retaining caller ownership of input streams. A reused logical key with different immutable content or metadata is a deterministic conflict; the fake does not perform external storage calls.
+- `tests/BillingControl.Tests/DocumentStorageTests.cs` covers validation, caller-owned streams, store/reference immutability, idempotent logical-key reuse, conflict detection, Exists/Missing results, metadata mismatch, and deterministic reconciliation behavior.
+- Phase 7A is technically complete against approved Lane B SHA `399ed3f266557841e3ba01392266c5326535c3e5`. It contains no Microsoft Graph/provider implementation, persistence, migration, or registration change. Phase 7 remains open for later SharePoint integration and operational sub-phases.
+
+### Phase 8A WhatsApp provider abstraction record
+
+- `src/BillingControl/Services/WhatsApp/WhatsAppProviderContracts.cs` defines the provider-neutral `IWhatsAppProvider` boundary, Direct/Group destinations, runtime capability model, immutable text/template content, and `Accepted`, `DefinitelyRejected`, and `Ambiguous` outcomes with `RetryAfter` support.
+- `src/BillingControl/Services/WhatsApp/DeterministicFakeWhatsAppProvider.cs` provides deterministic fake outcomes and deliberately does not deduplicate `LogicalMessageKey`, leaving idempotency policy to the later application boundary.
+- `tests/BillingControl.Tests/WhatsAppProviderTests.cs` covers destination/content validation, runtime capabilities, deterministic outcomes, retry metadata, immutable snapshots, and the deliberate non-deduplication behavior.
+- Phase 8A is technically complete against approved Lane C SHA `93583981c1d15b50a2eee128128d26e3ac11d1cd`. It contains no Meta HTTP integration, webhook, inbox/outbox, persistent conversation model, persistence, or migration. Phase 8 remains open for later infrastructure and conversation sub-phases.
+
+### Approved Parallel Wave 1 integration checkpoint
+
+- `codex/integration-wave1` was created from stable `codex/accounting-mvp` at `84ccd0e81a5321f8feaafb8697646232994270b6` after origin verification. Lane A, Lane B, and Lane C were merged in that order with normal `--no-ff` branch merges and no substantive merge conflict.
+- The combined wave preserves the boundaries above: no new migration, `AppDbContext` schema change, EF model snapshot change, `Program.cs` provider/storage registration, SharePoint Graph implementation, Meta network integration, webhook, inbox/outbox, persistent conversation model, persistent `DocumentRequestBatch` behavior, or Phase 9+ implementation was introduced.
+- `codex/accounting-mvp` remains the stable branch and is not merged or updated by this checkpoint. The integration branch requires review before any merge into stable.
 
 ---
 
