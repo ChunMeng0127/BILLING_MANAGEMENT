@@ -222,6 +222,7 @@ public sealed class DocumentRequestBatchService(AppDbContext db)
                                       item.Status != DocumentRequestItemStatus.NotRequired &&
                                       item.Status != DocumentRequestItemStatus.Waived),
                 x.Items.Count()));
+    }
 
     private static int[] NormalizeRequestIds(IEnumerable<int> requestIds)
     {
