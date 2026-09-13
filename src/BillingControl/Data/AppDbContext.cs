@@ -319,6 +319,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.NormalizedE164).IsUnique().HasFilter("\"IsActive\" = TRUE");
         b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.ContactId).IsUnique().HasFilter("\"IsActive\" = TRUE AND \"IsPrimary\" = TRUE");
         b.Entity<ContactWhatsAppAddress>().HasIndex(x => x.ProviderWaId);
+        b.Entity<ContactWhatsAppAddress>().HasAlternateKey(x => new { x.ContactId, x.Id });
         b.Entity<ContactWhatsAppAddress>().HasOne(x => x.Contact).WithMany(x => x.Addresses)
             .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ContactWhatsAppAddress>().ToTable(t =>
@@ -438,7 +439,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
         b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.Contact).WithMany()
             .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.ContactWhatsAppAddress).WithMany()
-            .HasForeignKey(x => x.ContactWhatsAppAddressId).OnDelete(DeleteBehavior.Restrict);
+            .HasPrincipalKey(x => new { x.ContactId, x.Id })
+            .HasForeignKey(x => new { x.ContactId, x.ContactWhatsAppAddressId })
+            .OnDelete(DeleteBehavior.Restrict);
         b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.BusinessParty).WithMany()
             .HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.Manager).WithMany()

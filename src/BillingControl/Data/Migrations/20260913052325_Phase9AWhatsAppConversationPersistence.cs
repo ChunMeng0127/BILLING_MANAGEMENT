@@ -12,6 +12,11 @@ namespace BillingControl.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddUniqueConstraint(
+                name: "AK_ContactWhatsAppAddresses_ContactId_Id",
+                table: "ContactWhatsAppAddresses",
+                columns: new[] { "ContactId", "Id" });
+
             migrationBuilder.CreateTable(
                 name: "WhatsAppConversations",
                 columns: table => new
@@ -176,9 +181,9 @@ namespace BillingControl.Data.Migrations
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_WhatsAppConversationParticipants_ContactWhatsAppAddresses_C~",
-                        column: x => x.ContactWhatsAppAddressId,
+                        columns: x => new { x.ContactId, x.ContactWhatsAppAddressId },
                         principalTable: "ContactWhatsAppAddresses",
-                        principalColumn: "Id",
+                        principalColumns: new[] { "ContactId", "Id" },
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_WhatsAppConversationParticipants_Contacts_ContactId",
@@ -328,14 +333,9 @@ namespace BillingControl.Data.Migrations
                 column: "BusinessPartyId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_WhatsAppConversationParticipants_ContactId",
+                name: "IX_WhatsAppConversationParticipants_ContactId_ContactWhatsAppA~",
                 table: "WhatsAppConversationParticipants",
-                column: "ContactId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_WhatsAppConversationParticipants_ContactWhatsAppAddressId",
-                table: "WhatsAppConversationParticipants",
-                column: "ContactWhatsAppAddressId");
+                columns: new[] { "ContactId", "ContactWhatsAppAddressId" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_WhatsAppConversationParticipants_ManagerId",
@@ -416,6 +416,10 @@ namespace BillingControl.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "WhatsAppConversations");
+
+            migrationBuilder.DropUniqueConstraint(
+                name: "AK_ContactWhatsAppAddresses_ContactId_Id",
+                table: "ContactWhatsAppAddresses");
         }
     }
 }

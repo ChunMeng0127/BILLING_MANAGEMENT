@@ -306,6 +306,69 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task ContactParticipantAddressMustBelongToTheSameContact()
+    {
+        await using var db = await Fresh();
+        var mismatchConversation = await AddGroupConversationAsync(db, "participant-contact-address-mismatch");
+        var matchingConversation = await AddGroupConversationAsync(db, "participant-contact-address-match");
+        var contactOnlyConversation = await AddGroupConversationAsync(db, "participant-contact-address-omitted");
+        var contactA = await AddContactAsync(db, "participant-contact-a");
+        var addressA = await AddContactAddressAsync(db, contactA.Id, "+60139000008");
+        var contactB = await AddContactAsync(db, "participant-contact-b");
+        var addressB = await AddContactAddressAsync(db, contactB.Id, "+60139000009");
+
+        var ownershipForeignKey = Assert.Single(
+            db.Model.FindEntityType(typeof(WhatsAppConversationParticipant))!.GetForeignKeys(),
+            foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(ContactWhatsAppAddress));
+        Assert.Equal(
+            new[] { nameof(WhatsAppConversationParticipant.ContactId), nameof(WhatsAppConversationParticipant.ContactWhatsAppAddressId) },
+            ownershipForeignKey.Properties.Select(property => property.Name));
+        Assert.Equal(
+            new[] { nameof(ContactWhatsAppAddress.ContactId), nameof(ContactWhatsAppAddress.Id) },
+            ownershipForeignKey.PrincipalKey.Properties.Select(property => property.Name));
+        Assert.Equal(DeleteBehavior.Restrict, ownershipForeignKey.DeleteBehavior);
+
+        await using (var mismatch = Db())
+        {
+            mismatch.WhatsAppConversationParticipants.Add(new WhatsAppConversationParticipant
+            {
+                WhatsAppConversationId = mismatchConversation.Id,
+                ParticipantKind = WhatsAppParticipantKind.Contact,
+                ContactId = contactA.Id,
+                ContactWhatsAppAddressId = addressB.Id,
+                JoinedAt = ConversationTestTime
+            });
+            await AssertDocumentPersistenceFailure(() => mismatch.SaveChangesAsync());
+        }
+
+        await using (var matching = Db())
+        {
+            matching.WhatsAppConversationParticipants.Add(new WhatsAppConversationParticipant
+            {
+                WhatsAppConversationId = matchingConversation.Id,
+                ParticipantKind = WhatsAppParticipantKind.Contact,
+                ContactId = contactA.Id,
+                ContactWhatsAppAddressId = addressA.Id,
+                JoinedAt = ConversationTestTime
+            });
+            await matching.SaveChangesAsync();
+        }
+
+        await using (var contactOnly = Db())
+        {
+            contactOnly.WhatsAppConversationParticipants.Add(new WhatsAppConversationParticipant
+            {
+                WhatsAppConversationId = contactOnlyConversation.Id,
+                ParticipantKind = WhatsAppParticipantKind.Contact,
+                ContactId = contactB.Id,
+                ContactWhatsAppAddressId = null,
+                JoinedAt = ConversationTestTime
+            });
+            await contactOnly.SaveChangesAsync();
+        }
+    }
+
+    [PostgresFact]
     public async Task ParticipantActiveMappingsAndProviderKeysHaveHistoricalDuplicateProtection()
     {
         await using var db = await Fresh();

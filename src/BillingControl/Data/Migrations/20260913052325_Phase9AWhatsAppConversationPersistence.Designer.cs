@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace BillingControl.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260913044442_Phase9AWhatsAppConversationPersistence")]
+    [Migration("20260913052325_Phase9AWhatsAppConversationPersistence")]
     partial class Phase9AWhatsAppConversationPersistence
     {
         /// <inheritdoc />
@@ -2796,11 +2796,9 @@ namespace BillingControl.Data.Migrations
 
                     b.HasIndex("BusinessPartyId");
 
-                    b.HasIndex("ContactId");
-
-                    b.HasIndex("ContactWhatsAppAddressId");
-
                     b.HasIndex("ManagerId");
+
+                    b.HasIndex("ContactId", "ContactWhatsAppAddressId");
 
                     b.HasIndex("WhatsAppConversationId", "AppUserId")
                         .IsUnique()
@@ -3914,11 +3912,6 @@ namespace BillingControl.Data.Migrations
                         .HasForeignKey("ContactId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("BillingControl.Models.ContactWhatsAppAddress", "ContactWhatsAppAddress")
-                        .WithMany()
-                        .HasForeignKey("ContactWhatsAppAddressId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("BillingControl.Models.Manager", "Manager")
                         .WithMany()
                         .HasForeignKey("ManagerId")
@@ -3929,6 +3922,12 @@ namespace BillingControl.Data.Migrations
                         .HasForeignKey("WhatsAppConversationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("BillingControl.Models.ContactWhatsAppAddress", "ContactWhatsAppAddress")
+                        .WithMany()
+                        .HasForeignKey("ContactId", "ContactWhatsAppAddressId")
+                        .HasPrincipalKey("ContactId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("AppUser");
 
