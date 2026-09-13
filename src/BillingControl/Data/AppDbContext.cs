@@ -49,6 +49,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     public DbSet<ContactStatusHistory> ContactStatusHistories => Set<ContactStatusHistory>();
     public DbSet<ContactWhatsAppAddressHistory> ContactWhatsAppAddressHistories => Set<ContactWhatsAppAddressHistory>();
     public DbSet<ContactCustomerLinkHistory> ContactCustomerLinkHistories => Set<ContactCustomerLinkHistory>();
+    public DbSet<WhatsAppConversation> WhatsAppConversations => Set<WhatsAppConversation>();
+    public DbSet<WhatsAppConversationParticipant> WhatsAppConversationParticipants => Set<WhatsAppConversationParticipant>();
+    public DbSet<WhatsAppConversationEngagementScope> WhatsAppConversationEngagementScopes => Set<WhatsAppConversationEngagementScope>();
+    public DbSet<WhatsAppConversationHistory> WhatsAppConversationHistories => Set<WhatsAppConversationHistory>();
+    public DbSet<WhatsAppConversationParticipantHistory> WhatsAppConversationParticipantHistories => Set<WhatsAppConversationParticipantHistory>();
+    public DbSet<WhatsAppConversationEngagementScopeHistory> WhatsAppConversationEngagementScopeHistories => Set<WhatsAppConversationEngagementScopeHistory>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -395,6 +401,132 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
             "CK_ContactCustomerLinkHistory_Text",
             "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0"));
 
+        b.Entity<WhatsAppConversation>().Property(x => x.ProviderName).HasMaxLength(80).IsRequired();
+        b.Entity<WhatsAppConversation>().Property(x => x.BusinessEndpointKey).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppConversation>().Property(x => x.ProviderAccountReference).HasMaxLength(254);
+        b.Entity<WhatsAppConversation>().Property(x => x.ProviderConversationKey).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppConversation>().HasIndex(x => new { x.ProviderName, x.BusinessEndpointKey, x.ProviderConversationKey }).IsUnique();
+        b.Entity<WhatsAppConversation>().HasIndex(x => new { x.BusinessEndpointKey, x.DirectContactWhatsAppAddressId }).IsUnique()
+            .HasFilter("\"Kind\" = 0 AND \"Status\" <> 1 AND \"DirectContactWhatsAppAddressId\" IS NOT NULL");
+        b.Entity<WhatsAppConversation>().HasOne(x => x.DirectContactWhatsAppAddress).WithMany()
+            .HasForeignKey(x => x.DirectContactWhatsAppAddressId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversation>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversation_Kind", "\"Kind\" IN (0, 1)");
+            t.HasCheckConstraint("CK_WhatsAppConversation_Status", "\"Status\" IN (0, 1, 2)");
+            t.HasCheckConstraint("CK_WhatsAppConversation_References", "length(btrim(\"ProviderName\")) > 0 AND length(btrim(\"BusinessEndpointKey\")) > 0 AND length(btrim(\"ProviderConversationKey\")) > 0 AND (\"ProviderAccountReference\" IS NULL OR length(btrim(\"ProviderAccountReference\")) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppConversation_AuthorizationVersion", "\"AuthorizationVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversation_DirectAddress", "\"Kind\" <> 0 OR \"DirectContactWhatsAppAddressId\" IS NOT NULL");
+            t.HasCheckConstraint("CK_WhatsAppConversation_GroupNoDirectAddress", "\"Kind\" <> 1 OR \"DirectContactWhatsAppAddressId\" IS NULL");
+        });
+
+        b.Entity<WhatsAppConversationParticipant>().Property(x => x.ProviderParticipantKey).HasMaxLength(254);
+        b.Entity<WhatsAppConversationParticipant>().Property(x => x.NormalizedE164).HasMaxLength(16);
+        b.Entity<WhatsAppConversationParticipant>().Property(x => x.DisplayNameSnapshot).HasMaxLength(254);
+        b.Entity<WhatsAppConversationParticipant>().HasIndex(x => new { x.WhatsAppConversationId, x.ContactId }).IsUnique()
+            .HasFilter("\"IsActive\" = TRUE AND \"ContactId\" IS NOT NULL");
+        b.Entity<WhatsAppConversationParticipant>().HasIndex(x => new { x.WhatsAppConversationId, x.BusinessPartyId }).IsUnique()
+            .HasFilter("\"IsActive\" = TRUE AND \"BusinessPartyId\" IS NOT NULL");
+        b.Entity<WhatsAppConversationParticipant>().HasIndex(x => new { x.WhatsAppConversationId, x.ManagerId }).IsUnique()
+            .HasFilter("\"IsActive\" = TRUE AND \"ManagerId\" IS NOT NULL");
+        b.Entity<WhatsAppConversationParticipant>().HasIndex(x => new { x.WhatsAppConversationId, x.AppUserId }).IsUnique()
+            .HasFilter("\"IsActive\" = TRUE AND \"AppUserId\" IS NOT NULL");
+        b.Entity<WhatsAppConversationParticipant>().HasIndex(x => new { x.WhatsAppConversationId, x.ProviderParticipantKey }).IsUnique()
+            .HasFilter("\"IsActive\" = TRUE AND \"ProviderParticipantKey\" IS NOT NULL");
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.WhatsAppConversation).WithMany(x => x.Participants)
+            .HasForeignKey(x => x.WhatsAppConversationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.Contact).WithMany()
+            .HasForeignKey(x => x.ContactId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.ContactWhatsAppAddress).WithMany()
+            .HasForeignKey(x => x.ContactWhatsAppAddressId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.BusinessParty).WithMany()
+            .HasForeignKey(x => x.BusinessPartyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.Manager).WithMany()
+            .HasForeignKey(x => x.ManagerId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().HasOne(x => x.AppUser).WithMany()
+            .HasForeignKey(x => x.AppUserId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipant>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_Kind", "\"ParticipantKind\" IN (0, 1, 2, 3, 4, 5)");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_Identity", "(\"ParticipantKind\" = 0 AND \"ContactId\" IS NOT NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 1 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NOT NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 2 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NOT NULL AND \"AppUserId\" IS NULL) OR (\"ParticipantKind\" = 3 AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NOT NULL) OR ((\"ParticipantKind\" = 4 OR \"ParticipantKind\" = 5) AND \"ContactId\" IS NULL AND \"ContactWhatsAppAddressId\" IS NULL AND \"BusinessPartyId\" IS NULL AND \"ManagerId\" IS NULL AND \"AppUserId\" IS NULL)");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_References", "\"ProviderParticipantKey\" IS NULL OR length(btrim(\"ProviderParticipantKey\")) > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_NormalizedE164", "\"NormalizedE164\" IS NULL OR \"NormalizedE164\" ~ '^\\+[1-9][0-9]{0,14}$'");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_DisplayName", "\"DisplayNameSnapshot\" IS NULL OR length(btrim(\"DisplayNameSnapshot\")) > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_Lifecycle", "(\"IsActive\" AND \"LeftAt\" IS NULL) OR (NOT \"IsActive\" AND \"LeftAt\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipant_Dates", "\"LeftAt\" IS NULL OR \"LeftAt\" >= \"JoinedAt\"");
+        });
+
+        b.Entity<WhatsAppConversationEngagementScope>().Property(x => x.ApprovedByActor).HasMaxLength(254).IsRequired();
+        b.Entity<WhatsAppConversationEngagementScope>().Property(x => x.ApprovalReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScope>().Property(x => x.RevokedByActor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScope>().Property(x => x.RevocationReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScope>().HasIndex(x => new { x.WhatsAppConversationId, x.EngagementId }).IsUnique();
+        b.Entity<WhatsAppConversationEngagementScope>().HasOne(x => x.WhatsAppConversation).WithMany(x => x.EngagementScopes)
+            .HasForeignKey(x => x.WhatsAppConversationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationEngagementScope>().HasOne(x => x.Engagement).WithMany()
+            .HasForeignKey(x => x.EngagementId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationEngagementScope>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScope_ApprovedVersion", "\"ApprovedAuthorizationVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScope_ApprovalFacts", "length(btrim(\"ApprovedByActor\")) > 0 AND (\"ApprovalReason\" IS NULL OR length(btrim(\"ApprovalReason\")) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScope_RevocationFacts", "(\"IsActive\" AND \"RevokedAt\" IS NULL AND \"RevokedByActor\" IS NULL AND \"RevocationReason\" IS NULL) OR (NOT \"IsActive\" AND \"RevokedAt\" IS NOT NULL AND \"RevokedByActor\" IS NOT NULL AND length(btrim(\"RevokedByActor\")) > 0 AND (\"RevocationReason\" IS NULL OR length(btrim(\"RevocationReason\")) > 0))");
+        });
+
+        b.Entity<WhatsAppConversationHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<WhatsAppConversationHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<WhatsAppConversationHistory>().HasIndex(x => new { x.WhatsAppConversationId, x.OccurredAt, x.Id });
+        b.Entity<WhatsAppConversationHistory>().HasOne(x => x.WhatsAppConversation).WithMany(x => x.History)
+            .HasForeignKey(x => x.WhatsAppConversationId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversationHistory_Status", "(\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN (0, 1, 2)) AND \"NewStatus\" IN (0, 1, 2)");
+            t.HasCheckConstraint("CK_WhatsAppConversationHistory_Versions", "(\"PreviousAuthorizationVersion\" IS NULL OR \"PreviousAuthorizationVersion\" > 0) AND \"NewAuthorizationVersion\" > 0 AND ((\"PreviousStatus\" IS NULL AND \"PreviousAuthorizationVersion\" IS NULL) OR (\"PreviousStatus\" IS NOT NULL AND \"PreviousAuthorizationVersion\" IS NOT NULL))");
+            t.HasCheckConstraint("CK_WhatsAppConversationHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+
+        b.Entity<WhatsAppConversationParticipantHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<WhatsAppConversationParticipantHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationParticipantHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationParticipantHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<WhatsAppConversationParticipantHistory>().HasIndex(x => new { x.WhatsAppConversationParticipantId, x.OccurredAt, x.Id });
+        b.Entity<WhatsAppConversationParticipantHistory>().HasOne(x => x.WhatsAppConversationParticipant).WithMany(x => x.History)
+            .HasForeignKey(x => x.WhatsAppConversationParticipantId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationParticipantHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipantHistory_PreviousLifecycle", "(\"PreviousIsActive\" IS NULL AND \"PreviousJoinedAt\" IS NULL AND \"PreviousLeftAt\" IS NULL) OR (\"PreviousIsActive\" AND \"PreviousJoinedAt\" IS NOT NULL AND \"PreviousLeftAt\" IS NULL) OR (NOT \"PreviousIsActive\" AND \"PreviousJoinedAt\" IS NOT NULL AND \"PreviousLeftAt\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipantHistory_NewLifecycle", "(\"NewIsActive\" AND \"NewLeftAt\" IS NULL) OR (NOT \"NewIsActive\" AND \"NewLeftAt\" IS NOT NULL)");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipantHistory_Dates", "\"NewLeftAt\" IS NULL OR \"NewLeftAt\" >= \"NewJoinedAt\"");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipantHistory_PreviousDates", "\"PreviousLeftAt\" IS NULL OR \"PreviousJoinedAt\" IS NOT NULL AND \"PreviousLeftAt\" >= \"PreviousJoinedAt\"");
+            t.HasCheckConstraint("CK_WhatsAppConversationParticipantHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.PreviousApprovedByActor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.NewApprovedByActor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.PreviousApprovalReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.NewApprovalReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.PreviousRevokedByActor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.NewRevokedByActor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.PreviousRevocationReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.NewRevocationReason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.Action).HasMaxLength(80);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.Reason).HasMaxLength(2000);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.Actor).HasMaxLength(254);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().Property(x => x.Source).HasMaxLength(80);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().HasIndex(x => new { x.WhatsAppConversationEngagementScopeId, x.OccurredAt, x.Id });
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().HasOne(x => x.WhatsAppConversationEngagementScope).WithMany(x => x.History)
+            .HasForeignKey(x => x.WhatsAppConversationEngagementScopeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<WhatsAppConversationEngagementScopeHistory>().ToTable(t =>
+        {
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_PreviousVersion", "\"PreviousApprovedAuthorizationVersion\" IS NULL OR \"PreviousApprovedAuthorizationVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_NewVersion", "\"NewApprovedAuthorizationVersion\" > 0");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_PreviousLifecycle", "(\"PreviousIsActive\" IS NULL AND \"PreviousApprovedAuthorizationVersion\" IS NULL AND \"PreviousApprovedAt\" IS NULL AND \"PreviousApprovedByActor\" IS NULL AND \"PreviousApprovalReason\" IS NULL AND \"PreviousRevokedAt\" IS NULL AND \"PreviousRevokedByActor\" IS NULL AND \"PreviousRevocationReason\" IS NULL) OR (\"PreviousIsActive\" AND \"PreviousApprovedAuthorizationVersion\" IS NOT NULL AND \"PreviousApprovedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousApprovedByActor\", ''))) > 0 AND \"PreviousRevokedAt\" IS NULL AND \"PreviousRevokedByActor\" IS NULL AND \"PreviousRevocationReason\" IS NULL) OR (NOT \"PreviousIsActive\" AND \"PreviousApprovedAuthorizationVersion\" IS NOT NULL AND \"PreviousApprovedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousApprovedByActor\", ''))) > 0 AND \"PreviousRevokedAt\" IS NOT NULL AND length(btrim(COALESCE(\"PreviousRevokedByActor\", ''))) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_NewLifecycle", "(\"NewIsActive\" AND \"NewRevokedAt\" IS NULL AND \"NewRevokedByActor\" IS NULL AND \"NewRevocationReason\" IS NULL) OR (NOT \"NewIsActive\" AND \"NewRevokedAt\" IS NOT NULL AND length(btrim(COALESCE(\"NewRevokedByActor\", ''))) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_ApprovalFacts", "length(btrim(\"NewApprovedByActor\")) > 0 AND (\"NewApprovalReason\" IS NULL OR length(btrim(\"NewApprovalReason\")) > 0) AND (\"NewRevocationReason\" IS NULL OR length(btrim(\"NewRevocationReason\")) > 0)");
+            t.HasCheckConstraint("CK_WhatsAppConversationEngagementScopeHistory_Text", "length(btrim(\"Action\")) > 0 AND length(btrim(\"Actor\")) > 0 AND length(btrim(\"Source\")) > 0");
+        });
+
         foreach (var fk in b.Model.GetEntityTypes().Where(t => typeof(Record).IsAssignableFrom(t.ClrType)).SelectMany(t => t.GetForeignKeys())) fk.DeleteBehavior = DeleteBehavior.Restrict;
     }
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -452,6 +584,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         ContactStatusHistory => [],
                         ContactWhatsAppAddressHistory => [],
                         ContactCustomerLinkHistory => [],
+                        WhatsAppConversation => ["Status", "AuthorizationVersion"],
+                        WhatsAppConversationParticipant => ["IsActive", "JoinedAt", "LeftAt"],
+                        WhatsAppConversationEngagementScope => ["IsActive", "ApprovedAuthorizationVersion", "ApprovedAt", "ApprovedByActor", "ApprovalReason", "RevokedAt", "RevokedByActor", "RevocationReason"],
+                        WhatsAppConversationHistory => [],
+                        WhatsAppConversationParticipantHistory => [],
+                        WhatsAppConversationEngagementScopeHistory => [],
                         WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                         WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                         CustomerReceipt => allowReceiptAllocationCorrection
