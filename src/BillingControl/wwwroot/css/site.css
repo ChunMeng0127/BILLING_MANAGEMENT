@@ -975,6 +975,66 @@ input[readonly],
   color: #6e7c8f;
 }
 
+.searchable-dropdown {
+  width: 100%;
+}
+
+.searchable-dropdown > .form-control {
+  width: 100%;
+}
+
+.searchable-dropdown-menu {
+  position: fixed;
+  z-index: 1100;
+  max-height: min(240px, calc(100vh - 16px));
+  overflow-y: auto;
+  border: 1px solid #d8d4cb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgb(38 32 22 / 16%);
+  padding: 4px;
+}
+
+.searchable-dropdown-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  padding: 8px 9px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.searchable-dropdown-option:hover,
+.searchable-dropdown-option.is-active {
+  background: var(--orange-wash);
+  color: var(--orange-strong);
+}
+
+.searchable-dropdown-option[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 750;
+}
+
+.searchable-dropdown-marker {
+  width: 15px;
+  flex: 0 0 15px;
+  color: var(--orange-strong);
+  font-weight: 850;
+  text-align: center;
+}
+
+.searchable-dropdown-empty {
+  color: var(--muted);
+  padding: 9px;
+  font-size: 11px;
+}
+
 input[type="checkbox"] {
   width: 15px;
   height: 15px;

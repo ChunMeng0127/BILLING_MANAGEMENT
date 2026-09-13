@@ -14,7 +14,8 @@ public static class DocumentChecklistDocumentOptions
         "Expenses Invoice",
         "Staff Claim",
         "Payroll Report",
-        "Payment / Receipt"
+        "Payment Voucher",
+        "Official Receipt"
     ];
 
     public static bool IsStandardDocument(string? value) =>

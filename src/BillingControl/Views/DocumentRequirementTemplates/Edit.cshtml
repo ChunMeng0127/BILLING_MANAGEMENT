@@ -111,7 +111,7 @@
                     <tbody><tr>
                         <td>
                             <label class="form-label visually-hidden" for="new-document">Document</label>
-                            <input id="new-document" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" value="@Model.NewItem.DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
+                            <input id="new-document" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" value="@Model.NewItem.DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
                             <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
                         </td>
                         <td><input name="Description" class="form-control" maxlength="2000" value="@Model.NewItem.Description" placeholder="Full financial year, all bank accounts" /></td>
@@ -156,7 +156,7 @@
                             <div class="form-grid compact">
                                 <div>
                                     <label class="form-label" for="item-document-@item.Id">Document</label>
-                                    <input id="item-document-@item.Id" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection maxlength="160" value="@documentSelection" placeholder="Other Documents" autocomplete="off" required />
+                                    <input id="item-document-@item.Id" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" value="@documentSelection" placeholder="Other Documents" autocomplete="off" required />
                                     <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
                                 </div>
                                 <div><label class="form-label" for="item-description-@item.Id">Description</label><input id="item-description-@item.Id" name="Description" class="form-control" maxlength="2000" value="@(edit?.Description ?? item.Description)" placeholder="Full financial year, all bank accounts" /></div>

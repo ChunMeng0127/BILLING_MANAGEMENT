@@ -108,6 +108,11 @@ public partial class IntegrationTests
         Assert.Contains("Use as default checklist for this service", createPage);
         Assert.Contains("Bank Statement", createPage);
         Assert.Contains("Other Documents", createPage);
+        Assert.Contains("Payment Voucher", createPage);
+        Assert.Contains("Official Receipt", createPage);
+        Assert.DoesNotContain("Payment / Receipt", createPage);
+        Assert.Contains("data-searchable-dropdown=\"combobox\"", createPage);
+        Assert.Contains("data-custom-placeholder=\"Type document name\"", createPage);
         Assert.Contains("list=\"checklist-document-options\"", createPage);
         Assert.DoesNotContain("data-other-document-wrapper", createPage);
         Assert.DoesNotContain("data-other-document-name", createPage);
@@ -266,6 +271,9 @@ public partial class IntegrationTests
         var customMappingPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}");
         Assert.Contains("value=\"Tax report\"", customMappingPage);
         Assert.Contains("Other Documents", customMappingPage);
+        Assert.Contains("Payment Voucher", customMappingPage);
+        Assert.Contains("Official Receipt", customMappingPage);
+        Assert.Contains("data-searchable-dropdown=\"combobox\"", customMappingPage);
 
         var legacyItem = await db.DocumentRequirementTemplateItems.SingleAsync(x => x.Id == secondItemId);
         legacyItem.IsRequired = false;
@@ -292,14 +300,32 @@ public partial class IntegrationTests
         Assert.False(preservedLegacyItem.IsRequired);
         Assert.Equal(DocumentRequirementWave.Later, preservedLegacyItem.Wave);
 
-        var editCustomToStandard = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        var editLegacyValue = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
         {
             ["TemplateId"] = secondId.ToString(), ["Id"] = taxItemId.ToString(), ["DocumentSelection"] = "Payment / Receipt",
             ["Description"] = "Annual tax receipt", ["IncludeInNewRequests"] = "true"
         });
-        Assert.Equal(HttpStatusCode.Redirect, editCustomToStandard.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, editLegacyValue.StatusCode);
         db.ChangeTracker.Clear();
         Assert.Equal("Payment / Receipt", await db.DocumentRequirementTemplateItems.Where(x => x.Id == taxItemId).Select(x => x.Name).SingleAsync());
+
+        var legacyPage = await admin.GetStringAsync($"/DocumentRequirementTemplates/Edit/{secondId}");
+        Assert.Contains("value=\"Payment / Receipt\"", legacyPage);
+
+        var editLegacyToPaymentVoucher = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = taxItemId.ToString(), ["DocumentSelection"] = "Payment Voucher",
+            ["Description"] = "Annual tax voucher", ["IncludeInNewRequests"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, editLegacyToPaymentVoucher.StatusCode);
+        var editPaymentVoucherToOfficialReceipt = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/EditItem", new()
+        {
+            ["TemplateId"] = secondId.ToString(), ["Id"] = taxItemId.ToString(), ["DocumentSelection"] = "Official Receipt",
+            ["Description"] = "Annual tax receipt", ["IncludeInNewRequests"] = "true"
+        });
+        Assert.Equal(HttpStatusCode.Redirect, editPaymentVoucherToOfficialReceipt.StatusCode);
+        db.ChangeTracker.Clear();
+        Assert.Equal("Official Receipt", await db.DocumentRequirementTemplateItems.Where(x => x.Id == taxItemId).Select(x => x.Name).SingleAsync());
 
         var deactivatePayroll = await PostWithToken(admin, $"/DocumentRequirementTemplates/Edit/{secondId}", "/DocumentRequirementTemplates/SetItemActive", new()
         {

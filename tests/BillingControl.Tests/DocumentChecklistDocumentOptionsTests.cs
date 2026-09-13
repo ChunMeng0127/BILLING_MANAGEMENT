@@ -5,6 +5,24 @@ namespace BillingControl.Tests;
 public class DocumentChecklistDocumentOptionsTests
 {
     [Fact]
+    public void StandardDocumentsUseTheProspectivePhaseTwoChoices()
+    {
+        Assert.Equal(
+            [
+                "Bank Statement",
+                "Sales Invoice",
+                "Purchase Invoice",
+                "Expenses Invoice",
+                "Staff Claim",
+                "Payroll Report",
+                "Payment Voucher",
+                "Official Receipt"
+            ],
+            DocumentChecklistDocumentOptions.StandardDocuments);
+        Assert.False(DocumentChecklistDocumentOptions.IsStandardDocument("Payment / Receipt"));
+    }
+
+    [Fact]
     public void StandardDocumentIsReturnedAsThePersistedName()
     {
         Assert.Equal("Bank Statement", DocumentChecklistDocumentOptions.ResolveDocumentName(" Bank Statement "));
@@ -29,5 +47,16 @@ public class DocumentChecklistDocumentOptionsTests
 
         Assert.Equal("Bank Statement", mapping.Selection);
         Assert.Null(mapping.OtherDocumentName);
+    }
+
+    [Fact]
+    public void ExistingLegacyPaymentReceiptRemainsReadableAndEditable()
+    {
+        var mapping = DocumentChecklistDocumentOptions.MapExistingDocument("Payment / Receipt");
+
+        Assert.Equal("Payment / Receipt", mapping.Selection);
+        Assert.Equal("Payment / Receipt", DocumentChecklistDocumentOptions.ResolveDocumentName(mapping.Selection));
+        Assert.Equal("Payment Voucher", DocumentChecklistDocumentOptions.ResolveDocumentName("Payment Voucher"));
+        Assert.Equal("Official Receipt", DocumentChecklistDocumentOptions.ResolveDocumentName("Official Receipt"));
     }
 }
