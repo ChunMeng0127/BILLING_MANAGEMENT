@@ -41,12 +41,71 @@
     eligibleCount === 0 && dataset.emptyEligibleMessage
       ? dataset.emptyEligibleMessage
       : dataset.emptyMessage ?? defaultGridEmptyMessage;
+  const exportGridKey = (dataset) => {
+    const key = dataset?.exportCsv;
+    return typeof key === "string" && key.trim() ? key.trim() : null;
+  };
+  const gridExportColumns = (headers) =>
+    headers
+      .map((header, index) => ({ header, index }))
+      .filter(
+        ({ header }) =>
+          !header.hidden && !header.hasAttribute("data-noexport"),
+      );
+  const visibleGridRows = (rows) =>
+    rows.filter((row) => !row.hidden && isGridEligible(row));
+  const isNumericGridValue = (value) => {
+    const normalized = value.trim().replace(/,/g, "");
+    return normalized !== "" && Number.isFinite(Number(normalized));
+  };
+  const protectCsvFormula = (value) => {
+    const text = String(value ?? "");
+    const candidate = text.trimStart();
+    if (!/^[=+@-]/.test(candidate) || isNumericGridValue(candidate))
+      return text;
+    return `'${text}`;
+  };
+  const csvCell = (value) => {
+    const text = protectCsvFormula(value);
+    return /[",\r\n]/.test(text)
+      ? `"${text.replace(/"/g, '""')}"`
+      : text;
+  };
+  const buildGridCsv = (headers, rows) => {
+    const columns = gridExportColumns(headers);
+    const lines = [
+      columns.map(({ header }) => header.dataset.title ?? header.textContent.trim()),
+      ...visibleGridRows(rows).map((row) =>
+        columns.map(({ index }) => row.cells[index]?.textContent.trim() ?? ""),
+      ),
+    ];
+    return "\uFEFF" + lines.map((line) => line.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  };
+  const gridExportFilename = (key, date = new Date()) => {
+    const prefix = String(key)
+      .trim()
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "") || "grid";
+    const pad = (value) => String(value).padStart(2, "0");
+    return `${prefix}-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(
+      date.getDate(),
+    )}-${pad(date.getHours())}${pad(date.getMinutes())}.csv`;
+  };
+  const gridExportDisabled = (shownRows) => shownRows.length === 0;
   if (typeof module === "object" && module.exports)
     module.exports = {
       isGridEligible,
       eligibleGridRows,
       gridRowCountText,
       gridEmptyMessage,
+      exportGridKey,
+      gridExportColumns,
+      visibleGridRows,
+      protectCsvFormula,
+      csvCell,
+      buildGridCsv,
+      gridExportFilename,
+      gridExportDisabled,
       workflowVersionRequired,
       workflowSuggestedVersion,
       sidebarStorageKey,
@@ -162,6 +221,15 @@
     b.addEventListener("click", action);
     return b;
   };
+  const downloadCsv = (csv, filename) => {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = element("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+  };
   document.querySelectorAll("table.data-grid").forEach((table) => {
     const body = table.tBodies[0],
       rows = [...body.rows],
@@ -179,6 +247,8 @@
       filters.clear();
       render();
     });
+    const exportKey = exportGridKey(table.dataset);
+    let exportButton;
     const limitSelect = element("select", "form-select grid-limit");
     limitSelect.setAttribute("aria-label", "Row limit");
     [
@@ -211,7 +281,19 @@
       d.append(button("Done", () => d.close(), "btn btn-primary"));
       d.showModal();
     });
-    tools.append(clear, columns, limitSelect);
+    if (exportKey) {
+      exportButton = button("Export CSV", () => {
+        const currentRows = visibleGridRows([...body.rows]);
+        if (currentRows.length === 0) return;
+        downloadCsv(
+          buildGridCsv(headers, currentRows),
+          gridExportFilename(exportKey),
+        );
+      });
+    }
+    tools.append(clear, columns);
+    if (exportButton) tools.append(exportButton);
+    tools.append(limitSelect);
     toolbar.append(count, tools);
     table.before(toolbar);
     const scroll = element("div", "table-scroll");
@@ -284,6 +366,7 @@
       });
       count.textContent = gridRowCountText(shown.length, loadedRows.length);
       clear.hidden = filters.size === 0;
+      if (exportButton) exportButton.disabled = gridExportDisabled(shown);
       empty.textContent = gridEmptyMessage(eligible().length, table.dataset);
       empty.hidden = shown.length !== 0;
     };

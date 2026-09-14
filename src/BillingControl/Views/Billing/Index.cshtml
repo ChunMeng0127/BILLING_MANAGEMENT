@@ -21,7 +21,7 @@
 <a href="/Billing">Reset</a>
 </form>
 <div class="panel">
-<table class="table data-grid">
+<table class="table data-grid" data-export-csv="billing-records">
 <thead>
 <tr>
 <th>Record</th>
@@ -34,7 +34,7 @@
 <th>Status</th>
 <th data-type="amount">Amount (RM)</th>
 @if(showReceipts) { <th data-type="amount">Received (RM)</th><th data-type="amount">Outstanding (RM)</th> }
-<th data-nosort>Actions</th>
+<th data-nosort data-noexport>Actions</th>
 </tr>
 </thead>
 <tbody>
