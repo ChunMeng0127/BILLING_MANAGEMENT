@@ -36,8 +36,10 @@ builder.Services.AddScoped<BillingScheduleService>();
 builder.Services.AddScoped<InvoiceService>();
 builder.Services.AddScoped<DocumentRequirementTemplateService>();
 builder.Services.AddScoped<DocumentRequestService>();
+builder.Services.AddScoped<DocumentRequestBatchService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<WhatsAppConversationService>();
+builder.Services.AddScoped<WhatsAppOutboundQueueService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<BusinessClock>();
@@ -61,7 +63,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
         o.KnownIPNetworks.Add(new System.Net.IPNetwork(networkAddress, prefixLength));
 });
 var keys = builder.Configuration["DataProtection:Path"];
-if (!string.IsNullOrWhiteSpace(keys)) builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keys)).SetApplicationName("BillingControl");
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("BillingControl");
+if (!string.IsNullOrWhiteSpace(keys)) dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keys));
 var app = builder.Build();
 app.UseForwardedHeaders();
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) { app.UseExceptionHandler("/Home/Error"); app.UseHsts(); app.UseHttpsRedirection(); }
