@@ -357,7 +357,7 @@ public partial class IntegrationTests
 
         var exception = await Assert.ThrowsAsync<BusinessException>(() => service.QueueAsync(preview.PreviewToken));
 
-        Assert.Contains("not eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not currently eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, await db.WhatsAppOutboundMessages.CountAsync());
     }
 
@@ -384,7 +384,7 @@ public partial class IntegrationTests
 
         var exception = await Assert.ThrowsAsync<BusinessException>(() => service.QueueAsync(preview.PreviewToken));
 
-        Assert.Contains("not eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not currently eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [PostgresFact]
