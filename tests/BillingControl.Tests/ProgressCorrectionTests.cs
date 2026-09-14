@@ -12,6 +12,27 @@ namespace BillingControl.Tests;
 
 public partial class IntegrationTests
 {
+    private static async Task AlignAssignmentAuditWithClockAsync(AppDbContext db, FixedProgressTime time, params int[] assignmentIds)
+    {
+        var timestamp = time.Now.UtcDateTime;
+        await db.WorkerAssignments
+            .Where(x => assignmentIds.Contains(x.Id))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.CreatedAt, timestamp)
+                .SetProperty(x => x.UpdatedAt, timestamp));
+
+        foreach (var entry in db.ChangeTracker.Entries<WorkerAssignment>())
+        {
+            if (!assignmentIds.Contains(entry.Entity.Id)) continue;
+            entry.Entity.CreatedAt = timestamp;
+            entry.Entity.UpdatedAt = timestamp;
+            entry.Property(x => x.CreatedAt).OriginalValue = timestamp;
+            entry.Property(x => x.UpdatedAt).OriginalValue = timestamp;
+            entry.Property(x => x.CreatedAt).IsModified = false;
+            entry.Property(x => x.UpdatedAt).IsModified = false;
+        }
+    }
+
     [Fact]
     public void ProgressBusinessClockUsesMalaysiaSundayDeadline()
     {
@@ -107,6 +128,8 @@ public partial class IntegrationTests
         var worker = new Worker { Name = "Current week editor" };
         db.Add(worker); await db.SaveChangesAsync();
         await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        await AlignAssignmentAuditWithClockAsync(db, time, assignmentId);
         var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).SingleAsync();
         var access = new AccessProfile("current-week-worker", AppRoles.Worker, null, null, worker.Id);
         var reporting = new ProgressReportService(db, clock);
@@ -779,6 +802,7 @@ public partial class IntegrationTests
         await billing.Assign(future.WorkItem.Id, worker.Id, 50);
         await billing.Assign(future.WorkItem.Id, other.Id, 50);
         var assignments = await db.WorkerAssignments.OrderBy(x => x.Id).ToListAsync();
+        await AlignAssignmentAuditWithClockAsync(db, time, assignments.Select(x => x.Id).ToArray());
         var assignment = assignments.Single(x => x.WorkerId == worker.Id && x.WorkItemId == past.WorkItem.Id);
         var futureAssignment = assignments.Single(x => x.WorkerId == worker.Id && x.WorkItemId == future.WorkItem.Id);
         var otherAssignment = assignments.Single(x => x.WorkerId == other.Id);
@@ -902,6 +926,8 @@ public partial class IntegrationTests
         var worker = new Worker { Name = "Progress history worker" };
         db.Add(worker); await db.SaveChangesAsync();
         await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
+        await AlignAssignmentAuditWithClockAsync(db, time, assignmentId);
         var assignment = await db.WorkerAssignments.SingleAsync();
         var access = new AccessProfile("history-worker", AppRoles.Worker, null, null, worker.Id);
         var reporting = new ProgressReportService(db, clock);
