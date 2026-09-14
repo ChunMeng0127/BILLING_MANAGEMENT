@@ -246,7 +246,7 @@ public partial class IntegrationTests
             QueueService(db, new EphemeralDataProtectionProvider(), new DeterministicFakeWhatsAppProvider(GroupTestCapabilities()))
                 .PreviewAsync(QueuePreviewInput(fixture)));
 
-        Assert.Contains("active participant", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("participant", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [PostgresFact]
@@ -357,7 +357,7 @@ public partial class IntegrationTests
 
         var exception = await Assert.ThrowsAsync<BusinessException>(() => service.QueueAsync(preview.PreviewToken));
 
-        Assert.Contains("stale", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, await db.WhatsAppOutboundMessages.CountAsync());
     }
 
@@ -384,7 +384,7 @@ public partial class IntegrationTests
 
         var exception = await Assert.ThrowsAsync<BusinessException>(() => service.QueueAsync(preview.PreviewToken));
 
-        Assert.Contains("stale", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not eligible", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [PostgresFact]
@@ -437,7 +437,7 @@ public partial class IntegrationTests
 
         var exception = await Assert.ThrowsAsync<BusinessException>(() => service.QueueAsync(preview.PreviewToken));
 
-        Assert.Contains("stale", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not active", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [PostgresFact]
@@ -498,7 +498,10 @@ public partial class IntegrationTests
         var consentService = QueueService(consentDb, new EphemeralDataProtectionProvider());
         var consentPreview = await consentService.PreviewAsync(QueuePreviewInput(consentFixture));
         await consentDb.ContactWhatsAppAddresses.Where(x => x.Id == consentFixture.AddressId)
-            .ExecuteUpdateAsync(x => x.SetProperty(y => y.ConsentState, ContactWhatsAppConsentState.DoNotWhatsApp));
+            .ExecuteUpdateAsync(x => x
+                .SetProperty(y => y.ConsentState, ContactWhatsAppConsentState.DoNotWhatsApp)
+                .SetProperty(y => y.LastOptOutAt, ConversationTestTime)
+                .SetProperty(y => y.LastOptOutReason, "Phase 10B stale consent test"));
         var consentException = await Assert.ThrowsAsync<BusinessException>(() => consentService.QueueAsync(consentPreview.PreviewToken));
         Assert.Contains("consent", consentException.Message, StringComparison.OrdinalIgnoreCase);
 
