@@ -490,12 +490,14 @@ public partial class IntegrationTests
             .Where(x => x.DocumentRequestId == original.Id)
             .Select(x => x.DocumentRequirementTemplateItemId)
             .SingleAsync();
+        await SetRequestStatusAsync(db, original.Id, DocumentRequestStatus.Superseded);
         var later = await AddDocumentRequestAsync(
             db,
             original.WorkItemId,
             original.DocumentRequirementTemplateId,
             revision: original.Revision + 1,
-            status: DocumentRequestStatus.Draft);
+            status: DocumentRequestStatus.Draft,
+            supersedesRequestId: original.Id);
         await AddDocumentRequestItemAsync(db, later.Id, templateItemId!.Value, "later-revision-item");
 
         await Assert.ThrowsAsync<BusinessException>(() =>
@@ -772,8 +774,12 @@ public partial class IntegrationTests
 
         var outcomes = await Task.WhenAll(Attempt(firstService), Attempt(secondService));
 
-        Assert.Contains(outcomes, x => x.Result is not null);
-        Assert.Contains(outcomes, x => x.Error is BusinessException);
+        Assert.Contains(outcomes, x => x.Result is { AlreadyAccepted: false });
+        Assert.All(outcomes, x =>
+        {
+            if (x.Result is null)
+                Assert.IsType<BusinessException>(x.Error);
+        });
         Assert.Single(fixture.Provider.CapturedRequests);
         await using var verify = Db();
         Assert.Equal(1, await verify.WhatsAppOutboundMessageAttempts.CountAsync());

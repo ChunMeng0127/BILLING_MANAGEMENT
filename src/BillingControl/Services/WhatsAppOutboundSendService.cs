@@ -417,6 +417,7 @@ public sealed class WhatsAppOutboundSendService
             message,
             attempt,
             providerResult.Disposition,
+            providerMessageId,
             AlreadyAccepted: false);
     }
 
@@ -777,12 +778,18 @@ public sealed class WhatsAppOutboundSendService
         WhatsAppOutboundMessage message,
         WhatsAppOutboundMessageAttempt attempt,
         bool AlreadyAccepted) =>
-        ToResult(message, attempt, ParseDisposition(attempt.Disposition), AlreadyAccepted);
+        ToResult(
+            message,
+            attempt,
+            ParseDisposition(attempt.Disposition),
+            attempt.ProviderMessageId,
+            AlreadyAccepted);
 
     private static WhatsAppOutboundSendResult ToResult(
         WhatsAppOutboundMessage message,
         WhatsAppOutboundMessageAttempt attempt,
         WhatsAppSendDisposition disposition,
+        string? providerMessageId,
         bool AlreadyAccepted) =>
         new(
             message.Id,
@@ -793,7 +800,7 @@ public sealed class WhatsAppOutboundSendService
             message.State,
             message.DocumentRequestBatch?.Status ??
                 throw new BusinessException(ResultConflictMessage),
-            attempt.ProviderMessageId,
+            providerMessageId,
             AlreadyAccepted);
 
     private static WhatsAppSendDisposition ParseDisposition(string? disposition)
