@@ -144,6 +144,7 @@ public partial class IntegrationTests
         Assert.Equal(WhatsAppOutboundMessageState.Accepted, result.MessageState);
         Assert.Equal(DocumentRequestBatchStatus.Sent, result.BatchStatus);
         Assert.False(result.AlreadyAccepted);
+        Assert.False(result.RequiresDocumentActivationReconciliation);
         Assert.Single(fixture.Provider.CapturedRequests);
         Assert.Equal("Immutable direct body.",
             Assert.IsType<WhatsAppTextContent>(fixture.Provider.CapturedRequests[0].Content).Text);
@@ -174,6 +175,7 @@ public partial class IntegrationTests
         var content = Assert.IsType<WhatsAppTemplateContent>(request.Content);
 
         Assert.Equal(WhatsAppSendDisposition.Accepted, result.Disposition);
+        Assert.False(result.RequiresDocumentActivationReconciliation);
         Assert.Equal(WhatsAppDestinationKind.Group, request.Destination.Kind);
         Assert.Equal(fixture.Message.ProviderDestinationKey, request.Destination.ProviderDestinationKey);
         Assert.Equal(fixture.Message.LogicalMessageKey, request.LogicalMessageKey);
@@ -249,6 +251,7 @@ public partial class IntegrationTests
             x.NewStatus == DocumentRequestStatus.Requested &&
             x.Actor == "accepted-auditor");
         Assert.Equal(DocumentRequestItemStatus.Requested, item.Status);
+        Assert.False(result.RequiresDocumentActivationReconciliation);
         Assert.Contains(item.StatusHistory, x =>
             x.Action == "WhatsAppProviderAccepted" &&
             x.NewStatus == DocumentRequestItemStatus.Requested &&
@@ -729,6 +732,171 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task Phase10CAcceptedResultPreservesRequestRaceAndRepeatedSendReconcilesWithoutResend()
+    {
+        await using var db = await Fresh();
+        var fixture = await AddQueueFixtureAsync(db, "send-request-race-after-claim");
+        var provider = new PostClaimMutationWhatsAppProvider(async () =>
+        {
+            await using var raceDb = Db();
+            var request = await raceDb.DocumentRequests
+                .SingleAsync(x => x.Id == fixture.RequestId);
+            request.Status = DocumentRequestStatus.Paused;
+            await raceDb.SaveChangesAsync();
+        });
+        var queue = QueueService(db, new EphemeralDataProtectionProvider(), provider);
+        var preview = await queue.PreviewAsync(QueuePreviewInput(fixture));
+        var queued = await queue.QueueAsync(preview.PreviewToken);
+        db.ChangeTracker.Clear();
+        var message = await db.WhatsAppOutboundMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == queued.WhatsAppOutboundMessageId);
+        var service = SendService(db, provider);
+
+        var result = await service.SendAsync(new(
+            message.Id,
+            message.Version,
+            "phase10c-race-sender",
+            "Phase10C.Race.Tests"));
+
+        Assert.Equal(WhatsAppSendDisposition.Accepted, result.Disposition);
+        Assert.True(result.RequiresDocumentActivationReconciliation);
+        Assert.False(result.AlreadyAccepted);
+        Assert.Equal(1, provider.SendCallCount);
+
+        db.ChangeTracker.Clear();
+        var persistedMessage = await db.WhatsAppOutboundMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == message.Id);
+        var attempt = await db.WhatsAppOutboundMessageAttempts.AsNoTracking()
+            .SingleAsync(x => x.WhatsAppOutboundMessageId == message.Id);
+        Assert.Equal(WhatsAppOutboundMessageState.Accepted, persistedMessage.State);
+        Assert.Equal("post-claim-provider-message-0001", persistedMessage.ProviderMessageId);
+        Assert.Equal("Accepted", attempt.Disposition);
+        Assert.NotNull(attempt.CompletedAt);
+        Assert.Equal(DocumentRequestBatchStatus.Sent,
+            await db.DocumentRequestBatches.Where(x => x.Id == message.DocumentRequestBatchId)
+                .Select(x => x.Status).SingleAsync());
+        Assert.Equal(DocumentRequestStatus.Paused,
+            await db.DocumentRequests.Where(x => x.Id == fixture.RequestId)
+                .Select(x => x.Status).SingleAsync());
+        Assert.Equal(DocumentRequestItemStatus.Missing,
+            await db.DocumentRequestItems.Where(x => x.Id == fixture.ItemId)
+                .Select(x => x.Status).SingleAsync());
+
+        var repeated = await service.SendAsync(new(
+            message.Id,
+            persistedMessage.Version,
+            "phase10c-race-sender",
+            "Phase10C.Race.Tests"));
+
+        Assert.Equal(WhatsAppSendDisposition.Accepted, repeated.Disposition);
+        Assert.True(repeated.AlreadyAccepted);
+        Assert.True(repeated.RequiresDocumentActivationReconciliation);
+        Assert.Equal(result.WhatsAppOutboundMessageAttemptId, repeated.WhatsAppOutboundMessageAttemptId);
+        Assert.Equal(1, provider.SendCallCount);
+        Assert.Equal(1, await db.WhatsAppOutboundMessageAttempts.CountAsync(
+            x => x.WhatsAppOutboundMessageId == message.Id));
+    }
+
+    [PostgresFact]
+    public async Task Phase10CAcceptedResultPreservesItemRaceAndActivatesOnlySafeRows()
+    {
+        await using var db = await Fresh();
+        var fixture = await AddQueueFixtureAsync(db, "send-item-race-after-claim");
+        var provider = new PostClaimMutationWhatsAppProvider(async () =>
+        {
+            await using var raceDb = Db();
+            var item = await raceDb.DocumentRequestItems
+                .SingleAsync(x => x.Id == fixture.ItemId);
+            item.Status = DocumentRequestItemStatus.NotRequired;
+            await raceDb.SaveChangesAsync();
+        });
+        var queue = QueueService(db, new EphemeralDataProtectionProvider(), provider);
+        var preview = await queue.PreviewAsync(QueuePreviewInput(fixture));
+        var queued = await queue.QueueAsync(preview.PreviewToken);
+        db.ChangeTracker.Clear();
+        var message = await db.WhatsAppOutboundMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == queued.WhatsAppOutboundMessageId);
+
+        var result = await SendService(db, provider).SendAsync(new(
+            message.Id,
+            message.Version,
+            "phase10c-race-sender",
+            "Phase10C.Race.Tests"));
+
+        Assert.Equal(WhatsAppSendDisposition.Accepted, result.Disposition);
+        Assert.True(result.RequiresDocumentActivationReconciliation);
+        Assert.Equal(1, provider.SendCallCount);
+        Assert.Equal(DocumentRequestStatus.Requested,
+            await db.DocumentRequests.Where(x => x.Id == fixture.RequestId)
+                .Select(x => x.Status).SingleAsync());
+        Assert.Equal(DocumentRequestItemStatus.NotRequired,
+            await db.DocumentRequestItems.Where(x => x.Id == fixture.ItemId)
+                .Select(x => x.Status).SingleAsync());
+        Assert.Equal(WhatsAppOutboundMessageState.Accepted,
+            await db.WhatsAppOutboundMessages.Where(x => x.Id == message.Id)
+                .Select(x => x.State).SingleAsync());
+        Assert.Equal("Accepted",
+            await db.WhatsAppOutboundMessageAttempts
+                .Where(x => x.WhatsAppOutboundMessageId == message.Id)
+                .Select(x => x.Disposition).SingleAsync());
+    }
+
+    [PostgresFact]
+    public async Task Phase10CSerializationRetryPersistsAcceptedResultWithoutSecondProviderCall()
+    {
+        await using var db = await Fresh();
+        var fixture = await AddQueuedSendFixtureAsync(db, "send-result-serialization-retry");
+        await db.Database.OpenConnectionAsync();
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                CREATE TEMP SEQUENCE phase10c_result_persistence_fail_once;
+                CREATE OR REPLACE FUNCTION pg_temp.phase10c_fail_result_persistence_once()
+                RETURNS trigger
+                LANGUAGE plpgsql
+                AS $function$
+                BEGIN
+                    IF nextval('phase10c_result_persistence_fail_once') = 1 THEN
+                        RAISE EXCEPTION 'deterministic Phase 10C result serialization conflict'
+                            USING ERRCODE = '40001';
+                    END IF;
+                    RETURN NEW;
+                END
+                $function$;
+                CREATE TRIGGER phase10c_fail_result_persistence_once
+                BEFORE UPDATE ON "WhatsAppOutboundMessages"
+                FOR EACH ROW
+                WHEN (OLD."State" IS DISTINCT FROM NEW."State")
+                EXECUTE FUNCTION pg_temp.phase10c_fail_result_persistence_once();
+                """);
+
+            var result = await SendService(db, fixture.Provider).SendAsync(SendInput(fixture));
+
+            Assert.Equal(WhatsAppSendDisposition.Accepted, result.Disposition);
+            Assert.False(result.RequiresDocumentActivationReconciliation);
+            Assert.Single(fixture.Provider.CapturedRequests);
+            Assert.Equal(WhatsAppOutboundMessageState.Accepted,
+                await db.WhatsAppOutboundMessages.Where(x => x.Id == fixture.Message.Id)
+                    .Select(x => x.State).SingleAsync());
+            var attempt = await db.WhatsAppOutboundMessageAttempts.AsNoTracking()
+                .SingleAsync(x => x.Id == result.WhatsAppOutboundMessageAttemptId);
+            Assert.Equal("Accepted", attempt.Disposition);
+            Assert.NotNull(attempt.CompletedAt);
+            Assert.Equal("fake-provider-message-0001", attempt.ProviderMessageId);
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlRawAsync("""
+                DROP TRIGGER IF EXISTS phase10c_fail_result_persistence_once
+                    ON "WhatsAppOutboundMessages";
+                DROP FUNCTION IF EXISTS pg_temp.phase10c_fail_result_persistence_once();
+                DROP SEQUENCE IF EXISTS pg_temp.phase10c_result_persistence_fail_once;
+                """);
+            await db.Database.CloseConnectionAsync();
+        }
+    }
+
+    [PostgresFact]
     public async Task Phase10CRepeatedAcceptedSendIsDeterministicAndDoesNotCreateAttempt()
     {
         await using var db = await Fresh();
@@ -743,6 +911,7 @@ public partial class IntegrationTests
         Assert.Equal(WhatsAppSendDisposition.Accepted, first.Disposition);
         Assert.Equal(WhatsAppSendDisposition.Accepted, second.Disposition);
         Assert.True(second.AlreadyAccepted);
+        Assert.False(second.RequiresDocumentActivationReconciliation);
         Assert.Equal(first.WhatsAppOutboundMessageAttemptId, second.WhatsAppOutboundMessageAttemptId);
         Assert.Equal(first.ProviderMessageId, second.ProviderMessageId);
         Assert.Single(fixture.Provider.CapturedRequests);
@@ -835,6 +1004,39 @@ public partial class IntegrationTests
         Assert.Equal(DocumentRequestItemStatus.Missing,
             await db.DocumentRequestItems.Where(x => x.Id == unrelated.ItemId)
                 .Select(x => x.Status).SingleAsync());
+    }
+
+    private sealed class PostClaimMutationWhatsAppProvider : IWhatsAppProvider
+    {
+        private readonly Func<Task> mutation;
+        private int sendCallCount;
+
+        public PostClaimMutationWhatsAppProvider(Func<Task> mutation)
+        {
+            this.mutation = mutation ?? throw new ArgumentNullException(nameof(mutation));
+        }
+
+        public int SendCallCount => Volatile.Read(ref sendCallCount);
+
+        public Task<WhatsAppProviderCapabilities> GetCapabilitiesAsync(
+            WhatsAppProviderAccountBinding accountBinding,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(new WhatsAppProviderCapabilities());
+        }
+
+        public async Task<WhatsAppSendResult> SendAsync(
+            WhatsAppOutboundRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Interlocked.Increment(ref sendCallCount) != 1)
+                throw new InvalidOperationException("The post-claim race provider was called more than once.");
+
+            await mutation();
+            return WhatsAppSendResult.Accepted("post-claim-provider-message-0001");
+        }
     }
 
     private sealed class SendThrowingWhatsAppProvider : IWhatsAppProvider

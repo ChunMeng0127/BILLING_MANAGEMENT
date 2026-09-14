@@ -34,7 +34,8 @@ public sealed record WhatsAppOutboundSendResult(
     WhatsAppOutboundMessageState MessageState,
     DocumentRequestBatchStatus BatchStatus,
     string? ProviderMessageId,
-    bool AlreadyAccepted);
+    bool AlreadyAccepted,
+    bool RequiresDocumentActivationReconciliation);
 
 /// <summary>
 /// Owns the Phase 10C manual queued-message send boundary. A short
@@ -214,7 +215,11 @@ public sealed class WhatsAppOutboundSendService
 
         if (message.State == WhatsAppOutboundMessageState.Accepted)
         {
-            return new(ToAlreadyAcceptedResult(message));
+            await LockSnapshotRowsAsync(message, cancellationToken);
+            var requiresReconciliation = await RequiresDocumentActivationReconciliationAsync(
+                message,
+                cancellationToken);
+            return new(ToAlreadyAcceptedResult(message, requiresReconciliation));
         }
 
         Finance.Require(message.Version == expectedMessageVersion,
@@ -312,6 +317,11 @@ public sealed class WhatsAppOutboundSendService
             {
                 // The provider result is already known. A caller cancellation
                 // must not prevent the durable result from being recorded.
+                // The claim contains only immutable request data, so discard
+                // all pre-provider tracked entities before re-reading the
+                // current lifecycle rows. A staff update during the provider
+                // call must never be hidden by a stale EF identity-map entry.
+                db.ChangeTracker.Clear();
                 return await InSerializableTransactionAsync(
                     () => PersistResultInsideTransactionAsync(
                         claim,
@@ -350,7 +360,22 @@ public sealed class WhatsAppOutboundSendService
         // A database/result persistence retry or an application-level replay
         // must return the durable prior outcome without calling the provider.
         if (attempt.CompletedAt is not null)
-            return ToResult(message, attempt, AlreadyAccepted: message.State == WhatsAppOutboundMessageState.Accepted);
+        {
+            var requiresReconciliation = false;
+            if (message.State == WhatsAppOutboundMessageState.Accepted)
+            {
+                await LockSnapshotRowsAsync(message, CancellationToken.None);
+                requiresReconciliation = await RequiresDocumentActivationReconciliationAsync(
+                    message,
+                    CancellationToken.None);
+            }
+
+            return ToResult(
+                message,
+                attempt,
+                AlreadyAccepted: message.State == WhatsAppOutboundMessageState.Accepted,
+                RequiresDocumentActivationReconciliation: requiresReconciliation);
+        }
 
         Finance.Require(message.State == WhatsAppOutboundMessageState.Queued,
             ResultConflictMessage);
@@ -364,6 +389,7 @@ public sealed class WhatsAppOutboundSendService
         var errorCode = BoundedOptional(providerResult.ErrorCode, 254, nameof(providerResult.ErrorCode));
         var providerMessageId = BoundedOptional(providerResult.ProviderMessageId, 254, nameof(providerResult.ProviderMessageId));
         var providerTimestamp = providerResult.ProviderTimestamp?.UtcDateTime;
+        var requiresDocumentActivationReconciliation = false;
 
         switch (providerResult.Disposition)
         {
@@ -375,7 +401,11 @@ public sealed class WhatsAppOutboundSendService
                 message.ProviderRetryAfterUntil = null;
                 message.NextAttemptAt = null;
                 message.ProviderTimestamp = providerTimestamp;
-                ActivateAcceptedDocumentRequests(message, actor, source, completedAt);
+                requiresDocumentActivationReconciliation = ActivateAcceptedDocumentRequests(
+                    message,
+                    actor,
+                    source,
+                    completedAt).RequiresReconciliation;
                 break;
 
             case WhatsAppSendDisposition.DefinitelyRejected:
@@ -418,7 +448,8 @@ public sealed class WhatsAppOutboundSendService
             attempt,
             providerResult.Disposition,
             providerMessageId,
-            AlreadyAccepted: false);
+            AlreadyAccepted: false,
+            RequiresDocumentActivationReconciliation: requiresDocumentActivationReconciliation);
     }
 
     private async Task CompleteAttemptAsync(
@@ -478,7 +509,7 @@ public sealed class WhatsAppOutboundSendService
     /// only the current snapshot member may move ReadyToSend -> Requested,
     /// and only its still-Missing snapshot items may move to Requested.
     /// </summary>
-    private void ActivateAcceptedDocumentRequests(
+    private AcceptedDocumentActivationOutcome ActivateAcceptedDocumentRequests(
         WhatsAppOutboundMessage message,
         string actor,
         string source,
@@ -488,8 +519,8 @@ public sealed class WhatsAppOutboundSendService
             ?? throw new BusinessException(ResultConflictMessage);
         var batch = message.DocumentRequestBatch
             ?? throw new BusinessException(ResultConflictMessage);
-        Finance.Require(batch.Status == DocumentRequestBatchStatus.Queued,
-            ResultConflictMessage);
+
+        var requiresReconciliation = false;
 
         var snapshotRequestIds = snapshot.Requests
             .Select(x => x.DocumentRequestId)
@@ -500,57 +531,86 @@ public sealed class WhatsAppOutboundSendService
             .Select(x => x.DocumentRequestId)
             .OrderBy(x => x)
             .ToArray();
-        Finance.Require(snapshotRequestIds.SequenceEqual(activeMemberIds),
-            ResultConflictMessage);
+        var membershipMatches = snapshotRequestIds.SequenceEqual(activeMemberIds);
+        requiresReconciliation |= !membershipMatches;
 
         var requestIds = snapshotRequestIds;
         var requests = db.DocumentRequests
             .Include(x => x.Items)
             .Where(x => requestIds.Contains(x.Id))
             .ToList();
-        Finance.Require(requests.Count == requestIds.Length, ResultConflictMessage);
 
         foreach (var requestSnapshot in snapshot.Requests.OrderBy(x => x.DocumentRequestId))
         {
-            var request = requests.SingleOrDefault(x => x.Id == requestSnapshot.DocumentRequestId)
-                ?? throw new BusinessException(ResultConflictMessage);
-            Finance.Require(request.Revision == requestSnapshot.RequestRevision &&
-                            request.Version == requestSnapshot.RequestVersion &&
-                            request.Status == DocumentRequestStatus.ReadyToSend &&
-                            !db.DocumentRequests.Any(x =>
-                                x.WorkItemId == request.WorkItemId &&
-                                x.Revision > request.Revision),
-                ResultConflictMessage);
-
-            var previousStatus = request.Status;
-            request.Status = DocumentRequestStatus.Requested;
-            db.DocumentRequestStatusHistories.Add(new DocumentRequestStatusHistory
+            var request = requests.SingleOrDefault(x => x.Id == requestSnapshot.DocumentRequestId);
+            if (request is null)
             {
-                DocumentRequestId = request.Id,
-                PreviousStatus = previousStatus,
-                NewStatus = DocumentRequestStatus.Requested,
-                Action = "WhatsAppProviderAccepted",
-                Reason = "The immutable WhatsApp outbound message was accepted by the provider.",
-                Actor = actor,
-                Source = source,
-                CorrelationId = message.CorrelationId,
-                OccurredAt = occurredAt
-            });
+                requiresReconciliation = true;
+                continue;
+            }
+
+            var canActivateRequest = membershipMatches &&
+                request.Revision == requestSnapshot.RequestRevision &&
+                request.Version == requestSnapshot.RequestVersion &&
+                request.Status == DocumentRequestStatus.ReadyToSend &&
+                !db.DocumentRequests.Any(x =>
+                    x.WorkItemId == request.WorkItemId &&
+                    x.Revision > request.Revision);
+
+            if (canActivateRequest)
+            {
+                var previousStatus = request.Status;
+                request.Status = DocumentRequestStatus.Requested;
+                db.DocumentRequestStatusHistories.Add(new DocumentRequestStatusHistory
+                {
+                    DocumentRequestId = request.Id,
+                    PreviousStatus = previousStatus,
+                    NewStatus = DocumentRequestStatus.Requested,
+                    Action = "WhatsAppProviderAccepted",
+                    Reason = "The immutable WhatsApp outbound message was accepted by the provider.",
+                    Actor = actor,
+                    Source = source,
+                    CorrelationId = message.CorrelationId,
+                    OccurredAt = occurredAt
+                });
+            }
+            else if (request.Status != DocumentRequestStatus.Requested)
+            {
+                // A later staff lifecycle state wins. It is surfaced as a
+                // reconciliation outcome instead of being overwritten.
+                requiresReconciliation = true;
+            }
 
             foreach (var itemSnapshot in snapshot.Items
                          .Where(x => x.DocumentRequestId == request.Id)
                          .OrderBy(x => x.DocumentRequestItemId))
             {
-                var item = request.Items.SingleOrDefault(x => x.Id == itemSnapshot.DocumentRequestItemId)
-                    ?? throw new BusinessException(ResultConflictMessage);
-                Finance.Require(item.RequirementName == itemSnapshot.RequirementNameSnapshot &&
-                                item.IsRequired == itemSnapshot.IsRequired &&
-                                item.DisplayOrder == itemSnapshot.DisplayOrder &&
-                                itemSnapshot.RequestRevision == request.Revision,
-                    ResultConflictMessage);
-
-                if (item.Status != DocumentRequestItemStatus.Missing)
+                var item = request.Items.SingleOrDefault(x => x.Id == itemSnapshot.DocumentRequestItemId);
+                if (item is null)
+                {
+                    requiresReconciliation = true;
                     continue;
+                }
+
+                var itemMatchesSnapshot = item.RequirementName == itemSnapshot.RequirementNameSnapshot &&
+                    item.IsRequired == itemSnapshot.IsRequired &&
+                    item.DisplayOrder == itemSnapshot.DisplayOrder &&
+                    itemSnapshot.RequestRevision == request.Revision;
+
+                if (!canActivateRequest || !itemMatchesSnapshot)
+                {
+                    if (item.Status != DocumentRequestItemStatus.Requested)
+                        requiresReconciliation = true;
+                    continue;
+                }
+
+                if (item.Status == DocumentRequestItemStatus.Requested)
+                    continue;
+                if (item.Status != DocumentRequestItemStatus.Missing)
+                {
+                    requiresReconciliation = true;
+                    continue;
+                }
 
                 item.Status = DocumentRequestItemStatus.Requested;
                 db.DocumentRequestItemStatusHistories.Add(new DocumentRequestItemStatusHistory
@@ -569,19 +629,79 @@ public sealed class WhatsAppOutboundSendService
         }
 
         var previousBatchStatus = batch.Status;
-        batch.Status = DocumentRequestBatchStatus.Sent;
-        db.DocumentRequestBatchStatusHistories.Add(new DocumentRequestBatchStatusHistory
+        if (batch.Status != DocumentRequestBatchStatus.Sent)
         {
-            DocumentRequestBatchId = batch.Id,
-            PreviousStatus = previousBatchStatus,
-            NewStatus = DocumentRequestBatchStatus.Sent,
-            Action = "WhatsAppProviderAccepted",
-            Reason = "The WhatsApp provider accepted the immutable outbound message.",
-            Actor = actor,
-            Source = source,
-            CorrelationId = message.CorrelationId,
-            OccurredAt = occurredAt
-        });
+            batch.Status = DocumentRequestBatchStatus.Sent;
+            db.DocumentRequestBatchStatusHistories.Add(new DocumentRequestBatchStatusHistory
+            {
+                DocumentRequestBatchId = batch.Id,
+                PreviousStatus = previousBatchStatus,
+                NewStatus = DocumentRequestBatchStatus.Sent,
+                Action = "WhatsAppProviderAccepted",
+                Reason = "The WhatsApp provider accepted the immutable outbound message.",
+                Actor = actor,
+                Source = source,
+                CorrelationId = message.CorrelationId,
+                OccurredAt = occurredAt
+            });
+        }
+
+        return new(requiresReconciliation);
+    }
+
+    private async Task<bool> RequiresDocumentActivationReconciliationAsync(
+        WhatsAppOutboundMessage message,
+        CancellationToken cancellationToken)
+    {
+        var snapshot = message.WhatsAppOutboundBatchSnapshot
+            ?? throw new BusinessException(ResultConflictMessage);
+        var batch = message.DocumentRequestBatch
+            ?? throw new BusinessException(ResultConflictMessage);
+        var requiresReconciliation = batch.Status != DocumentRequestBatchStatus.Sent;
+
+        var snapshotRequestIds = snapshot.Requests
+            .Select(x => x.DocumentRequestId)
+            .OrderBy(x => x)
+            .ToArray();
+        var activeMemberIds = batch.Members
+            .Where(x => x.IsActive)
+            .Select(x => x.DocumentRequestId)
+            .OrderBy(x => x)
+            .ToArray();
+        requiresReconciliation |= !snapshotRequestIds.SequenceEqual(activeMemberIds);
+
+        var requests = await db.DocumentRequests
+            .AsNoTracking()
+            .Include(x => x.Items)
+            .Where(x => snapshotRequestIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        if (requests.Count != snapshotRequestIds.Length)
+            requiresReconciliation = true;
+
+        foreach (var requestSnapshot in snapshot.Requests.OrderBy(x => x.DocumentRequestId))
+        {
+            var request = requests.SingleOrDefault(x => x.Id == requestSnapshot.DocumentRequestId);
+            if (request is null)
+            {
+                requiresReconciliation = true;
+                continue;
+            }
+
+            if (request.Status != DocumentRequestStatus.Requested)
+                requiresReconciliation = true;
+
+            foreach (var itemSnapshot in snapshot.Items
+                         .Where(x => x.DocumentRequestId == request.Id)
+                         .OrderBy(x => x.DocumentRequestItemId))
+            {
+                var item = request.Items.SingleOrDefault(x => x.Id == itemSnapshot.DocumentRequestItemId);
+                if (item is null || item.Status != DocumentRequestItemStatus.Requested)
+                    requiresReconciliation = true;
+            }
+        }
+
+        return requiresReconciliation;
     }
 
     private async Task InvalidateQueuedMessageAsync(
@@ -759,7 +879,8 @@ public sealed class WhatsAppOutboundSendService
     }
 
     private static WhatsAppOutboundSendResult ToAlreadyAcceptedResult(
-        WhatsAppOutboundMessage message)
+        WhatsAppOutboundMessage message,
+        bool requiresDocumentActivationReconciliation)
     {
         var attempt = message.Attempts
             .Where(x => x.CompletedAt is not null &&
@@ -771,26 +892,33 @@ public sealed class WhatsAppOutboundSendService
             ?? throw new BusinessException(ResultConflictMessage);
         Finance.Require(message.DocumentRequestBatch?.Status == DocumentRequestBatchStatus.Sent,
             ResultConflictMessage);
-        return ToResult(message, attempt, AlreadyAccepted: true);
+        return ToResult(
+            message,
+            attempt,
+            AlreadyAccepted: true,
+            RequiresDocumentActivationReconciliation: requiresDocumentActivationReconciliation);
     }
 
     private static WhatsAppOutboundSendResult ToResult(
         WhatsAppOutboundMessage message,
         WhatsAppOutboundMessageAttempt attempt,
-        bool AlreadyAccepted) =>
+        bool AlreadyAccepted,
+        bool RequiresDocumentActivationReconciliation = false) =>
         ToResult(
             message,
             attempt,
             ParseDisposition(attempt.Disposition),
             attempt.ProviderMessageId,
-            AlreadyAccepted);
+            AlreadyAccepted,
+            RequiresDocumentActivationReconciliation);
 
     private static WhatsAppOutboundSendResult ToResult(
         WhatsAppOutboundMessage message,
         WhatsAppOutboundMessageAttempt attempt,
         WhatsAppSendDisposition disposition,
         string? providerMessageId,
-        bool AlreadyAccepted) =>
+        bool AlreadyAccepted,
+        bool RequiresDocumentActivationReconciliation = false) =>
         new(
             message.Id,
             attempt.Id,
@@ -801,7 +929,8 @@ public sealed class WhatsAppOutboundSendService
             message.DocumentRequestBatch?.Status ??
                 throw new BusinessException(ResultConflictMessage),
             providerMessageId,
-            AlreadyAccepted);
+            AlreadyAccepted,
+            RequiresDocumentActivationReconciliation);
 
     private static WhatsAppSendDisposition ParseDisposition(string? disposition)
     {
@@ -863,6 +992,9 @@ public sealed class WhatsAppOutboundSendService
         int AttemptId,
         int AttemptNumber,
         WhatsAppOutboundRequest Request);
+
+    private sealed record AcceptedDocumentActivationOutcome(
+        bool RequiresReconciliation);
 
     private sealed record ClaimOutcome(
         WhatsAppOutboundSendResult? AlreadyAccepted,
