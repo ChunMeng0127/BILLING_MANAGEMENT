@@ -26,6 +26,10 @@ public partial class IntegrationTests
             if (!assignmentIds.Contains(entry.Entity.Id)) continue;
             entry.Entity.CreatedAt = timestamp;
             entry.Entity.UpdatedAt = timestamp;
+            entry.Property(x => x.CreatedAt).OriginalValue = timestamp;
+            entry.Property(x => x.UpdatedAt).OriginalValue = timestamp;
+            entry.Property(x => x.CreatedAt).IsModified = false;
+            entry.Property(x => x.UpdatedAt).IsModified = false;
         }
     }
 
