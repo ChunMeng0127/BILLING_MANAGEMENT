@@ -40,6 +40,7 @@ builder.Services.AddScoped<DocumentRequestBatchService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<WhatsAppConversationService>();
 builder.Services.AddScoped<WhatsAppOutboundQueueService>();
+builder.Services.AddScoped<WhatsAppOutboundSendService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<BusinessClock>();

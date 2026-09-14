@@ -335,6 +335,66 @@ public sealed class WhatsAppOutboundQueueService
         throw new BusinessException(QueueConflictMessage);
     }
 
+    /// <summary>
+    /// Revalidates a durable Phase 10B message immediately before a manual
+    /// provider send and reconstructs the provider request from the persisted
+    /// message/snapshot only. The caller owns the surrounding transaction and
+    /// row locks; this method deliberately does not begin or commit a
+    /// transaction and never calls SendAsync.
+    /// </summary>
+    internal async Task<WhatsAppOutboundRequest> RevalidateQueuedMessageAndBuildRequestAsync(
+        WhatsAppOutboundMessage message,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var snapshot = message.WhatsAppOutboundBatchSnapshot;
+        Finance.Require(snapshot is not null, StalePreviewMessage);
+        Finance.Require(snapshot!.Id == message.WhatsAppOutboundBatchSnapshotId &&
+                        snapshot.DocumentRequestBatchId == message.DocumentRequestBatchId &&
+                        snapshot.Requests.Count > 0,
+            StalePreviewMessage);
+
+        var selections = snapshot.Requests
+            .OrderBy(x => x.DocumentRequestId)
+            .Select(x => new DocumentBatchRequestSelection(x.DocumentRequestId, x.RequestRevision))
+            .ToArray();
+        var content = ContentFromQueuedMessage(message);
+        var capabilities = await ReadProviderCapabilitiesAsync(
+            snapshot.WhatsAppConversationId,
+            cancellationToken);
+        var eligible = await requestBatchService.PreviewBatchAsync(
+            snapshot.ContactId,
+            selections,
+            cancellationToken);
+        var currentFacts = await LoadAndValidateFactsAsync(
+            snapshot.ContactId,
+            snapshot.WhatsAppConversationId,
+            selections,
+            eligible.Requests,
+            content,
+            capabilities,
+            cancellationToken);
+
+        EnsureQueuedSnapshotMatches(message, snapshot, currentFacts);
+
+        var account = new WhatsAppProviderAccountBinding(
+            message.ProviderName,
+            message.BusinessEndpointKey,
+            message.ProviderAccountReference);
+        var destination = message.DestinationKind == WhatsAppOutboundDestinationKind.Direct
+            ? WhatsAppDestination.Direct(
+                message.ProviderDestinationKey,
+                message.NormalizedE164,
+                message.ProviderRecipientKey)
+            : WhatsAppDestination.Group(message.ProviderDestinationKey);
+        return new WhatsAppOutboundRequest(
+            message.LogicalMessageKey,
+            account,
+            destination,
+            ToProviderContent(content),
+            message.CorrelationId);
+    }
+
     private async Task<WhatsAppOutboundQueueResult> QueueInsideTransactionAsync(
         PreviewTokenPayload payload,
         CancellationToken cancellationToken)
@@ -910,6 +970,132 @@ public sealed class WhatsAppOutboundQueueService
         message.ProviderDestinationKey == destination.ProviderDestinationKey &&
         message.NormalizedE164 == destination.NormalizedE164 &&
         message.ProviderRecipientKey == destination.ProviderRecipientKey;
+
+    private static ContentFact ContentFromQueuedMessage(WhatsAppOutboundMessage message)
+    {
+        return message.ContentKind switch
+        {
+            ModelContentKind.Text => BuildQueuedTextContent(message),
+            ModelContentKind.Template => BuildQueuedTemplateContent(message),
+            _ => throw new BusinessException(StalePreviewMessage)
+        };
+    }
+
+    private static ContentFact BuildQueuedTextContent(WhatsAppOutboundMessage message)
+    {
+        Finance.Require(!string.IsNullOrWhiteSpace(message.TextBody) &&
+                        message.TemplateName is null &&
+                        message.TemplateLanguage is null &&
+                        message.TemplateParametersSnapshot is null,
+            StalePreviewMessage);
+        return new(ModelContentKind.Text, message.TextBody, null, null, [], null);
+    }
+
+    private static ContentFact BuildQueuedTemplateContent(WhatsAppOutboundMessage message)
+    {
+        Finance.Require(message.TextBody is null &&
+                        !string.IsNullOrWhiteSpace(message.TemplateName) &&
+                        !string.IsNullOrWhiteSpace(message.TemplateLanguage) &&
+                        !string.IsNullOrWhiteSpace(message.TemplateParametersSnapshot),
+            StalePreviewMessage);
+
+        string[] parameters;
+        try
+        {
+            parameters = JsonSerializer.Deserialize<string[]>(
+                message.TemplateParametersSnapshot!,
+                TokenJsonOptions) ?? throw new JsonException("Template parameters were null.");
+        }
+        catch (JsonException ex)
+        {
+            throw new BusinessException(StalePreviewMessage, ex);
+        }
+
+        Finance.Require(JsonSerializer.Serialize(parameters, TokenJsonOptions) == message.TemplateParametersSnapshot,
+            StalePreviewMessage);
+        return new(
+            ModelContentKind.Template,
+            null,
+            message.TemplateName,
+            message.TemplateLanguage,
+            parameters,
+            message.TemplateParametersSnapshot);
+    }
+
+    private static void EnsureQueuedSnapshotMatches(
+        WhatsAppOutboundMessage message,
+        WhatsAppOutboundBatchSnapshot snapshot,
+        PreviewFacts actual)
+    {
+        Finance.Require(snapshot.DocumentRequestBatchId == message.DocumentRequestBatchId &&
+                        snapshot.ContactId == actual.Contact.Id &&
+                        snapshot.WhatsAppConversationId == actual.Conversation.Id &&
+                        snapshot.ConversationAuthorizationVersion == actual.Conversation.AuthorizationVersion &&
+                        string.Equals(snapshot.ParticipantSetHash, actual.ParticipantSetHash, StringComparison.Ordinal) &&
+                        string.Equals(snapshot.CorrelationId, message.CorrelationId, StringComparison.Ordinal) &&
+                        message.ProviderName == actual.Conversation.ProviderName &&
+                        message.BusinessEndpointKey == actual.Conversation.BusinessEndpointKey &&
+                        message.ProviderAccountReference == actual.Conversation.ProviderAccountReference &&
+                        MessageDestinationMatches(message, actual.Destination),
+            StalePreviewMessage);
+
+        var participants = actual.ActiveParticipants.OrderBy(x => x.Id).ToArray();
+        var participantSnapshots = snapshot.Participants.OrderBy(x => x.WhatsAppConversationParticipantId).ToArray();
+        Finance.Require(participants.Length == participantSnapshots.Length &&
+                        participants.Zip(participantSnapshots).All(x =>
+                            x.First.Id == x.Second.WhatsAppConversationParticipantId &&
+                            x.First.ParticipantKind == x.Second.ParticipantKind &&
+                            x.First.ContactId == x.Second.ContactId &&
+                            x.First.ContactWhatsAppAddressId == x.Second.ContactWhatsAppAddressId &&
+                            x.First.BusinessPartyId == x.Second.BusinessPartyId &&
+                            x.First.ManagerId == x.Second.ManagerId &&
+                            x.First.AppUserId == x.Second.AppUserId &&
+                            x.First.ProviderParticipantKey == x.Second.ProviderParticipantKey &&
+                            x.First.NormalizedE164 == x.Second.NormalizedE164 &&
+                            x.First.DisplayNameSnapshot == x.Second.DisplayNameSnapshot),
+            StalePreviewMessage);
+
+        var scopes = actual.EngagementScopes.OrderBy(x => x.Id).ToArray();
+        var scopeSnapshots = snapshot.EngagementScopes.OrderBy(x => x.WhatsAppConversationEngagementScopeId).ToArray();
+        Finance.Require(scopes.Length == scopeSnapshots.Length &&
+                        scopes.Zip(scopeSnapshots).All(x =>
+                            x.First.Id == x.Second.WhatsAppConversationEngagementScopeId &&
+                            x.First.EngagementId == x.Second.EngagementId &&
+                            x.First.ApprovedAuthorizationVersion == x.Second.ApprovedAuthorizationVersion),
+            StalePreviewMessage);
+
+        var requests = actual.Requests.OrderBy(x => x.DocumentRequestId).ToArray();
+        var requestSnapshots = snapshot.Requests.OrderBy(x => x.DocumentRequestId).ToArray();
+        Finance.Require(requests.Length == requestSnapshots.Length &&
+                        requests.Zip(requestSnapshots).All(x =>
+                            x.First.DocumentRequestId == x.Second.DocumentRequestId &&
+                            x.First.Revision == x.Second.RequestRevision &&
+                            x.First.Version == x.Second.RequestVersion &&
+                            x.First.EngagementId == x.Second.EngagementId &&
+                            x.First.CustomerId == x.Second.CustomerId &&
+                            x.First.CustomerName == x.Second.CustomerNameSnapshot &&
+                            x.First.ServiceId == x.Second.ServiceId &&
+                            x.First.ServiceName == x.Second.ServiceNameSnapshot &&
+                            QueuedItemsMatch(x.First, snapshot)),
+            StalePreviewMessage);
+    }
+
+    private static bool QueuedItemsMatch(RequestFact request, WhatsAppOutboundBatchSnapshot snapshot)
+    {
+        var items = request.UnresolvedItems.OrderBy(x => x.DocumentRequestItemId).ToArray();
+        var itemSnapshots = snapshot.Items
+            .Where(x => x.DocumentRequestId == request.DocumentRequestId)
+            .OrderBy(x => x.DocumentRequestItemId)
+            .ToArray();
+        return items.Length == itemSnapshots.Length &&
+               items.Zip(itemSnapshots).All(x =>
+                   x.First.DocumentRequestItemId == x.Second.DocumentRequestItemId &&
+                   x.Second.RequestRevision == request.Revision &&
+                   x.First.RequirementName == x.Second.RequirementNameSnapshot &&
+                   x.First.IsRequired == x.Second.IsRequired &&
+                   x.First.DisplayOrder == x.Second.DisplayOrder &&
+                   x.First.Status == x.Second.ItemStatusSnapshot);
+    }
 
     private static PreviewTokenPayload CreateTokenPayload(
         Guid previewId,
