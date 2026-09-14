@@ -113,6 +113,8 @@ public sealed class WhatsAppOutboundSendService
             actor,
             source,
             cancellationToken);
+        if (claim.FailureMessage is not null)
+            throw new BusinessException(claim.FailureMessage);
         if (claim.AlreadyAccepted is not null)
             return claim.AlreadyAccepted;
 
@@ -263,7 +265,9 @@ public sealed class WhatsAppOutboundSendService
         catch (BusinessException exception)
         {
             await InvalidateQueuedMessageAsync(message, actor, source, exception.Message, cancellationToken);
-            throw new BusinessException(StaleSendMessage, exception);
+            // Return a committed failure outcome from the transaction. The
+            // caller throws only after the invalidation transaction commits.
+            return new(null, null, StaleSendMessage);
         }
 
         var attemptNumber = Math.Max(
@@ -409,7 +413,11 @@ public sealed class WhatsAppOutboundSendService
             providerTimestamp,
             actor);
         await db.SaveChangesAsync(CancellationToken.None);
-        return ToResult(message, attempt, AlreadyAccepted: false);
+        return ToResult(
+            message,
+            attempt,
+            providerResult.Disposition,
+            AlreadyAccepted: false);
     }
 
     private async Task CompleteAttemptAsync(
@@ -769,12 +777,19 @@ public sealed class WhatsAppOutboundSendService
         WhatsAppOutboundMessage message,
         WhatsAppOutboundMessageAttempt attempt,
         bool AlreadyAccepted) =>
+        ToResult(message, attempt, ParseDisposition(attempt.Disposition), AlreadyAccepted);
+
+    private static WhatsAppOutboundSendResult ToResult(
+        WhatsAppOutboundMessage message,
+        WhatsAppOutboundMessageAttempt attempt,
+        WhatsAppSendDisposition disposition,
+        bool AlreadyAccepted) =>
         new(
             message.Id,
             attempt.Id,
             attempt.AttemptNumber,
             message.Version,
-            ParseDisposition(attempt.Disposition),
+            disposition,
             message.State,
             message.DocumentRequestBatch?.Status ??
                 throw new BusinessException(ResultConflictMessage),
@@ -844,5 +859,6 @@ public sealed class WhatsAppOutboundSendService
 
     private sealed record ClaimOutcome(
         WhatsAppOutboundSendResult? AlreadyAccepted,
-        SendClaim? Claim = null);
+        SendClaim? Claim = null,
+        string? FailureMessage = null);
 }
