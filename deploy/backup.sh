@@ -11,8 +11,15 @@ DB_USER="${DB_USER:-billing}"
 DB_NAME="${DB_NAME:-billing}"
 APPLY_RETENTION="${APPLY_RETENTION:-1}"
 OFFSITE_DIR="${OFFSITE_DIR:-}"
+OFFSITE_RCLONE_REMOTE="${OFFSITE_RCLONE_REMOTE:-}"
+OFFSITE_RCLONE_CONFIG="${OFFSITE_RCLONE_CONFIG:-/root/.config/rclone/rclone.conf}"
 OFFSITE_REQUIRED="${OFFSITE_REQUIRED:-0}"
 OFFSITE_MUST_BE_MOUNT="${OFFSITE_MUST_BE_MOUNT:-1}"
+
+if [[ -n "$OFFSITE_DIR" && -n "$OFFSITE_RCLONE_REMOTE" ]]; then
+  echo "Configure either OFFSITE_DIR or OFFSITE_RCLONE_REMOTE, not both." >&2
+  exit 2
+fi
 
 if [[ -n "${COMPOSE_FILE:-}" ]]; then
   compose_file="$COMPOSE_FILE"
@@ -70,7 +77,24 @@ printf '%s  %s\n' "$sha" "$(basename "$final")" > "$sha_file"
 chmod 600 "$final" "$sha_file"
 
 offsite_status="disabled"
-if [[ -n "$OFFSITE_DIR" ]]; then
+if [[ -n "$OFFSITE_RCLONE_REMOTE" ]]; then
+  if ! command -v rclone >/dev/null 2>&1 || [[ ! -f "$OFFSITE_RCLONE_CONFIG" ]]; then
+    if [[ "$OFFSITE_REQUIRED" == "1" ]]; then
+      echo "rclone or rclone config is unavailable for required offsite backup." >&2
+      false
+    fi
+    offsite_status="unavailable"
+  else
+    remote_base="${OFFSITE_RCLONE_REMOTE%/}"
+    remote_dump="$remote_base/$(basename "$final")"
+    remote_sha_file="$remote_base/$(basename "$sha_file")"
+    rclone --config "$OFFSITE_RCLONE_CONFIG" copyto "$final" "$remote_dump" --retries 3 --low-level-retries 5
+    rclone --config "$OFFSITE_RCLONE_CONFIG" copyto "$sha_file" "$remote_sha_file" --retries 3 --low-level-retries 5
+    offsite_sha="$(rclone --config "$OFFSITE_RCLONE_CONFIG" cat "$remote_dump" | sha256sum | awk '{print $1}')"
+    [[ "$offsite_sha" == "$sha" ]]
+    offsite_status="rclone-copied-verified"
+  fi
+elif [[ -n "$OFFSITE_DIR" ]]; then
   if [[ "$OFFSITE_MUST_BE_MOUNT" == "1" ]] && ! mountpoint -q "$OFFSITE_DIR"; then
     if [[ "$OFFSITE_REQUIRED" == "1" ]]; then
       echo "Offsite path is not a mounted filesystem: $OFFSITE_DIR" >&2
@@ -88,14 +112,14 @@ if [[ -n "$OFFSITE_DIR" ]]; then
     install -m 600 "$sha_file" "$OFFSITE_DIR/$(basename "$sha_file")"
     offsite_sha="$(sha256sum "$OFFSITE_DIR/$(basename "$final")" | awk '{print $1}')"
     [[ "$offsite_sha" == "$sha" ]]
-    offsite_status="copied"
+    offsite_status="mounted-copied-verified"
   fi
 fi
 
 retention=("$SCRIPT_DIR/backup-retention.py" "$BACKUP_DIR")
 if [[ "$APPLY_RETENTION" == "1" ]]; then retention+=(--apply); fi
 python3 "${retention[@]}"
-if [[ "$offsite_status" == "copied" ]]; then
+if [[ "$offsite_status" == "mounted-copied-verified" ]]; then
   offsite_retention=("$SCRIPT_DIR/backup-retention.py" "$OFFSITE_DIR")
   if [[ "$APPLY_RETENTION" == "1" ]]; then offsite_retention+=(--apply); fi
   python3 "${offsite_retention[@]}"
