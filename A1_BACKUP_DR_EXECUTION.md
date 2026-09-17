@@ -19,10 +19,11 @@
 - Isolated PostgreSQL 17 restore verification script.
 - Daily systemd backup timer.
 - Weekly systemd isolated restore verification timer.
+- `rclone` installed on the VPS for direct offsite copy support.
+- Direct rclone offsite upload support with remote read-back SHA-256 verification.
+- Mounted-filesystem offsite mode remains available as an alternative.
 
 ## Production validation
-
-The installed scripts were sourced from branch `hardening/a1-backup-dr` at SHA `69163fc507307ba92774f1cdcdd8be6eb4f25a4c`.
 
 Manual production backup validation on 2026-09-17:
 
@@ -38,6 +39,17 @@ Manual production backup validation on 2026-09-17:
 
 Retention logic was independently tested against synthetic backup sets in both dry-run and apply modes. Sidecar deletion matched dump deletion and unrelated files were preserved.
 
+The rclone offsite mechanism was also tested with an isolated temporary rclone alias target:
+
+- backup creation: PASS
+- dump upload: PASS
+- SHA-256 sidecar upload: PASS
+- remote dump read-back: PASS
+- remote read-back SHA-256 matched local SHA-256: PASS
+- resulting status: `rclone-copied-verified`
+
+The temporary test target was deleted after verification and was not treated as a real offsite backup.
+
 ## Active schedules
 
 - Daily backup: approximately 02:30 Asia/Kuala_Lumpur, with up to 10 minutes randomized delay.
@@ -46,19 +58,27 @@ Retention logic was independently tested against synthetic backup sets in both d
 
 ## Offsite status
 
-**Not yet complete.**
+**External destination authorization is still pending.**
 
-No separately mounted remote filesystem, object-storage client, or existing offsite destination was present on the production VPS during implementation. `OFFSITE_DIR` therefore remains disabled rather than copying to another path on the same VPS and incorrectly treating it as disaster recovery.
+The VPS is now prepared for direct rclone-based offsite backup. No company cloud account has been connected yet, so no financial backup has been uploaded outside the VPS.
 
-The backup implementation already supports a separately mounted offsite filesystem through `/etc/billing-control/backup.env` using:
+Preferred configuration after a company-owned cloud destination is authorized:
 
 ```text
-OFFSITE_DIR=/mnt/billing-control-offsite
+OFFSITE_RCLONE_REMOTE=billing-backup-crypt:production
+OFFSITE_RCLONE_CONFIG=/root/.config/rclone/rclone.conf
 OFFSITE_REQUIRED=1
-OFFSITE_MUST_BE_MOUNT=1
 ```
 
-A1 cannot be marked fully complete until an off-VPS destination is configured and a copied backup is checksum-verified there.
+The target should preferably be an rclone `crypt` remote layered over the company-owned storage provider. The backup job uploads the dump and checksum sidecar, then reads the remote dump back through rclone and recalculates SHA-256. The job is successful only when the read-back checksum matches the local backup.
+
+A separately mounted remote filesystem remains supported as an alternative, but another directory on the same VPS must never be treated as offsite disaster recovery.
+
+A1 cannot be marked fully complete until an off-VPS destination is authorized, a production backup is copied there, and the remote read-back checksum is verified.
+
+## CI note
+
+PR CI currently reports the same three date-dependent integration-test failures already present on the `master` baseline. The A1 change does not modify the affected application workflow/test code. These pre-existing deterministic-time test failures remain tracked for A6 and must not be misclassified as an A1 backup regression.
 
 ## Acceptance status
 
@@ -72,7 +92,9 @@ A1 cannot be marked fully complete until an off-VPS destination is configured an
 | Isolated restore verification | PASS |
 | Daily timer enabled | PASS |
 | Weekly restore-verification timer enabled | PASS |
-| Off-VPS copy | PENDING |
+| Offsite client / verified copy mechanism | PASS |
+| Company-owned off-VPS destination authorized | PENDING |
+| Production backup copied off-VPS and read-back checksum verified | PENDING |
 | Failure notification beyond local journal/status | PENDING / optional where practical |
 
 ## Safety notes
@@ -80,4 +102,5 @@ A1 cannot be marked fully complete until an off-VPS destination is configured an
 - Production DB was never used as a restore-test target.
 - The application did not need to be stopped for backup or verification testing.
 - Development / WhatsApp code was not deployed or merged as part of A1.
-- Do not configure `OFFSITE_DIR` to another directory on the same VPS filesystem.
+- No cloud account or OAuth token has been connected without explicit user authorization.
+- No production backup has been uploaded to a personal or unknown destination.
