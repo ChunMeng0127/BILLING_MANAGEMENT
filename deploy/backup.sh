@@ -119,7 +119,12 @@ fi
 retention=("$SCRIPT_DIR/backup-retention.py" "$BACKUP_DIR")
 if [[ "$APPLY_RETENTION" == "1" ]]; then retention+=(--apply); fi
 python3 "${retention[@]}"
-if [[ "$offsite_status" == "mounted-copied-verified" ]]; then
+
+if [[ "$offsite_status" == "rclone-copied-verified" ]]; then
+  offsite_retention=("$SCRIPT_DIR/rclone-retention.py" "$OFFSITE_RCLONE_REMOTE" --config "$OFFSITE_RCLONE_CONFIG")
+  if [[ "$APPLY_RETENTION" == "1" ]]; then offsite_retention+=(--apply); fi
+  python3 "${offsite_retention[@]}"
+elif [[ "$offsite_status" == "mounted-copied-verified" ]]; then
   offsite_retention=("$SCRIPT_DIR/backup-retention.py" "$OFFSITE_DIR")
   if [[ "$APPLY_RETENTION" == "1" ]]; then offsite_retention+=(--apply); fi
   python3 "${offsite_retention[@]}"
