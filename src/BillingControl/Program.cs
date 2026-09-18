@@ -65,7 +65,12 @@ app.Use(async (context, next) =>
         logger.LogError("HTTP {StatusCode} {Method} {Path}", context.Response.StatusCode, context.Request.Method, context.Request.Path);
     }
 });
-if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) { app.UseExceptionHandler("/Home/Error"); app.UseHsts(); app.UseHttpsRedirection(); }
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+    app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), branch => branch.UseHttpsRedirection());
+}
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
