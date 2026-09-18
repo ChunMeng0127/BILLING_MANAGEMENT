@@ -20,7 +20,9 @@ services:
         test "$$(git -C /release/source/repo rev-parse HEAD)"
         = "${RELEASE_SHA:?Set RELEASE_SHA}" &&
         printf '%s\n' "${RELEASE_SHA:?Set RELEASE_SHA}"
-        > /release/source/RELEASE_SHA
+        > /release/source/RELEASE_SHA &&
+        git -C /release/source/repo show -s --format=%ct HEAD
+        > /release/source/SOURCE_DATE_EPOCH
     volumes:
       - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}:/release
 
@@ -36,7 +38,10 @@ services:
         cp -R /release/source/repo/src/BillingControl /work &&
         dotnet restore /work/BillingControl.csproj &&
         dotnet publish /work/BillingControl.csproj -c Release --no-restore
-        -o /release/publish /p:UseAppHost=false
+        -o /release/publish /p:UseAppHost=false &&
+        fixed_date="$(date -u -d "@$(cat /release/source/SOURCE_DATE_EPOCH)" '+%a, %d %b %Y %H:%M:%S GMT')" &&
+        sed -E -i "s/[A-Z][a-z]{2}, [0-9]{2} [A-Z][a-z]{2} [0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2} GMT/$fixed_date/g"
+        /release/publish/BillingControl.staticwebassets.endpoints.json
     volumes:
       - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}:/release
     depends_on:
