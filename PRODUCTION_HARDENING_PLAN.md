@@ -451,8 +451,8 @@ The following rules apply throughout this plan:
 | Production baseline audit | ✅ Complete | Data-integrity audit clean |
 | Verified current backup | ✅ Complete | 2026-09-17 dump restored successfully in isolation |
 | Sensitive local file permissions | ✅ Complete | Current `.env` and known local DB dumps restricted to owner-only |
-| A1 — Backup & Disaster Recovery | ⏳ Next | Automated/offsite backup still required |
-| A2 — Database Least Privilege | Not started | Runtime DB role currently superuser |
+| A1 — Backup & Disaster Recovery | ✅ Complete | Automated local + Microsoft 365 offsite backup, retention and isolated restore verification are active |
+| A2 — Database Least Privilege | ✅ Complete | Runtime, migration, backup and break-glass roles separated; bootstrap superuser locked NOLOGIN |
 | A3 — Immutable Deployment | Not started | Live deployment still follows mutable `master` |
 | A4 — CI / Health / Monitoring | Not started | CI/production topology drift exists |
 | A5 — VPS Hardening | Not started | Must use controlled lockout-safe sequence |
