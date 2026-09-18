@@ -1,6 +1,6 @@
 # A6 Code Maintenance & Auditability Execution
 
-Status: implementation complete; final CI / merge pending
+Status: COMPLETE; merge pending
 
 ## Scope
 
@@ -156,9 +156,21 @@ Recommended boundaries:
 
 This enhancement is not a prerequisite for closing the current production hardening plan.
 
+## Final validation
+
+GitHub Actions run `35325899339` completed successfully.
+
+- JavaScript: 12/12 PASS
+- Release build: PASS, 0 warnings / 0 errors
+- PostgreSQL-backed .NET: 51/51 PASS, 0 failed, 0 skipped
+- Docker image build: PASS
+- production Compose / Traefik HTTPS smoke: PASS
+- health/login/authenticated production-path smoke: PASS
+- antiforgery / Cache-Control override warning in CI log: none
+
 ## A6 acceptance
 
-Pending final CI, A6 is expected to satisfy:
+A6 satisfies:
 
 - deterministic full test suite independent of real-world date
 - all existing financial/data-integrity regression coverage retained
