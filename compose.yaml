@@ -19,6 +19,14 @@ services:
 
   migrate:
     build: .
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     command: ["--migrate"]
     environment:
       ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
@@ -37,6 +45,14 @@ services:
   app:
     build: .
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     environment:
       TZ: Asia/Kuala_Lumpur
       ASPNETCORE_ENVIRONMENT: Production
