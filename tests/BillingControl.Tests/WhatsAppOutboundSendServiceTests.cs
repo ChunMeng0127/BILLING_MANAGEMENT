@@ -732,6 +732,74 @@ public partial class IntegrationTests
     }
 
     [PostgresFact]
+    public async Task Phase10CRepeatedAcceptedResultTreatsLegitimateLaterDocumentProgressAsReconciled()
+    {
+        await using var db = await Fresh();
+        var fixture = await AddQueuedSendFixtureAsync(db, "send-accepted-later-progress");
+        var service = SendService(db, fixture.Provider);
+
+        var first = await service.SendAsync(SendInput(fixture));
+
+        Assert.Equal(WhatsAppSendDisposition.Accepted, first.Disposition);
+        Assert.False(first.RequiresDocumentActivationReconciliation);
+        Assert.Single(fixture.Provider.CapturedRequests);
+
+        var request = await db.DocumentRequests
+            .SingleAsync(x => x.Id == fixture.Queue.RequestId);
+        var item = await db.DocumentRequestItems
+            .SingleAsync(x => x.Id == fixture.Queue.ItemId);
+        var progressedAt = WhatsAppTestClock().UtcNow.AddMinutes(5);
+
+        request.Status = DocumentRequestStatus.Complete;
+        db.DocumentRequestStatusHistories.Add(new DocumentRequestStatusHistory
+        {
+            DocumentRequestId = request.Id,
+            PreviousStatus = DocumentRequestStatus.Requested,
+            NewStatus = DocumentRequestStatus.Complete,
+            Action = "EvidenceCompletedRequest",
+            Reason = "Test-only legitimate post-send document lifecycle progression.",
+            Actor = "phase10c-progress",
+            Source = "Phase10C.Tests",
+            OccurredAt = progressedAt
+        });
+
+        item.Status = DocumentRequestItemStatus.Received;
+        db.DocumentRequestItemStatusHistories.Add(new DocumentRequestItemStatusHistory
+        {
+            DocumentRequestItemId = item.Id,
+            PreviousStatus = DocumentRequestItemStatus.Requested,
+            NewStatus = DocumentRequestItemStatus.Received,
+            Action = "EvidenceReceivedItem",
+            Reason = "Test-only legitimate post-send document lifecycle progression.",
+            Actor = "phase10c-progress",
+            Source = "Phase10C.Tests",
+            OccurredAt = progressedAt
+        });
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var currentMessage = await db.WhatsAppOutboundMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == fixture.Message.Id);
+        var repeated = await service.SendAsync(new(
+            currentMessage.Id,
+            currentMessage.Version,
+            "phase10c-replay",
+            "Phase10C.Tests"));
+
+        Assert.Equal(WhatsAppSendDisposition.Accepted, repeated.Disposition);
+        Assert.True(repeated.AlreadyAccepted);
+        Assert.False(repeated.RequiresDocumentActivationReconciliation);
+        Assert.Equal(first.WhatsAppOutboundMessageAttemptId, repeated.WhatsAppOutboundMessageAttemptId);
+        Assert.Single(fixture.Provider.CapturedRequests);
+        Assert.Equal(DocumentRequestStatus.Complete,
+            await db.DocumentRequests.Where(x => x.Id == fixture.Queue.RequestId)
+                .Select(x => x.Status).SingleAsync());
+        Assert.Equal(DocumentRequestItemStatus.Received,
+            await db.DocumentRequestItems.Where(x => x.Id == fixture.Queue.ItemId)
+                .Select(x => x.Status).SingleAsync());
+    }
+
+    [PostgresFact]
     public async Task Phase10CAcceptedResultPreservesRequestRaceAndRepeatedSendReconcilesWithoutResend()
     {
         await using var db = await Fresh();
