@@ -12,6 +12,14 @@ namespace BillingControl.Tests;
 
 public partial class IntegrationTests
 {
+    private static async Task SetProgressAssignmentAuditTime(AppDbContext db, DateTime utc)
+    {
+        await db.WorkerAssignments.ExecuteUpdateAsync(setters => setters
+            .SetProperty(x => x.CreatedAt, utc)
+            .SetProperty(x => x.UpdatedAt, utc));
+        db.ChangeTracker.Clear();
+    }
+
     [Fact]
     public void ProgressBusinessClockUsesMalaysiaSundayDeadline()
     {
@@ -107,6 +115,7 @@ public partial class IntegrationTests
         var worker = new Worker { Name = "Current week editor" };
         db.Add(worker); await db.SaveChangesAsync();
         await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        await SetProgressAssignmentAuditTime(db, time.Now.UtcDateTime);
         var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).SingleAsync();
         var access = new AccessProfile("current-week-worker", AppRoles.Worker, null, null, worker.Id);
         var reporting = new ProgressReportService(db, clock);
@@ -778,6 +787,7 @@ public partial class IntegrationTests
         await billing.Assign(past.WorkItem.Id, worker.Id, 0);
         await billing.Assign(future.WorkItem.Id, worker.Id, 50);
         await billing.Assign(future.WorkItem.Id, other.Id, 50);
+        await SetProgressAssignmentAuditTime(db, time.Now.UtcDateTime);
         var assignments = await db.WorkerAssignments.OrderBy(x => x.Id).ToListAsync();
         var assignment = assignments.Single(x => x.WorkerId == worker.Id && x.WorkItemId == past.WorkItem.Id);
         var futureAssignment = assignments.Single(x => x.WorkerId == worker.Id && x.WorkItemId == future.WorkItem.Id);
@@ -902,6 +912,7 @@ public partial class IntegrationTests
         var worker = new Worker { Name = "Progress history worker" };
         db.Add(worker); await db.SaveChangesAsync();
         await billing.Assign(bill.WorkItem.Id, worker.Id, 0);
+        await SetProgressAssignmentAuditTime(db, time.Now.UtcDateTime);
         var assignment = await db.WorkerAssignments.SingleAsync();
         var access = new AccessProfile("history-worker", AppRoles.Worker, null, null, worker.Id);
         var reporting = new ProgressReportService(db, clock);
