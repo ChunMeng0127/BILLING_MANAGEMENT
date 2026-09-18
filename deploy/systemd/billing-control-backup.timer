@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Billing Control backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Kuala_Lumpur
+Persistent=true
+RandomizedDelaySec=10m
+Unit=billing-control-backup.service
+
+[Install]
+WantedBy=timers.target

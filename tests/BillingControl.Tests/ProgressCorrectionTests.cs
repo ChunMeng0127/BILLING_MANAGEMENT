@@ -51,8 +51,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task ActiveAssignmentsIgnoreBillingPeriodsAndPreserveWeeklyWorkflowSnapshots()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 2, 2, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -119,8 +119,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task WorkerCurrentWeekReportEditUpdatesAssignmentStateAndPreservesSubmissionAudit()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -131,6 +131,8 @@ public partial class IntegrationTests
         var assignmentId = await db.WorkerAssignments.Select(x => x.Id).SingleAsync();
         await AlignAssignmentAuditWithClockAsync(db, time, assignmentId);
         var assignment = await db.WorkerAssignments.Include(x => x.WorkItem).ThenInclude(x => x.BillingRecord).SingleAsync();
+        Assert.Equal(time.Now.UtcDateTime, assignment.CreatedAt);
+        Assert.Equal(time.Now.UtcDateTime, assignment.UpdatedAt);
         var access = new AccessProfile("current-week-worker", AppRoles.Worker, null, null, worker.Id);
         var reporting = new ProgressReportService(db, clock);
         var first = await reporting.SaveAsync(access, new WeeklyProgressForm
@@ -191,8 +193,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task HistoricalLateReportDoesNotRewriteCurrentAssignmentWorkflow()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -238,8 +240,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task CurrentWeekEditUsesLatestAssignmentStateAndRejectsStaleAssignmentVersion()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -318,8 +320,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task CompletedAssignmentCanSubmitEarlierMissingWeekWithoutReopening()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 16, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -393,8 +395,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task HistoricalMissingWeekSurvivesHideAndUnhideWithoutRetroactiveResumption()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -449,8 +451,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task BatchCompletionAllowsSingleFinalCurrentWeekReport()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -547,8 +549,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task HistoricalResponsibilityWindowsPreservePastResultsAndResumeSafely()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -788,8 +790,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task WorkflowStateHistoryVisibilityAndBatchRulesAreSafe()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);
@@ -917,8 +919,8 @@ public partial class IntegrationTests
     [PostgresFact]
     public async Task CurrentWeekProgressUpdatesKeepOneReportAndAppendImmutableHistory()
     {
-        await using var db = await Fresh();
         var time = new FixedProgressTime { Now = new(2026, 9, 9, 4, 0, 0, TimeSpan.Zero) };
+        await using var db = await Fresh(time);
         var clock = new BusinessClock(time, new ConfigurationBuilder().Build());
         var engagement = await Engagement(db);
         var billing = new BillingService(db);

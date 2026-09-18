@@ -44,7 +44,16 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -keyout deploy/tls/privkey.pem -out deploy/tls/fullchain.pem -subj /CN=localhost -addext subjectAltName=DNS:localhost
           docker compose -f compose.yaml config --quiet
           docker compose -f compose.yaml up -d --build
-          curl --cacert deploy/tls/fullchain.pem --fail --retry 20 --retry-delay 3 --retry-all-errors --retry-max-time 90 https://localhost/Account/Login -o /dev/null
+          app_id="$(docker compose -f compose.yaml ps -q app)"
+          for i in $(seq 1 30); do
+            health="$(docker inspect "$app_id" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}')"
+            if [ "$health" = healthy ]; then break; fi
+            if [ "$health" = unhealthy ]; then docker inspect "$app_id" --format '{{json .State.Health}}'; exit 1; fi
+            sleep 3
+          done
+          test "$(docker inspect "$app_id" --format '{{.State.Health.Status}}')" = healthy
+          curl --cacert deploy/tls/fullchain.pem --fail --retry 20 --retry-delay 3 --retry-all-errors --retry-max-time 90 https://localhost/health/ready -o /dev/null
+          curl --cacert deploy/tls/fullchain.pem --fail https://localhost/Account/Login -o /dev/null
           python3 scripts/smoke_https.py
       - name: Stop production smoke stack
         if: always()
@@ -54,7 +63,7 @@ jobs:
           ADMIN_PASSWORD: CI-Compose-Password!123
           APP_HOST: localhost
         run: |
-          docker compose -f compose.yaml logs --no-color --tail 100 app nginx
+          docker compose -f compose.yaml logs --no-color --tail 100 app traefik
           docker compose -f compose.yaml down
       - uses: actions/upload-artifact@v4
         if: always()
