@@ -455,7 +455,7 @@ The following rules apply throughout this plan:
 | A2 — Database Least Privilege | ✅ Complete | Runtime, migration, backup and break-glass roles separated; bootstrap superuser locked NOLOGIN |
 | A3 — Immutable Deployment | ✅ Production complete | Exact-SHA deterministic releases active; GitHub `master` protection requires repository-admin follow-up |
 | A4 — CI / Health / Monitoring | ✅ Complete | Traefik-aligned CI, app readiness/Docker health, deployment smoke and 5-minute production monitor are active |
-| A5 — VPS Hardening | Not started | Must use controlled lockout-safe sequence |
+| A5 — VPS Hardening | ✅ Complete | Key-only non-root admin, hardened SSH, UFW/fail2ban, non-root restricted app container, full updates and controlled reboot verified |
 | A6 — Code Maintenance | 🚧 In progress | A6.1 date-dependent tests fixed; remaining maintenance pending |
 
 ---
