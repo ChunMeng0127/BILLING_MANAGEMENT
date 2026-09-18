@@ -454,9 +454,9 @@ The following rules apply throughout this plan:
 | A1 — Backup & Disaster Recovery | ✅ Complete | Automated local + Microsoft 365 offsite backup, retention and isolated restore verification are active |
 | A2 — Database Least Privilege | ✅ Complete | Runtime, migration, backup and break-glass roles separated; bootstrap superuser locked NOLOGIN |
 | A3 — Immutable Deployment | ✅ Production complete | Exact-SHA deterministic releases active; GitHub `master` protection requires repository-admin follow-up |
-| A4 — CI / Health / Monitoring | Not started | CI/production topology drift exists |
+| A4 — CI / Health / Monitoring | ✅ Complete | Traefik-aligned CI, app readiness/Docker health, deployment smoke and 5-minute production monitor are active |
 | A5 — VPS Hardening | Not started | Must use controlled lockout-safe sequence |
-| A6 — Code Maintenance | Not started | 3 date-dependent tests to fix |
+| A6 — Code Maintenance | 🚧 In progress | A6.1 date-dependent tests fixed; remaining maintenance pending |
 
 ---
 

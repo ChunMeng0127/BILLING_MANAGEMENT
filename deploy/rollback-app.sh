@@ -68,14 +68,28 @@ docker compose -f "$compose_file" --project-directory "$PROJECT_DIR"   up -d --n
 
 app_host="$(awk -F= '$1=="APP_HOST"{print $2}' "$ENV_FILE")"
 healthy=0
+ready_code=""
+login_code=""
+docker_health=""
+legacy_health=0
 for _ in $(seq 1 30); do
-  code="$(curl -L -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/" || true)"
-  if [[ "$code" == "200" ]]; then healthy=1; break; fi
+  docker_health="$(docker inspect billing-control-app-1 --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+  ready_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/health/ready" || true)"
+  login_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/Account/Login" || true)"
+  if [[ "$docker_health" == "healthy" && "$ready_code" == "200" && "$login_code" == "200" ]]; then
+    healthy=1
+    break
+  fi
+  if [[ "$docker_health" == "healthy" && "$ready_code" == "404" && "$login_code" == "200" ]]; then
+    healthy=1
+    legacy_health=1
+    break
+  fi
   sleep 2
 done
 if [[ "$healthy" != "1" ]]; then
   docker compose -f "$compose_file" --project-directory "$PROJECT_DIR" stop app || true
-  echo "Rollback target failed health check; application stopped." >&2
+  echo "Rollback target failed smoke test (docker_health=$docker_health ready=$ready_code login=$login_code); application stopped." >&2
   exit 5
 fi
 
@@ -99,4 +113,7 @@ chmod 600 "$STATE_DIR/history.tsv"
 echo "rollback=PASS"
 echo "release_sha=$target"
 echo "from_sha=$current_sha"
-echo "https_code=200"
+echo "docker_health=$docker_health"
+echo "ready_code=$ready_code"
+echo "login_code=$login_code"
+echo "legacy_health_fallback=$legacy_health"
