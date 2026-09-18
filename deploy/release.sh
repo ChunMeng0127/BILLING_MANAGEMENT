@@ -130,7 +130,7 @@ if [[ -z "$previous_sha" ]]; then
   previous_sha="$(docker inspect billing-control-app-1     --format '{{index .Config.Labels "com.billing-control.release-sha"}}' 2>/dev/null || true)"
 fi
 if [[ -z "$previous_sha" ]] && docker volume inspect billing-control_app_source >/dev/null 2>&1; then
-  previous_sha="$(docker run --rm -v billing-control_app_source:/src alpine:3.20 sh -c     'apk add --no-cache git >/dev/null 2>&1 && git -C /src/repo rev-parse HEAD' 2>/dev/null || true)"
+  previous_sha="$(docker run --rm -v billing-control_app_source:/src alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc sh -c     'apk add --no-cache git >/dev/null 2>&1 && git -C /src/repo rev-parse HEAD' 2>/dev/null || true)"
 fi
 
 echo "Creating required pre-deploy database backup ..."
@@ -141,7 +141,7 @@ echo "Preparing Data Protection key permissions ..."
 compose run --rm --no-deps keys-init
 
 echo "Stopping application before migration ..."
-docker compose -f "$compose_file" --project-directory "$PROJECT_DIR" stop app
+compose stop app
 
 write_env_release "$target"
 
