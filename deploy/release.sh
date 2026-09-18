@@ -133,6 +133,16 @@ if [[ -z "$previous_sha" ]] && docker volume inspect billing-control_app_source 
   previous_sha="$(docker run --rm -v billing-control_app_source:/src alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc sh -c     'apk add --no-cache git >/dev/null 2>&1 && git -C /src/repo rev-parse HEAD' 2>/dev/null || true)"
 fi
 
+current_env_sha="$(awk -F= '$1=="RELEASE_SHA"{print $2}' "$ENV_FILE")"
+if [[ ! "$current_env_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  [[ "$previous_sha" =~ ^[0-9a-fA-F]{40}$ ]] || {
+    echo "Cannot establish the current production SHA before the backup gate." >&2
+    exit 4
+  }
+  echo "Bootstrapping RELEASE_SHA from currently deployed production: $previous_sha"
+  write_env_release "${previous_sha,,}"
+fi
+
 echo "Creating required pre-deploy database backup ..."
 systemctl start billing-control-backup.service
 grep -q '^status=success$' /var/lib/billing-control-backup/last-success
