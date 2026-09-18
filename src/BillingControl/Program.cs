@@ -56,6 +56,15 @@ var keys = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrWhiteSpace(keys)) builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keys)).SetApplicationName("BillingControl");
 var app = builder.Build();
 app.UseForwardedHeaders();
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Response.StatusCode >= 500)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("BillingControl.Http");
+        logger.LogError("HTTP {StatusCode} {Method} {Path}", context.Response.StatusCode, context.Request.Method, context.Request.Path);
+    }
+});
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) { app.UseExceptionHandler("/Home/Error"); app.UseHsts(); app.UseHttpsRedirection(); }
 app.Use(async (context, next) =>
 {
@@ -67,6 +76,23 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseStaticFiles(); app.UseRouting(); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.MapGet("/health/live", () => Results.Text("Healthy", "text/plain")).AllowAnonymous();
+app.MapGet("/health/ready", async (AppDbContext db, ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        if (await db.Database.CanConnectAsync(cancellationToken))
+            return Results.Text("Healthy", "text/plain");
+
+        loggerFactory.CreateLogger("BillingControl.Health").LogWarning("Database readiness check returned unavailable.");
+    }
+    catch (Exception ex)
+    {
+        loggerFactory.CreateLogger("BillingControl.Health").LogWarning(ex, "Database readiness check failed.");
+    }
+
+    return Results.Text("Unhealthy", "text/plain", statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
 if (args.Contains("--migrate"))
 {
