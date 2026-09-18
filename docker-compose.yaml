@@ -40,7 +40,7 @@ services:
         dotnet publish /work/BillingControl.csproj -c Release --no-restore
         -o /release/publish /p:UseAppHost=false &&
         fixed_date="$(date -u -d "@$(cat /release/source/SOURCE_DATE_EPOCH)" '+%a, %d %b %Y %H:%M:%S GMT')" &&
-        sed -E -i "s/[A-Z][a-z][a-z], [0-9][0-9] [A-Z][a-z][a-z] [0-9][0-9][0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] GMT/$fixed_date/g"
+        sed -E -i "s/[A-Z][a-z][a-z], [0-9][0-9] [A-Z][a-z][a-z] [0-9][0-9][0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] GMT/$$fixed_date/g"
         /release/publish/BillingControl.staticwebassets.endpoints.json
     volumes:
       - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}:/release
