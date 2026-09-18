@@ -107,9 +107,9 @@ No hardening phase may weaken these controls.
 | P2 | Application container has no healthcheck | Must be added |
 | P2 | Monitoring / alerting is limited | Must be improved |
 | P2 | Application process runs as root | Should be hardened |
-| P2 | Three date-dependent integration tests currently fail | Must be fixed |
-| P3 | Generalized before/after financial correction audit trail | Future improvement |
-| P3 | Antiforgery warning log noise | Cleanup only |
+| P2 | Three date-dependent integration tests currently fail | ✅ Fixed; audit/business time now share injectable TimeProvider |
+| P3 | Generalized before/after financial correction audit trail | Evaluated; intentionally deferred as separate audited enhancement |
+| P3 | Antiforgery warning log noise | ✅ Cleaned without weakening antiforgery/cache protection |
 
 ---
 
@@ -402,7 +402,18 @@ Deployed SHA isolated test result on 2026-09-17:
 - JavaScript: 12/12 PASS
 - .NET integration tests: 48 PASS / 3 FAIL
 
-The three failures are currently associated with fixed test business time versus real `DateTime.UtcNow` audit timestamps in current-week workflow tests.
+The three failures were associated with fixed test business time versus real `DateTime.UtcNow` audit timestamps in current-week workflow tests.
+
+A6 final validation on 2026-09-18:
+
+- audit timestamps and business time share injectable `TimeProvider`
+- direct-SQL test audit-time workaround removed
+- .NET: 51/51 PASS
+- JavaScript: 12/12 PASS
+- Release build: 0 warnings / 0 errors
+- Docker / production Traefik HTTPS smoke: PASS
+- antiforgery Cache-Control override warning: no longer present
+- generalized before/after financial correction ledger: evaluated and deferred to separate future change control; no A6 migration
 
 ### Acceptance criteria
 
@@ -456,7 +467,7 @@ The following rules apply throughout this plan:
 | A3 — Immutable Deployment | ✅ Production complete | Exact-SHA deterministic releases active; GitHub `master` protection requires repository-admin follow-up |
 | A4 — CI / Health / Monitoring | ✅ Complete | Traefik-aligned CI, app readiness/Docker health, deployment smoke and 5-minute production monitor are active |
 | A5 — VPS Hardening | ✅ Complete | Key-only non-root admin, hardened SSH, UFW/fail2ban, non-root restricted app container, full updates and controlled reboot verified |
-| A6 — Code Maintenance | 🚧 In progress | A6.1 date-dependent tests fixed; remaining maintenance pending |
+| A6 — Code Maintenance | ✅ Complete | Shared injectable audit/business time, 51/51 .NET + 12/12 JS green, antiforgery warning source removed, financial audit-ledger enhancement evaluated/deferred |
 
 ---
 
