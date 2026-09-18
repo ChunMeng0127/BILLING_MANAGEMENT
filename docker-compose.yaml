@@ -120,17 +120,17 @@ services:
         - >-
           bash -c 'request() {
           exec 3<>/dev/tcp/127.0.0.1/8080;
-          host="${AllowedHosts%%;*}";
-          printf "GET $1 HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n" "$host" >&3;
+          host="$${AllowedHosts%%;*}";
+          printf "GET $$1 HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n" "$$host" >&3;
           IFS= read -r line <&3;
           exec 3<&-; exec 3>&-;
           printf "%s" "$$line";
           };
           status="$$(request /health/ready)";
           [[ "$$status" == *" 200 "* ]] && exit 0;
-          [[ "$status" == *" 404 "* || "$status" == *" 307 "* ]] || exit 1;
-          legacy="$(request /Account/Login)";
-          [[ "$legacy" == *" 200 "* || "$legacy" == *" 307 "* ]]'
+          [[ "$$status" == *" 404 "* || "$$status" == *" 307 "* ]] || exit 1;
+          legacy="$$(request /Account/Login)";
+          [[ "$$legacy" == *" 200 "* || "$$legacy" == *" 307 "* ]]'
       interval: 30s
       timeout: 5s
       retries: 3
