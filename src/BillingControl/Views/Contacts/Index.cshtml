@@ -1,0 +1,73 @@
+@model ContactListViewModel
+@{
+    ViewData["Title"] = "Contacts / PICs";
+}
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">CONTACT MANAGEMENT</p>
+        <h1>Contacts / PICs</h1>
+        <p>Staff-managed contact routing, WhatsApp addresses, consent records, and customer relationships.</p>
+    </div>
+    <a class="btn btn-primary" href="/Contacts/Create">+ New Contact</a>
+</div>
+
+<form class="report-filters" method="get" action="/Contacts">
+    <div>
+        <label class="form-label" for="Search">Search</label>
+        <input id="Search" name="search" value="@Model.Search" class="form-control" maxlength="160" placeholder="Name or international phone number" />
+    </div>
+    <div class="d-flex align-items-end">
+        <label class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="includeInactive" value="true" @(Model.IncludeInactive ? "checked" : null) />
+            <span class="form-check-label">Include inactive</span>
+        </label>
+    </div>
+    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
+    <a href="/Contacts">Reset</a>
+</form>
+
+@if (Model.Contacts.Count == 0)
+{
+    <section class="panel empty-state p-4">
+        <h2>No contacts found</h2>
+        <p>Try a different name or number, include inactive contacts, or create the first Contact/PIC.</p>
+        <a class="btn btn-primary" href="/Contacts/Create">Create a Contact/PIC</a>
+    </section>
+}
+else
+{
+    <section class="panel">
+        <div class="panel-heading">
+            <div>
+                <h2>Contact directory</h2>
+                <p>@Model.Contacts.Count contact@(Model.Contacts.Count == 1 ? "" : "s") · active contacts shown by default</p>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table data-grid">
+                <thead>
+                    <tr><th>Name</th><th>Preferred language</th><th>Status</th><th>Active addresses</th><th>Active customer links</th><th data-nosort>Actions</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var contact in Model.Contacts)
+                {
+                    <tr>
+                        <td><strong>@contact.Name</strong></td>
+                        <td>@(contact.PreferredLanguage ?? "—")</td>
+                        <td><span class="badge @(contact.IsActive ? "status-active" : "status-inactive")">@(contact.IsActive ? "Active" : "Inactive")</span></td>
+                        <td>@contact.ActiveAddressCount</td>
+                        <td>@contact.ActiveCustomerLinkCount</td>
+                        <td>
+                            <div class="d-flex gap-2">
+                                <a href="/Contacts/Details/@contact.Id">Details</a>
+                                <a href="/Contacts/Edit/@contact.Id">Edit</a>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}

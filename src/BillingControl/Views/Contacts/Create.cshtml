@@ -1,0 +1,34 @@
+@model ContactCreateViewModel
+@{
+    ViewData["Title"] = "Create Contact / PIC";
+}
+
+<a class="back-link" href="/Contacts">← Contacts / PICs</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">CONTACT MANAGEMENT</p>
+        <h1>Create Contact / PIC</h1>
+        <p>A Contact/PIC is separate from an ASP.NET Identity user. Active state and communication consent are managed separately.</p>
+    </div>
+</div>
+
+<form method="post" action="/Contacts/Create" class="panel form-panel">
+    @Html.AntiForgeryToken()
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="form-grid">
+        <div>
+            <label asp-for="Name" class="form-label">Name</label>
+            <input asp-for="Name" class="form-control" maxlength="160" required autofocus />
+            <p class="hint">Use the staff-facing display name.</p>
+        </div>
+        <div>
+            <label asp-for="PreferredLanguage" class="form-label">Preferred language</label>
+            <input asp-for="PreferredLanguage" class="form-control" maxlength="35" placeholder="e.g. en-MY" />
+            <p class="hint">Descriptive only; this does not grant authorization.</p>
+        </div>
+    </div>
+    <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Create Contact</button>
+        <a class="btn btn-outline-secondary" href="/Contacts">Cancel</a>
+    </div>
+</form>

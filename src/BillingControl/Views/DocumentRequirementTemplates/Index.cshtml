@@ -1,0 +1,87 @@
+@model DocumentRequirementTemplateIndexViewModel
+@{
+    ViewData["Title"] = "Document Checklists";
+}
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">DOCUMENT COLLECTION</p>
+        <h1>Document Checklists</h1>
+        <p>Reusable, versioned checklists for staff-managed service document requests.</p>
+    </div>
+    <a class="btn btn-primary" href="/DocumentRequirementTemplates/Create">+ New checklist</a>
+</div>
+
+<form class="report-filters" method="get" action="/DocumentRequirementTemplates">
+    <div>
+        <label for="ServiceId">Service</label>
+        <select id="ServiceId" name="ServiceId" class="form-select">
+            <option value="">All services</option>
+            @foreach (var service in Model.Services)
+            {
+                <option value="@service.Id" selected="@(Model.ServiceId == service.Id ? "selected" : null)">@service.Name@(service.IsActive ? "" : " (inactive)")</option>
+            }
+        </select>
+    </div>
+    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
+    <a href="/DocumentRequirementTemplates">Reset</a>
+</form>
+
+@if (!Model.Templates.Any())
+{
+    <div class="panel empty-state p-4">
+        <h2>No document checklists found</h2>
+        <p>Create the first checklist for a service, or clear the service filter to view all checklist history.</p>
+    </div>
+}
+else
+{
+    @foreach (var family in Model.Families)
+    {
+        var current = family.CurrentVersion;
+        <div class="panel checklist-family" data-checklist-family>
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow mb-2">@family.ServiceName</p>
+                    <h2>@current.Name</h2>
+                    <p>Reusable checklist for @family.ServiceName.</p>
+                </div>
+                <a class="btn btn-outline-primary" href="/DocumentRequirementTemplates/Edit/@current.Id">View current</a>
+            </div>
+            <div class="checklist-family-summary">
+                <div><span>Current version</span><strong>@current.TemplateVersion</strong></div>
+                <div><span>Versions</span><strong>@family.VersionCount</strong></div>
+                <div><span>Documents</span><strong>@current.ItemCount</strong></div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-3" aria-label="Current checklist status">
+                <span class="badge @(current.IsActive ? "status-active" : "status-inactive")">@(current.IsActive ? "Active" : "Inactive")</span>
+                <span class="badge @(current.IsDefault ? "status-completed" : "status-muted")">@(current.IsDefault ? "Default" : "Not default")</span>
+                <span class="badge @(current.IsUsed ? "status-muted" : "status-readytobill")">@(current.IsUsed ? "Used" : "Unused")</span>
+            </div>
+            @if (family.PreviousVersions.Count > 0)
+            {
+                <details class="checklist-history">
+                    <summary>Previous versions (@family.PreviousVersions.Count)</summary>
+                    <div class="table-responsive mt-2">
+                        <table class="table table-sm">
+                            <thead><tr><th>Version</th><th>Active</th><th>Default</th><th>Used</th><th>Documents</th><th></th></tr></thead>
+                            <tbody>
+                            @foreach (var previous in family.PreviousVersions)
+                            {
+                                <tr>
+                                    <td>Version @previous.TemplateVersion</td>
+                                    <td>@(previous.IsActive ? "Active" : "Inactive")</td>
+                                    <td>@(previous.IsDefault ? "Default" : "—")</td>
+                                    <td>@(previous.IsUsed ? "Used" : "Unused")</td>
+                                    <td>@previous.ItemCount</td>
+                                    <td><a href="/DocumentRequirementTemplates/Edit/@previous.Id">View</a></td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        </div>
+    }
+}

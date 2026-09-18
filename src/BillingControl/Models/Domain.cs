@@ -29,7 +29,7 @@ public abstract class Master : Record
     public bool IsActive { get; set; } = true;
     [StringLength(2000)] public string? Notes { get; set; }
 }
-public class Customer : Master { [EmailAddress, StringLength(254)] public string? Email { get; set; } [StringLength(60)] public string? RegistrationNumber { get; set; } }
+public class Customer : Master { [EmailAddress, StringLength(254)] public string? Email { get; set; } [StringLength(60)] public string? RegistrationNumber { get; set; } public List<ContactCustomerLink> ContactCustomerLinks { get; set; } = []; }
 public class Service : Master { }
 public class BusinessParty : Master { }
 public class Manager : Master { }

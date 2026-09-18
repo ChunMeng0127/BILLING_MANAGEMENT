@@ -1,0 +1,91 @@
+@model DocumentRequirementTemplateCreateViewModel
+@using BillingControl.Services
+@{
+    ViewData["Title"] = "New document checklist";
+    var services = ViewBag.Services as IReadOnlyList<DocumentRequirementTemplateServiceOption> ?? [];
+    var standardDocuments = DocumentChecklistDocumentOptions.StandardDocuments;
+}
+
+<a class="back-link" href="/DocumentRequirementTemplates">← Document Checklists</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">NEW DOCUMENT CHECKLIST</p>
+        <h1>Create first version</h1>
+        <p>Version 1 is created automatically. Add the documents normally required for this service.</p>
+    </div>
+</div>
+
+<form asp-action="Create" method="post" class="panel form-panel wide">
+    <div asp-validation-summary="All" class="text-danger"></div>
+    <div class="form-grid">
+        <div>
+            <label asp-for="ServiceId" class="form-label">Service</label>
+            <select asp-for="ServiceId" class="form-select" required>
+                <option value="">Select service</option>
+                @foreach (var service in services) { <option value="@service.Id">@service.Name@(service.IsActive ? "" : " (inactive)")</option> }
+            </select>
+        </div>
+        <div>
+            <label asp-for="Name" class="form-label">Checklist name</label>
+            <input asp-for="Name" class="form-control" maxlength="160" required placeholder="Standard Yearly Bookkeeping Documents" />
+            <p class="hint">Use a reusable checklist name for this service, not a customer name.</p>
+        </div>
+        <div>
+            <label asp-for="Description" class="form-label">Checklist description <span class="hint">(optional)</span></label>
+            <textarea asp-for="Description" class="form-control" rows="2" maxlength="2000" placeholder="Standard documents normally required from clients for yearly bookkeeping."></textarea>
+        </div>
+    </div>
+    <div class="form-grid">
+        <label class="form-check form-switch mt-3"><input asp-for="IsActive" class="form-check-input" /><span class="form-check-label">Active</span></label>
+        <div>
+            <label class="form-check form-switch mt-3"><input asp-for="IsDefault" class="form-check-input" /><span class="form-check-label">Use as default checklist for this service</span></label>
+            <p class="hint">This checklist will be selected first when creating a document request for this service.</p>
+        </div>
+    </div>
+
+    <h2 class="section-title">Initial checklist items</h2>
+    <p class="hint">Documents will appear in the order shown below. You can change the order later.</p>
+    <div class="table-responsive">
+        <table class="table data-grid template-items-table">
+            <thead><tr><th>Document</th><th>Description</th><th>Include in new requests</th><th></th></tr></thead>
+            <tbody data-template-rows data-next-index="@Model.Items.Count">
+            @for (var i = 0; i < Model.Items.Count; i++)
+            {
+                <tr>
+                    <td>
+                        <label class="form-label visually-hidden" for="document-@i">Document</label>
+                        <input id="document-@i" name="Items[@i].DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" value="@Model.Items[i].DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
+                        <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
+                    </td>
+                    <td><input asp-for="Items[i].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
+                    <td class="text-center"><input id="include-in-requests-@i" name="Items[@i].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(Model.Items[i].IncludeInNewRequests ? "checked" : null) /><label class="visually-hidden" for="include-in-requests-@i">Include in new requests</label></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <button type="button" class="btn btn-outline-secondary" data-template-add-row data-template-target="[data-template-rows]">+ Add document</button>
+    <p class="hint mt-2">Turn this off to keep the item for history but exclude it from future document requests.</p>
+    <template id="template-item-prototype">
+        <tr>
+            <td>
+                <label class="form-label visually-hidden" for="document-__index__">Document</label>
+                <input id="document-__index__" name="Items[__index__].DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" placeholder="Other Documents" autocomplete="off" required />
+                <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
+            </td>
+            <td><input name="Items[__index__].Description" class="form-control" maxlength="2000" placeholder="Full financial year, all bank accounts" /></td>
+            <td class="text-center"><input name="Items[__index__].IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests checked /></td>
+            <td><button type="button" class="btn btn-sm btn-outline-secondary" data-template-remove-row>Remove</button></td>
+        </tr>
+    </template>
+    <datalist id="checklist-document-options">
+        @foreach (var document in standardDocuments)
+        {
+            <option value="@document"></option>
+        }
+        <option value="@DocumentChecklistDocumentOptions.OtherDocuments"></option>
+    </datalist>
+    <div class="form-actions"><button class="btn btn-primary">Create document checklist</button><a class="btn btn-outline-secondary" href="/DocumentRequirementTemplates">Cancel</a></div>
+</form>
+@section Scripts { <script src="~/js/document-templates.js" asp-append-version="true"></script> }

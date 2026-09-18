@@ -1,9 +1,25 @@
 (() => {
   const sidebarStorageKey = "billing-control.sidebar-collapsed";
   const sidebarBreakpoint = 900;
+  const navGroupNames = Object.freeze([
+    "home",
+    "billing",
+    "work",
+    "documents",
+    "directory",
+    "reports",
+    "administration",
+  ]);
   const sidebarMode = (viewportWidth) =>
     viewportWidth < sidebarBreakpoint ? "mobile" : "desktop";
   const savedSidebarPreference = (value) => value === "true";
+  const desktopSidebarLabel = (open) =>
+    open ? "Hide navigation" : "Show navigation";
+  const keepOneNavGroupOpen = (groups, selected) => {
+    groups.forEach((group) => {
+      if (group !== selected) group.open = false;
+    });
+  };
   const isGridEligible = (row) => row.dataset.gridEligible !== "false";
   const eligibleGridRows = (items) => items.filter((item) =>
     isGridEligible(item.row ?? item),
@@ -37,6 +53,9 @@
       sidebarBreakpoint,
       sidebarMode,
       savedSidebarPreference,
+      navGroupNames,
+      keepOneNavGroupOpen,
+      desktopSidebarLabel,
     };
   if (typeof document === "undefined") return;
 
@@ -44,6 +63,9 @@
   const sidebar = document.getElementById("app-sidebar");
   const sidebarToggles = [...document.querySelectorAll("[data-sidebar-toggle]")];
   const sidebarScrim = document.querySelector("[data-sidebar-scrim]");
+  const navGroups = sidebar
+    ? [...sidebar.querySelectorAll("[data-nav-group]")]
+    : [];
   const isMobileSidebar = () => sidebarMode(window.innerWidth) === "mobile";
   const readSidebarPreference = () => {
     try {
@@ -72,9 +94,7 @@
           ? open
             ? "Close navigation"
             : "Open navigation"
-          : open
-            ? "Collapse navigation"
-            : "Expand navigation",
+          : desktopSidebarLabel(open),
       );
     });
   };
@@ -123,6 +143,12 @@
     });
     root.dataset.sidebarMode = sidebarMode(window.innerWidth);
   }
+
+  navGroups.forEach((group) =>
+    group.addEventListener("toggle", () => {
+      if (group.open) keepOneNavGroupOpen(navGroups, group);
+    }),
+  );
 
   const element = (tag, cls, text) => {
     const e = document.createElement(tag);

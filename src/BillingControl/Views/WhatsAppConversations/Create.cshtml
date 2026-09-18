@@ -1,0 +1,86 @@
+@model WhatsAppConversationCreateViewModel
+@using BillingControl.Services
+@{
+    ViewData["Title"] = "Create WhatsApp Conversation";
+}
+
+<a class="back-link" href="/WhatsAppConversations">← WhatsApp Conversations</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">WHATSAPP MANAGEMENT</p>
+        <h1>Create WhatsApp Conversation</h1>
+        <p>Record the provider and routing identity for a Direct or Group conversation. Participants and Engagement scopes are reviewed separately after creation.</p>
+    </div>
+</div>
+
+<section class="panel form-panel wide">
+    <div class="panel-heading">
+        <div>
+            <h2>Provider and routing identity</h2>
+            <p>These identity fields are immutable after creation.</p>
+        </div>
+    </div>
+    <form method="post" action="/WhatsAppConversations/Create" data-whatsapp-create-form>
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="text-danger"></div>
+        <div class="form-grid thirds">
+            <div>
+                <label class="form-label" for="Kind">Kind</label>
+                <select id="Kind" name="Kind" class="form-select" data-whatsapp-conversation-kind>
+                    @foreach (var kind in Enum.GetValues<WhatsAppConversationKind>())
+                    {
+                        <option value="@kind" selected="@(Model.Kind == kind ? "selected" : null)">@Finance.Label(kind)</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label class="form-label" for="ProviderName">Provider name</label>
+                <input id="ProviderName" name="ProviderName" class="form-control" maxlength="80" value="@Model.ProviderName" required />
+            </div>
+            <div>
+                <label class="form-label" for="BusinessEndpointKey">Business endpoint key</label>
+                <input id="BusinessEndpointKey" name="BusinessEndpointKey" class="form-control" maxlength="254" value="@Model.BusinessEndpointKey" required />
+            </div>
+            <div>
+                <label class="form-label" for="ProviderAccountReference">Provider account reference <span class="hint">(optional)</span></label>
+                <input id="ProviderAccountReference" name="ProviderAccountReference" class="form-control" maxlength="254" value="@Model.ProviderAccountReference" />
+                <p class="hint">Routing metadata only. Do not enter access tokens or secrets.</p>
+            </div>
+            <div>
+                <label class="form-label" for="ProviderConversationKey">Provider conversation key</label>
+                <input id="ProviderConversationKey" name="ProviderConversationKey" class="form-control" maxlength="254" value="@Model.ProviderConversationKey" required />
+            </div>
+            <div data-whatsapp-direct-anchor>
+                <label class="form-label" for="DirectContactWhatsAppAddressId">Direct Contact WhatsApp address</label>
+                <select id="DirectContactWhatsAppAddressId" name="DirectContactWhatsAppAddressId" class="form-select">
+                    <option value="">Select an active Contact address</option>
+                    @foreach (var option in Model.DirectAddressOptions)
+                    {
+                        <option value="@option.Id" selected="@(Model.DirectContactWhatsAppAddressId == option.Id ? "selected" : null)">@option.ContactName · @option.NormalizedE164</option>
+                    }
+                </select>
+                <p class="hint">Required for Direct. Only active Contact WhatsApp addresses are listed; the service rechecks the anchor.</p>
+            </div>
+        </div>
+
+        <div>
+            <label class="form-label" for="Reason">Audited reason <span class="hint">(optional)</span></label>
+            <textarea id="Reason" name="Reason" class="form-control" rows="2" maxlength="2000">@Model.Reason</textarea>
+        </div>
+
+        <div class="panel-note mt-4">
+            <strong>Management boundary</strong>
+            <p class="mb-1">Creating a conversation records provider/routing identity only. It does not authorize document disclosure or WhatsApp sending.</p>
+            <p class="mb-0">Provider/runtime group capability is separate from this conversation authorization model. This page does not call a WhatsApp provider.</p>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit">Create conversation</button>
+            <a class="btn btn-outline-secondary" href="/WhatsAppConversations">Cancel</a>
+        </div>
+    </form>
+</section>
+
+@section Scripts {
+    <script src="~/js/whatsapp-conversations.js" asp-append-version="true"></script>
+}

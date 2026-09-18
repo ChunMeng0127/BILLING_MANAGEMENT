@@ -1,0 +1,183 @@
+@model DocumentRequirementTemplateDetailViewModel
+@using BillingControl.Services
+@{
+    ViewData["Title"] = $"{Model.Definition.Name} · Version {Model.TemplateVersion}";
+    var activeItemCount = Model.Items.Count(x => x.IsActive);
+    var standardDocuments = DocumentChecklistDocumentOptions.StandardDocuments;
+}
+
+<a class="back-link" href="/DocumentRequirementTemplates">← Document Checklists</a>
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">DOCUMENT CHECKLIST</p>
+        <h1>@Model.Definition.Name <span class="text-muted">· Version @Model.TemplateVersion</span></h1>
+        <p>@Model.ServiceName · This checklist can be reused when requesting documents for this service.</p>
+    </div>
+    <div class="form-actions">
+        <form asp-action="CreateVersion" method="post">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <button class="btn btn-primary">Create new version</button>
+        </form>
+    </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 mb-3" aria-label="Checklist status">
+    @if (Model.IsDefault) { <span class="badge status-completed">Default checklist</span> }
+    @if (Model.IsActive) { <span class="badge status-active">Active</span> } else { <span class="badge status-inactive">Inactive</span> }
+    @if (Model.IsUsed) { <span class="badge status-muted">Used · details locked</span> } else { <span class="badge status-readytobill">Unused · editable</span> }
+</div>
+
+@if (Model.IsUsed)
+{
+    <div class="alert alert-info" role="status">This checklist version has already been used in a document request. Its documents can no longer be changed. Create a new version to make changes.</div>
+}
+
+<div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+<div class="panel form-panel wide mb-4">
+    <div class="panel-heading"><div><h2>Checklist details</h2><p>The selected service and version are fixed. The checklist name and description are reusable staff-facing information.</p></div></div>
+    <div class="form-grid">
+        <div><label class="form-label">Service</label><input class="form-control" value="@Model.ServiceName" readonly /></div>
+        <div><label class="form-label">Version</label><input class="form-control" value="@Model.TemplateVersion" readonly /></div>
+    </div>
+    @if (Model.IsUsed)
+    {
+        <div class="form-grid mt-3">
+            <div><label class="form-label">Checklist name</label><input class="form-control" value="@Model.Definition.Name" readonly /></div>
+            <div><label class="form-label">Checklist description</label><textarea class="form-control" rows="2" readonly>@Model.Definition.Description</textarea></div>
+        </div>
+    }
+    else
+    {
+        <form asp-action="EditDefinition" method="post">
+            <input type="hidden" name="Id" value="@Model.Definition.Id" />
+            <div class="form-grid mt-3">
+                <div>
+                    <label class="form-label" for="definition-name">Checklist name</label>
+                    <input id="definition-name" name="Name" class="form-control" maxlength="160" required value="@Model.Definition.Name" placeholder="Standard Yearly Bookkeeping Documents" />
+                </div>
+                <div>
+                    <label class="form-label" for="definition-description">Checklist description <span class="hint">(optional)</span></label>
+                    <textarea id="definition-description" name="Description" class="form-control" rows="2" maxlength="2000" placeholder="Standard documents normally required from clients for yearly bookkeeping.">@Model.Definition.Description</textarea>
+                </div>
+            </div>
+            <p class="hint">Use a reusable checklist name for this service, not a customer name. You can rename an unused checklist without affecting how its versions are tracked.</p>
+            <div class="form-actions"><button class="btn btn-outline-primary">Save checklist details</button></div>
+        </form>
+    }
+</div>
+
+<div class="panel form-panel wide mb-4">
+    <div class="panel-heading"><div><h2>Checklist status</h2><p>Active and default status are separate from the checklist details.</p></div></div>
+    <div class="form-actions">
+        <form asp-action="SetActive" method="post">
+            <input type="hidden" name="id" value="@Model.Id" />
+            <input type="hidden" name="isActive" value="@(!Model.IsActive ? "true" : "false")" />
+            <button class="btn @(Model.IsActive ? "btn-outline-danger" : "btn-outline-primary")">@(Model.IsActive ? "Deactivate checklist" : "Activate checklist")</button>
+        </form>
+        @if (Model.IsActive && !Model.IsDefault && activeItemCount > 0)
+        {
+            <form asp-action="SetDefault" method="post">
+                <input type="hidden" name="id" value="@Model.Id" />
+                <button class="btn btn-outline-primary">Use as default checklist for this service</button>
+            </form>
+        }
+        else if (!Model.IsDefault && !Model.IsActive)
+        {
+            <span class="hint">Activate this checklist before using it as the service default.</span>
+        }
+        else if (!Model.IsDefault && activeItemCount == 0)
+        {
+            <span class="hint">Add or include a document before using this checklist as the service default.</span>
+        }
+        else if (Model.IsDefault)
+        {
+            <span class="hint">This is the current default checklist. Use another active version as default before deactivating it.</span>
+        }
+    </div>
+    <p class="hint mt-3 mb-0">This checklist will be selected first when creating a document request for this service. It does not send WhatsApp messages or contact clients automatically.</p>
+</div>
+
+<div class="panel form-panel wide">
+    <div class="panel-heading"><div><h2>Checklist documents</h2><p>@Model.Items.Count document@(Model.Items.Count == 1 ? "" : "s") · @activeItemCount included in new requests</p></div></div>
+    @if (!Model.IsUsed)
+    {
+        <form asp-action="AddItem" method="post" class="mb-4">
+            <input type="hidden" name="TemplateId" value="@Model.Id" />
+            <h3 class="section-title">Add document</h3>
+            <div class="table-responsive">
+                <table class="table data-grid template-items-table">
+                    <thead><tr><th>Document</th><th>Description</th><th>Include in new requests</th><th></th></tr></thead>
+                    <tbody><tr>
+                        <td>
+                            <label class="form-label visually-hidden" for="new-document">Document</label>
+                            <input id="new-document" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" value="@Model.NewItem.DocumentSelection" placeholder="Other Documents" autocomplete="off" required />
+                            <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
+                        </td>
+                        <td><input name="Description" class="form-control" maxlength="2000" value="@Model.NewItem.Description" placeholder="Full financial year, all bank accounts" /></td>
+                        <td class="text-center"><input id="new-include-in-requests" name="IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(Model.NewItem.IncludeInNewRequests ? "checked" : null) /><label class="visually-hidden" for="new-include-in-requests">Include in new requests</label></td>
+                        <td><button class="btn btn-outline-primary">Add</button></td>
+                    </tr></tbody>
+                </table>
+            </div>
+        </form>
+    }
+
+    <div class="table-responsive">
+        <table class="table data-grid template-items-table">
+            <thead><tr><th data-nosort>Move</th><th>Document</th><th>Description</th><th>Include in new requests</th><th data-nosort>Actions</th></tr></thead>
+            <tbody>
+            @foreach (var item in Model.Items.OrderBy(x => x.DisplayOrder).ThenBy(x => x.Id))
+            {
+                var edit = Model.EditingItem?.Id == item.Id ? Model.EditingItem : null;
+                var existingDocument = DocumentChecklistDocumentOptions.MapExistingDocument(item.Name);
+                var documentSelection = edit?.DocumentSelection ?? existingDocument.Selection;
+                var includeInNewRequests = edit?.IncludeInNewRequests ?? item.IsActive;
+                <tr>
+                @if (Model.IsUsed)
+                {
+                    <td><span class="hint">Read-only</span></td>
+                    <td>@item.Name</td>
+                    <td>@(item.Description ?? "—")</td>
+                    <td>@(item.IsActive ? "Included in new requests" : "Excluded from new requests")</td>
+                    <td><span class="hint">Used version</span></td>
+                }
+                else
+                {
+                    <td>
+                        <div class="d-flex gap-1">
+                            <form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="up" /><button class="btn btn-sm btn-outline-secondary" title="Move up" aria-label="Move @item.Name up">↑</button></form>
+                            <form asp-action="MoveItem" method="post"><input type="hidden" name="templateId" value="@Model.Id" /><input type="hidden" name="itemId" value="@item.Id" /><input type="hidden" name="direction" value="down" /><button class="btn btn-sm btn-outline-secondary" title="Move down" aria-label="Move @item.Name down">↓</button></form>
+                        </div>
+                    </td>
+                    <td colspan="3">
+                        <form asp-action="EditItem" method="post" class="template-item-edit-form">
+                            <input type="hidden" name="TemplateId" value="@Model.Id" /><input type="hidden" name="Id" value="@item.Id" />
+                            <div class="form-grid compact">
+                                <div>
+                                    <label class="form-label" for="item-document-@item.Id">Document</label>
+                                    <input id="item-document-@item.Id" name="DocumentSelection" class="form-control" list="checklist-document-options" data-document-selection data-searchable-dropdown="combobox" data-custom-trigger="Other Documents" data-custom-placeholder="Type document name" maxlength="160" value="@documentSelection" placeholder="Other Documents" autocomplete="off" required />
+                                    <p class="hint mt-1 mb-0">Choose a standard document or type a custom document name.</p>
+                                </div>
+                                <div><label class="form-label" for="item-description-@item.Id">Description</label><input id="item-description-@item.Id" name="Description" class="form-control" maxlength="2000" value="@(edit?.Description ?? item.Description)" placeholder="Full financial year, all bank accounts" /></div>
+                                <label class="form-check"><input id="include-in-requests-@item.Id" name="IncludeInNewRequests" value="true" type="checkbox" class="form-check-input" data-include-in-new-requests @(includeInNewRequests ? "checked" : null) /><span class="form-check-label">Include in new requests</span></label>
+                                <button class="btn btn-sm btn-outline-primary align-self-end">Save changes</button>
+                            </div>
+                        </form>
+                    </td>
+                    <td></td>
+                }
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <datalist id="checklist-document-options">
+        @foreach (var document in standardDocuments)
+        {
+            <option value="@document"></option>
+        }
+        <option value="@DocumentChecklistDocumentOptions.OtherDocuments"></option>
+    </datalist>
+    <p class="hint mt-2">Turn this off to keep the item for history but exclude it from future document requests.</p>
+</div>

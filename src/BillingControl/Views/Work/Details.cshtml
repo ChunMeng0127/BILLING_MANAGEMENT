@@ -50,3 +50,4 @@
 <p class="hint">Combined active assignments cannot exceed 100% of LCM's share. A 0% assignment keeps the worker responsible for the work without creating a worker entitlement. Entitlements are saved as historical amounts.</p>
 </section> } }
 @if(access.IsStaff || access.IsWorker) { <partial name="_Assignments" model="Model.Assignments" /> }
+@if(access.IsStaff && ViewBag.DocumentRequestPanel is DocumentRequestPanelViewModel documentPanel) { <partial name="_DocumentRequestPanel" model="documentPanel" /> }

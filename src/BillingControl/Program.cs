@@ -1,6 +1,7 @@
 using BillingControl.Data;
 using BillingControl.Models;
 using BillingControl.Services;
+using BillingControl.Services.WhatsApp;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.DataProtection;
@@ -33,12 +34,21 @@ builder.Services.AddControllersWithViews(o => o.Filters.Add(new AutoValidateAnti
 builder.Services.AddScoped<BillingService>();
 builder.Services.AddScoped<BillingScheduleService>();
 builder.Services.AddScoped<InvoiceService>();
+builder.Services.AddScoped<DocumentRequirementTemplateService>();
+builder.Services.AddScoped<DocumentRequestService>();
+builder.Services.AddScoped<DocumentRequestBatchService>();
+builder.Services.AddScoped<ContactService>();
+builder.Services.AddScoped<WhatsAppConversationService>();
+builder.Services.AddScoped<WhatsAppOutboundQueueService>();
 builder.Services.AddScoped<AccessScope>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<BusinessClock>();
 builder.Services.AddScoped<ProgressReportService>();
 builder.Services.AddScoped<AssignmentWorkflowService>();
 builder.Services.AddScoped<IAuthorizationHandler, ValidAccessProfileHandler>();
+builder.Services.Configure<MetaWhatsAppOptions>(builder.Configuration.GetSection(MetaWhatsAppOptions.SectionName));
+builder.Services.AddHttpClient<MetaWhatsAppProvider>();
+builder.Services.AddTransient<IWhatsAppProvider>(services => services.GetRequiredService<MetaWhatsAppProvider>());
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = 429;
@@ -53,7 +63,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
         o.KnownIPNetworks.Add(new System.Net.IPNetwork(networkAddress, prefixLength));
 });
 var keys = builder.Configuration["DataProtection:Path"];
-if (!string.IsNullOrWhiteSpace(keys)) builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(keys)).SetApplicationName("BillingControl");
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("BillingControl");
+if (!string.IsNullOrWhiteSpace(keys)) dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keys));
 var app = builder.Build();
 app.UseForwardedHeaders();
 app.Use(async (context, next) =>

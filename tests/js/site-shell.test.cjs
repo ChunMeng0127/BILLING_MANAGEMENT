@@ -21,4 +21,23 @@ test("only an explicit saved preference collapses the desktop sidebar", () => {
   assert.equal(site.savedSidebarPreference("false"), false);
   assert.equal(site.savedSidebarPreference(null), false);
   assert.equal(site.savedSidebarPreference("unexpected"), false);
+  assert.equal(site.desktopSidebarLabel(true), "Hide navigation");
+  assert.equal(site.desktopSidebarLabel(false), "Show navigation");
+});
+
+test("sidebar groups keep navigation compact", () => {
+  assert.deepEqual(site.navGroupNames, [
+    "home",
+    "billing",
+    "work",
+    "documents",
+    "directory",
+    "reports",
+    "administration",
+  ]);
+  const home = { open: true };
+  const billing = { open: true };
+  site.keepOneNavGroupOpen([home, billing], home);
+  assert.equal(home.open, true);
+  assert.equal(billing.open, false);
 });
