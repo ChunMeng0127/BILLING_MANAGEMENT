@@ -178,3 +178,32 @@ A6 satisfies:
 - antiforgery protection retained while warning noise is removed
 - financial before/after ledger evaluated and deliberately separated into future change control
 - no migration required for A6
+
+
+## Post-A6 DR helper follow-up
+
+During final production closure, a manual invocation of `verify-latest-backup.sh` exposed
+a deployment-path default issue.
+
+The scheduled systemd restore-verification service was not affected because it explicitly
+sets:
+
+- `PROJECT_DIR=/docker/billing-control`
+- `BACKUP_DIR=/docker/billing-control/backups`
+
+The installed standalone helper lives under `/usr/local/lib/billing-control`. Its original
+repo-relative default therefore resolved the project directory to `/usr/local/lib` when
+run manually without environment overrides.
+
+The same pattern existed in `backup.sh` and `restore.sh`.
+
+Follow-up correction:
+
+- preserve explicit `PROJECT_DIR` overrides
+- preserve repo-relative behaviour in a normal source checkout
+- when installed under `/usr/local/lib/billing-control` and the production project exists,
+  default to `/docker/billing-control`
+
+This changes no backup schedule, retention, offsite copy policy, restore semantics, database
+credentials or application behaviour. It only makes manual operational invocation match the
+production installation layout.

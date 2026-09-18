@@ -2,7 +2,11 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+default_project_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [[ "$default_project_dir" == "/usr/local/lib" && -d /docker/billing-control ]]; then
+  default_project_dir="/docker/billing-control"
+fi
+PROJECT_DIR="${PROJECT_DIR:-$default_project_dir}"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/backups}"
 STATUS_DIR="${STATUS_DIR:-/var/lib/billing-control-backup}"
 LOCK_FILE="${LOCK_FILE:-/var/lock/billing-control-backup.lock}"

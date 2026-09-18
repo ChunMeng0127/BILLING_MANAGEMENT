@@ -2,7 +2,11 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+default_project_dir="$(cd "$SCRIPT_DIR/.." && pwd)"
+if [[ "$default_project_dir" == "/usr/local/lib" && -d /docker/billing-control ]]; then
+  default_project_dir="/docker/billing-control"
+fi
+PROJECT_DIR="${PROJECT_DIR:-$default_project_dir}"
 DB_SERVICE="${DB_SERVICE:-db}"
 APP_SERVICE="${APP_SERVICE:-app}"
 ADMIN_DB_USER="${ADMIN_DB_USER:-billing_breakglass}"
