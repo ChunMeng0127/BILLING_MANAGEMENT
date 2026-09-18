@@ -672,7 +672,9 @@ public sealed class WhatsAppOutboundSendService
 
         var requests = await db.DocumentRequests
             .AsNoTracking()
+            .Include(x => x.StatusHistory)
             .Include(x => x.Items)
+                .ThenInclude(x => x.StatusHistory)
             .Where(x => snapshotRequestIds.Contains(x.Id))
             .ToListAsync(cancellationToken);
 
@@ -688,7 +690,18 @@ public sealed class WhatsAppOutboundSendService
                 continue;
             }
 
-            if (request.Status != DocumentRequestStatus.Requested)
+            // Reconciliation is about whether this specific accepted outbound
+            // message completed the document activation, not whether the row is
+            // still in Requested today. A correctly activated request may later
+            // progress to PartiallyReceived/Complete (or another legitimate
+            // lifecycle state). The durable, message-correlated activation
+            // history distinguishes that from a post-claim race where activation
+            // never completed and therefore no such history was written.
+            var requestWasActivatedByThisMessage = request.StatusHistory.Any(history =>
+                history.Action == "WhatsAppProviderAccepted" &&
+                history.NewStatus == DocumentRequestStatus.Requested &&
+                history.CorrelationId == message.CorrelationId);
+            if (!requestWasActivatedByThisMessage)
                 requiresReconciliation = true;
 
             foreach (var itemSnapshot in snapshot.Items
@@ -696,7 +709,17 @@ public sealed class WhatsAppOutboundSendService
                          .OrderBy(x => x.DocumentRequestItemId))
             {
                 var item = request.Items.SingleOrDefault(x => x.Id == itemSnapshot.DocumentRequestItemId);
-                if (item is null || item.Status != DocumentRequestItemStatus.Requested)
+                if (item is null)
+                {
+                    requiresReconciliation = true;
+                    continue;
+                }
+
+                var itemWasActivatedByThisMessage = item.StatusHistory.Any(history =>
+                    history.Action == "WhatsAppProviderAccepted" &&
+                    history.NewStatus == DocumentRequestItemStatus.Requested &&
+                    history.CorrelationId == message.CorrelationId);
+                if (!itemWasActivatedByThisMessage)
                     requiresReconciliation = true;
             }
         }
