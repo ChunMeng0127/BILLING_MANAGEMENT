@@ -5,8 +5,9 @@ using System.Security.Claims;
 
 namespace BillingControl.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<AppUser>(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null, TimeProvider? time = null) : IdentityDbContext<AppUser>(options)
 {
+    private readonly TimeProvider auditTime = time ?? TimeProvider.System;
     private bool allowInvoiceLineDeletion;
     private bool allowBillingSnapshotCorrection;
     private bool allowReceiptAllocationCorrection;
@@ -130,6 +131,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     }
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        var now = auditTime.GetUtcNow().UtcDateTime;
         foreach (var e in ChangeTracker.Entries<Record>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (e.State == EntityState.Deleted)
@@ -162,8 +164,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     throw new InvalidOperationException("Historical snapshots and audit origins cannot be edited.");
             }
             var actor = http?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
-            if (e.State == EntityState.Added) { e.Entity.CreatedAt = DateTime.UtcNow; e.Entity.CreatedBy = actor; }
-            e.Entity.UpdatedAt = DateTime.UtcNow; e.Entity.UpdatedBy = actor; e.Entity.Version++;
+            if (e.State == EntityState.Added) { e.Entity.CreatedAt = now; e.Entity.CreatedBy = actor; }
+            e.Entity.UpdatedAt = now; e.Entity.UpdatedBy = actor; e.Entity.Version++;
         }
         return base.SaveChangesAsync(cancellationToken);
     }
