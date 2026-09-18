@@ -166,14 +166,22 @@ compose up -d --no-deps --force-recreate app
 
 app_host="$(awk -F= '$1=="APP_HOST"{print $2}' "$ENV_FILE")"
 healthy=0
+ready_code=""
+login_code=""
+docker_health=""
 for _ in $(seq 1 30); do
-  code="$(curl -L -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/" || true)"
-  if [[ "$code" == "200" ]]; then healthy=1; break; fi
+  docker_health="$(docker inspect billing-control-app-1 --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || true)"
+  ready_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/health/ready" || true)"
+  login_code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://$app_host/Account/Login" || true)"
+  if [[ "$docker_health" == "healthy" && "$ready_code" == "200" && "$login_code" == "200" ]]; then
+    healthy=1
+    break
+  fi
   sleep 2
 done
 if [[ "$healthy" != "1" ]]; then
   compose stop app || true
-  echo "Release health check failed; application has been stopped. Database was not restored automatically." >&2
+  echo "Release smoke test failed (docker_health=$docker_health ready=$ready_code login=$login_code); application has been stopped. Database was not restored automatically." >&2
   exit 6
 fi
 
@@ -201,4 +209,6 @@ echo "release=PASS"
 echo "release_sha=$target"
 echo "artifact_sha256=$artifact_sha"
 echo "previous_sha=$previous_sha"
-echo "https_code=200"
+echo "docker_health=$docker_health"
+echo "ready_code=$ready_code"
+echo "login_code=$login_code"
