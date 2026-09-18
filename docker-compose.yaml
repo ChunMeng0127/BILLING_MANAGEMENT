@@ -2,40 +2,49 @@ name: billing-control
 
 services:
   source:
-    image: alpine:3.20
+    image: alpine@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
     restart: "no"
     command:
       - sh
       - -c
       - >-
         apk add --no-cache git &&
-        rm -rf /source/repo &&
-        git clone --depth 1 --branch master
-        https://github.com/ChunMeng0127/BILLING_MANAGEMENT.git /source/repo
+        rm -rf /release/source/repo &&
+        mkdir -p /release/source/repo &&
+        git -C /release/source/repo init -q &&
+        git -C /release/source/repo remote add origin
+        https://github.com/ChunMeng0127/BILLING_MANAGEMENT.git &&
+        git -C /release/source/repo fetch --depth 1 origin
+        ${RELEASE_SHA:?Set RELEASE_SHA} &&
+        git -C /release/source/repo checkout --detach FETCH_HEAD &&
+        test "$$(git -C /release/source/repo rev-parse HEAD)"
+        = "${RELEASE_SHA:?Set RELEASE_SHA}" &&
+        printf '%s\n' "${RELEASE_SHA:?Set RELEASE_SHA}"
+        > /release/source/RELEASE_SHA
     volumes:
-      - app_source:/source
+      - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}:/release
 
   builder:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
+    image: mcr.microsoft.com/dotnet/sdk@sha256:4ea6fe75dd36706bb6d8c3c293d4c4315840f5d76ea28ac97def77e3ec487fa5
     restart: "no"
     command:
       - sh
       - -c
       - >-
-        rm -rf /work /publish/* &&
-        cp -R /src/repo/src/BillingControl /work &&
+        rm -rf /work /release/publish &&
+        mkdir -p /release/publish &&
+        cp -R /release/source/repo/src/BillingControl /work &&
         dotnet restore /work/BillingControl.csproj &&
         dotnet publish /work/BillingControl.csproj -c Release --no-restore
-        -o /publish /p:UseAppHost=false
+        -o /release/publish /p:UseAppHost=false
     volumes:
-      - app_source:/src:ro
-      - app_publish:/publish
+      - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}:/release
     depends_on:
       source:
         condition: service_completed_successfully
 
   db:
-    image: postgres:17
+    image: postgres@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
     restart: unless-stopped
     environment:
       POSTGRES_DB: billing
@@ -52,7 +61,7 @@ services:
       - database
 
   keys-init:
-    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    image: mcr.microsoft.com/dotnet/aspnet@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497
     restart: "no"
     user: "0"
     command: ["sh", "-c", "mkdir -p /keys && chown -R 1654:1654 /keys"]
@@ -60,22 +69,21 @@ services:
       - data_keys:/keys
 
   migrate:
-    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    image: mcr.microsoft.com/dotnet/aspnet@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497
     restart: "no"
     command: ["dotnet", "/app/BillingControl.dll", "--migrate"]
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      ConnectionStrings__Default: Host=db;Database=billing;Username=billing_migrator;Password=${MIGRATOR_DB_PASSWORD:?Set MIGRATOR_DB_PASSWORD}
       BootstrapAdmin__Email: ${ADMIN_EMAIL:?Set ADMIN_EMAIL}
       BootstrapAdmin__Password: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}
       Seed__Demo: "false"
       DataProtection__Path: /keys
+      Release__Sha: ${RELEASE_SHA:?Set RELEASE_SHA}
     volumes:
-      - app_publish:/app:ro
+      - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}/publish:/app:ro
       - data_keys:/keys
     depends_on:
-      builder:
-        condition: service_completed_successfully
       db:
         condition: service_healthy
       keys-init:
@@ -84,7 +92,7 @@ services:
       - database
 
   app:
-    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    image: mcr.microsoft.com/dotnet/aspnet@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497
     restart: unless-stopped
     command: ["dotnet", "/app/BillingControl.dll"]
     working_dir: /app
@@ -98,12 +106,10 @@ services:
       ReverseProxy__Address: 172.17.0.1
       ReverseProxy__Network: 172.16.0.0/12
       AllowedHosts: ${APP_HOST:?Set APP_HOST}
+      Release__Sha: ${RELEASE_SHA:?Set RELEASE_SHA}
     volumes:
-      - app_publish:/app:ro
+      - ${RELEASE_ROOT:-/docker/billing-control/releases}/${RELEASE_SHA:?Set RELEASE_SHA}/publish:/app:ro
       - data_keys:/keys
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     networks:
       - database
       - frontend
@@ -115,10 +121,9 @@ services:
       - traefik.http.routers.billing-control.tls=true
       - traefik.http.routers.billing-control.tls.certresolver=letsencrypt
       - traefik.http.services.billing-control.loadbalancer.server.port=8080
+      - com.billing-control.release-sha=${RELEASE_SHA:?Set RELEASE_SHA}
 
 volumes:
-  app_source:
-  app_publish:
   postgres_data:
   data_keys:
 
