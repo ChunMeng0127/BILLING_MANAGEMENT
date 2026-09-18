@@ -75,6 +75,15 @@ services:
   migrate:
     image: mcr.microsoft.com/dotnet/aspnet@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497
     restart: "no"
+    user: "1654:1654"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     command: ["dotnet", "/app/BillingControl.dll", "--migrate"]
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -98,6 +107,15 @@ services:
   app:
     image: mcr.microsoft.com/dotnet/aspnet@sha256:1fe86375600b62e6566b465da9553eef0621f13c67f40fe764cd8dbb1dee1497
     restart: unless-stopped
+    user: "1654:1654"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     command: ["dotnet", "/app/BillingControl.dll"]
     working_dir: /app
     environment:
