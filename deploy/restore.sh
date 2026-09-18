@@ -5,7 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 DB_SERVICE="${DB_SERVICE:-db}"
 APP_SERVICE="${APP_SERVICE:-app}"
-DB_USER="${DB_USER:-billing}"
+ADMIN_DB_USER="${ADMIN_DB_USER:-billing_breakglass}"
+OBJECT_OWNER_ROLE="${OBJECT_OWNER_ROLE:-billing}"
 DB_NAME="${DB_NAME:-billing}"
 
 backup="${1:?Usage: restore.sh /absolute/path/backup.dump --confirm-replace}"
@@ -49,22 +50,22 @@ compose stop "$APP_SERVICE"
 restore_failed=1
 finish() {
   if [[ "$restore_failed" == "0" ]]; then
-    compose up -d "$APP_SERVICE"
+    compose up -d --no-deps "$APP_SERVICE"
   else
     echo "Restore did not complete. Application remains stopped to avoid serving a partial database." >&2
   fi
 }
 trap finish EXIT
 
-compose exec -T "$DB_SERVICE" dropdb -U "$DB_USER" --force "$DB_NAME"
-compose exec -T "$DB_SERVICE" createdb -U "$DB_USER" "$DB_NAME"
+compose exec -T "$DB_SERVICE" dropdb -U "$ADMIN_DB_USER" --force "$DB_NAME"
+compose exec -T "$DB_SERVICE" createdb -U "$ADMIN_DB_USER" -O "$OBJECT_OWNER_ROLE" "$DB_NAME"
 compose exec -T "$DB_SERVICE" pg_restore \
-  -U "$DB_USER" -d "$DB_NAME" \
+  -U "$ADMIN_DB_USER" -d "$DB_NAME" --role="$OBJECT_OWNER_ROLE" \
   --no-owner --exit-on-error --single-transaction < "$backup"
 
-migrations="$(compose exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -Atc \
+migrations="$(compose exec -T "$DB_SERVICE" psql -U "$ADMIN_DB_USER" -d "$DB_NAME" -Atc \
   'select count(*) from "__EFMigrationsHistory";' | tr -d '\r')"
-tables="$(compose exec -T "$DB_SERVICE" psql -U "$DB_USER" -d "$DB_NAME" -Atc \
+tables="$(compose exec -T "$DB_SERVICE" psql -U "$ADMIN_DB_USER" -d "$DB_NAME" -Atc \
   "select count(*) from pg_tables where schemaname='public';" | tr -d '\r')"
 [[ "$tables" =~ ^[0-9]+$ && "$tables" -gt 0 ]]
 [[ "$migrations" =~ ^[0-9]+$ && "$migrations" -gt 0 ]]

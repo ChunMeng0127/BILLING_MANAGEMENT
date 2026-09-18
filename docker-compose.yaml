@@ -93,7 +93,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
       ASPNETCORE_HTTPS_PORT: "443"
-      ConnectionStrings__Default: Host=db;Database=billing;Username=billing;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      ConnectionStrings__Default: Host=db;Database=billing;Username=billing_runtime;Password=${RUNTIME_DB_PASSWORD:?Set RUNTIME_DB_PASSWORD}
       DataProtection__Path: /keys
       ReverseProxy__Address: 172.17.0.1
       ReverseProxy__Network: 172.16.0.0/12
