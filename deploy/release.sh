@@ -111,7 +111,8 @@ source_repo=https://github.com/$REPO_SLUG.git
 ci_run=$ci_url
 built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
-  chmod 600 "$manifest" "$publish_dir/RELEASE_SHA" "$publish_dir/RELEASE_ARTIFACT_SHA256"
+  chmod 600 "$manifest"
+  chmod 444 "$publish_dir/RELEASE_SHA" "$publish_dir/RELEASE_ARTIFACT_SHA256"
   echo "Built immutable artifact: $artifact_sha"
 fi
 
