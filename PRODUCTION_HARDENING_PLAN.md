@@ -98,15 +98,15 @@ No hardening phase may weaken these controls.
 | --- | --- | --- |
 | P0 | Current production database backup | Verified on 2026-09-17 |
 | P0 | Production financial data integrity | No violation found |
-| P1 | Automated + offsite backup | Not implemented |
-| P1 | Runtime DB login is PostgreSQL superuser | Must be corrected |
-| P1 | Production deploy follows mutable `master` | Must be corrected |
-| P1 | `master` has no required branch protection/checks | Must be corrected |
-| P1 | SSH root/password access and host firewall posture | Must be hardened carefully |
-| P2 | CI topology differs from actual Traefik production topology | Must be aligned |
-| P2 | Application container has no healthcheck | Must be added |
-| P2 | Monitoring / alerting is limited | Must be improved |
-| P2 | Application process runs as root | Should be hardened |
+| P1 | Automated + offsite backup | ✅ Complete |
+| P1 | Runtime DB login is PostgreSQL superuser | ✅ Corrected; runtime uses least-privilege role |
+| P1 | Production deploy follows mutable `master` | ✅ Corrected; exact-SHA immutable release gate active |
+| P1 | `master` has no required branch protection/checks | ✅ Corrected; active production ruleset requires PR + green `test` check |
+| P1 | SSH root/password access and host firewall posture | ✅ Hardened and reboot-verified |
+| P2 | CI topology differs from actual Traefik production topology | ✅ Aligned to Traefik production path |
+| P2 | Application container has no healthcheck | ✅ Added and release-gated |
+| P2 | Monitoring / alerting is limited | ✅ Local production monitoring active |
+| P2 | Application process runs as root | ✅ Runs non-root with read-only/capability restrictions |
 | P2 | Three date-dependent integration tests currently fail | ✅ Fixed; audit/business time now share injectable TimeProvider |
 | P3 | Generalized before/after financial correction audit trail | Evaluated; intentionally deferred as separate audited enhancement |
 | P3 | Antiforgery warning log noise | ✅ Cleaned without weakening antiforgery/cache protection |
@@ -464,7 +464,7 @@ The following rules apply throughout this plan:
 | Sensitive local file permissions | ✅ Complete | Current `.env` and known local DB dumps restricted to owner-only |
 | A1 — Backup & Disaster Recovery | ✅ Complete | Automated local + Microsoft 365 offsite backup, retention and isolated restore verification are active |
 | A2 — Database Least Privilege | ✅ Complete | Runtime, migration, backup and break-glass roles separated; bootstrap superuser locked NOLOGIN |
-| A3 — Immutable Deployment | ✅ Production complete | Exact-SHA deterministic releases active; GitHub `master` protection requires repository-admin follow-up |
+| A3 — Immutable Deployment | ✅ Complete | Exact-SHA deterministic releases active; `master` ruleset requires PR + green `test`, blocks deletion and force push |
 | A4 — CI / Health / Monitoring | ✅ Complete | Traefik-aligned CI, app readiness/Docker health, deployment smoke and 5-minute production monitor are active |
 | A5 — VPS Hardening | ✅ Complete | Key-only non-root admin, hardened SSH, UFW/fail2ban, non-root restricted app container, full updates and controlled reboot verified |
 | A6 — Code Maintenance | ✅ Complete | Shared injectable audit/business time, 51/51 .NET + 12/12 JS green, antiforgery warning source removed, financial audit-ledger enhancement evaluated/deferred |
@@ -487,4 +487,21 @@ This plan is complete when all of the following are true:
 - deterministic automated tests are green
 - production data-integrity audit remains clean after all changes
 
-Until then, production should remain on the stable deployed financial core and development features should remain isolated.
+All completion conditions above were satisfied on 2026-09-18.
+
+Final repository protection:
+
+- Ruleset: `Production master protection`
+- Ruleset ID: `23649241`
+- Target: `refs/heads/master`
+- Enforcement: active
+- pull request required before merge
+- required GitHub Actions status check: `test`
+- branch must be up to date before merge
+- branch deletion blocked
+- force pushes blocked
+- bypass list empty
+
+**Production Hardening status: 100% COMPLETE.**
+
+Development features remain isolated from the hardened production release path.
