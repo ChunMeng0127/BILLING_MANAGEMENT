@@ -18,12 +18,12 @@ public class PostgresFactAttribute : FactAttribute
 public partial class IntegrationTests
 {
     private static string Connection => Environment.GetEnvironmentVariable("BILLING_TEST_CONNECTION")!;
-    private static AppDbContext Db() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Connection).Options);
-    private static async Task<AppDbContext> Fresh()
+    private static AppDbContext Db(TimeProvider? time = null) => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Connection).Options, null, time);
+    private static async Task<AppDbContext> Fresh(TimeProvider? time = null)
     {
         var cs = new Npgsql.NpgsqlConnectionStringBuilder(Connection);
         Assert.EndsWith("_test", cs.Database);
-        var db = Db(); await db.Database.EnsureDeletedAsync(); await db.Database.MigrateAsync(); return db;
+        var db = Db(time); await db.Database.EnsureDeletedAsync(); await db.Database.MigrateAsync(); return db;
     }
     private static async Task<int> Engagement(AppDbContext db)
     {

@@ -16,6 +16,10 @@ client = urllib.request.build_opener(
     urllib.request.HTTPSHandler(context=context),
     urllib.request.HTTPCookieProcessor(cookies),
 )
+for path in ["/health/live", "/health/ready"]:
+    with client.open(base + path, timeout=30) as response:
+        assert response.status == 200, path + " did not return HTTP 200"
+        assert response.read().decode().strip() == "Healthy", path + " did not report Healthy"
 with client.open(base + "/", timeout=30) as response:
     assert "/Account/Login" in response.url, "Anonymous dashboard did not redirect to login"
     page = response.read().decode()
@@ -33,4 +37,4 @@ assert identity_cookie and identity_cookie[0].secure, "Identity cookie is not Se
 for path, expected in [("/Users", "User management"), ("/Billing/Schedule", "Billing schedule"), ("/Progress", "Worker assignments and weekly updates")]:
     with client.open(base + path, timeout=30) as response:
         assert expected in response.read().decode(), "Protected page failed: " + path
-print("Production HTTPS redirect, login, Secure cookie, Admin and billing pages passed.")
+print("Health endpoints, production HTTPS redirect, login, Secure cookie, Admin and billing pages passed.")

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Billing Control isolated restore verification weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 03:30:00 Asia/Kuala_Lumpur
+Persistent=true
+RandomizedDelaySec=15m
+Unit=billing-control-backup-verify.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=Verify latest Billing Control backup by isolated restore
+Requires=docker.service
+After=docker.service billing-control-backup.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=PROJECT_DIR=/docker/billing-control
+Environment=BACKUP_DIR=/docker/billing-control/backups
+Environment=STATUS_DIR=/var/lib/billing-control-backup
+ExecStart=/usr/local/lib/billing-control/verify-latest-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=45min

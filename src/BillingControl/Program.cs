@@ -68,17 +68,53 @@ var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Bi
 if (!string.IsNullOrWhiteSpace(keys)) dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keys));
 var app = builder.Build();
 app.UseForwardedHeaders();
-if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing")) { app.UseExceptionHandler("/Home/Error"); app.UseHsts(); app.UseHttpsRedirection(); }
+app.Use(async (context, next) =>
+{
+    await next();
+    if (context.Response.StatusCode >= 500)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("BillingControl.Http");
+        logger.LogError("HTTP {StatusCode} {Method} {Path}", context.Response.StatusCode, context.Request.Method, context.Request.Path);
+    }
+});
+if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+    app.UseWhen(context => !context.Request.Path.StartsWithSegments("/health"), branch => branch.UseHttpsRedirection());
+}
 app.Use(async (context, next) =>
 {
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "same-origin";
     context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'";
-    context.Response.Headers.CacheControl = "no-store";
+    context.Response.OnStarting(() =>
+    {
+        if (!context.Response.Headers.ContainsKey("Cache-Control"))
+            context.Response.Headers.CacheControl = "no-store";
+        return Task.CompletedTask;
+    });
     await next();
 });
 app.UseStaticFiles(); app.UseRouting(); app.UseRateLimiter(); app.UseAuthentication(); app.UseAuthorization();
+app.MapGet("/health/live", () => Results.Text("Healthy", "text/plain")).AllowAnonymous();
+app.MapGet("/health/ready", async (AppDbContext db, ILoggerFactory loggerFactory, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        if (await db.Database.CanConnectAsync(cancellationToken))
+            return Results.Text("Healthy", "text/plain");
+
+        loggerFactory.CreateLogger("BillingControl.Health").LogWarning("Database readiness check returned unavailable.");
+    }
+    catch (Exception ex)
+    {
+        loggerFactory.CreateLogger("BillingControl.Health").LogWarning(ex, "Database readiness check failed.");
+    }
+
+    return Results.Text("Unhealthy", "text/plain", statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous();
 app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}");
 if (args.Contains("--migrate"))
 {
