@@ -1,9 +1,9 @@
 # Phase 10C Technical Closure Review
 
-**Reviewed:** 2026-09-17  
+**Reviewed:** 2026-09-19  
 **Branch:** `codex/phase10c-manual-send`  
-**Application-code checkpoint:** `c5f1b9a395b8b8e45a7652886fbf85e02c39d70e`  
-**Review status:** **BOUNDED CORRECTION REQUIRED BEFORE CLOSURE**
+**Application-code checkpoint:** `857cc12e81bcd853e9a85fac7eb4e1f788ec1df8`  
+**Review status:** **APPROVED / CLOSED**
 
 ---
 
@@ -86,6 +86,18 @@ Run the full existing PostgreSQL-backed .NET suite, JavaScript tests, Release bu
 
 ## 4. Closure Decision
 
-Phase 10C is **not yet closed**.
+Phase 10C is **APPROVED / CLOSED** on `codex/phase10c-manual-send` at `857cc12e81bcd853e9a85fac7eb4e1f788ec1df8`.
 
-No broad redesign is required. Complete only the bounded replay/reconciliation correction above, rerun the full validation suite, then perform a final diff/review. Do not start Phase 10D until this correction is approved and Phase 10C is promoted to stable development.
+The bounded Accepted-replay correction now uses the existing append-only, message-correlated `WhatsAppProviderAccepted` request/item activation histories as durable evidence. Legitimate later document progression no longer produces a false reconciliation warning, while post-claim request/item races that prevented activation continue to require reconciliation. Replay does not call the provider again.
+
+Final validation:
+
+- focused Phase 10C PostgreSQL tests: 34/34 passed locally during correction review
+- full PostgreSQL-backed .NET suite: 329/329 passed
+- JavaScript: 26/26 passed
+- Release build: 0 warnings / 0 errors
+- EF pending-model check: clean; no model changes since the last migration
+- GitHub Actions run `35417972727`: passed, including Docker build and production HTTPS smoke
+- schema/migration change: none
+
+Phase 10D remains **NOT STARTED**. This technical closure does not itself promote Phase 10C to `master` or deploy it to production; reconciliation/promotion must follow the normal protected-branch release workflow.
