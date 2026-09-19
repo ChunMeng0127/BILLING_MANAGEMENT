@@ -907,6 +907,21 @@ public partial class IntegrationTests
             await db.WhatsAppOutboundMessageAttempts
                 .Where(x => x.WhatsAppOutboundMessageId == message.Id)
                 .Select(x => x.Disposition).SingleAsync());
+
+        db.ChangeTracker.Clear();
+        var persistedMessage = await db.WhatsAppOutboundMessages.AsNoTracking()
+            .SingleAsync(x => x.Id == message.Id);
+        var repeated = await SendService(db, provider).SendAsync(new(
+            message.Id,
+            persistedMessage.Version,
+            "phase10c-race-sender",
+            "Phase10C.Race.Tests"));
+
+        Assert.True(repeated.AlreadyAccepted);
+        Assert.True(repeated.RequiresDocumentActivationReconciliation);
+        Assert.Equal(1, provider.SendCallCount);
+        Assert.Equal(1, await db.WhatsAppOutboundMessageAttempts.CountAsync(
+            x => x.WhatsAppOutboundMessageId == message.Id));
     }
 
     [PostgresFact]
