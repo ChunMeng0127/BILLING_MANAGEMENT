@@ -22,6 +22,19 @@ public static class Finance
     }
     public static decimal WorkerEntitlement(decimal lcmGross, decimal percent)
     { Percentage(percent); Require(lcmGross >= 0, "LCM gross share cannot be negative."); return Money(lcmGross * percent / 100m); }
+    public static decimal ShareAmount(BillingRecord bill, ShareKind kind) => bill.Shares.Single(x => x.Kind == kind).Amount;
+    public static decimal ManagerSalesAmount(BillingRecord bill) => ShareAmount(bill, ShareKind.Manager) + ShareAmount(bill, ShareKind.Lcm);
+    public static decimal InvoiceCap(BillingRecord bill, InvoiceFlow flow) => flow switch
+    {
+        InvoiceFlow.AccountingFirmToCustomer => bill.Amount,
+        InvoiceFlow.ManagerToAccountingFirm => ManagerSalesAmount(bill),
+        InvoiceFlow.LcmToManager => ShareAmount(bill, ShareKind.Lcm),
+        _ => 0m
+    };
+    public static decimal ActiveInvoiceAllocated(BillingRecord bill, InvoiceFlow flow) =>
+        bill.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == flow).Sum(x => x.AllocatedAmount);
+    public static decimal RemainingInvoiceCapacity(BillingRecord bill, InvoiceFlow flow) =>
+        Math.Max(0m, InvoiceCap(bill, flow) - ActiveInvoiceAllocated(bill, flow));
     public static void ValidateAllocation(decimal amount, decimal entitlement, decimal alreadyPaid)
     {
         PositiveMoney(amount);
