@@ -45,9 +45,13 @@
     };
   };
 
+  const exportHref = (baseUrl, flow) =>
+    `${baseUrl}?flow=${encodeURIComponent(flow)}`;
+
   const initialize = (documentRef, windowRef) => {
     const flow = documentRef.getElementById("invoice-flow");
     const table = documentRef.getElementById("invoice-allocation-grid");
+    const exportLink = documentRef.getElementById("invoice-create-export");
     if (!flow || !table) return;
     const numberFormat = new Intl.NumberFormat("en-MY", {
       minimumFractionDigits: 2,
@@ -61,6 +65,8 @@
         (value) => numberFormat.format(value),
         clearInputs,
       );
+      if (exportLink?.dataset.baseUrl)
+        exportLink.href = exportHref(exportLink.dataset.baseUrl, flow.value);
       table.dispatchEvent(new windowRef.Event("grid:refresh"));
     };
     flow.addEventListener("change", () => {
@@ -75,5 +81,5 @@
   if (typeof document !== "undefined" && typeof window !== "undefined")
     initialize(document, window);
 
-  return { stateFor, updateRow, updateTable, initialize };
+  return { stateFor, updateRow, updateTable, exportHref, initialize };
 });
