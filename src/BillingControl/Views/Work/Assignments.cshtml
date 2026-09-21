@@ -1,5 +1,7 @@
+[Reading 10 lines from start (total: 10 lines, 0 remaining)]
+
 @model List<WorkerAssignment>
-@{ ViewData["Title"]="Worker assignments"; }<div class="page-heading">
+@{ ViewData["Title"]="Worker assignments"; ViewData["PageClass"] = "table-page"; }<div class="page-heading">
 <div>
 <p class="eyebrow">TEAM ENTITLEMENTS</p>
 <h1>Worker assignments</h1>
@@ -8,3 +10,5 @@
 <a class="btn btn-primary" href="/Work">Assign from work items</a>
 </div>
 <partial name="_Assignments" model="Model" />
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
