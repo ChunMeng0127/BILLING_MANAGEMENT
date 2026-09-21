@@ -1,3 +1,5 @@
+[Reading 2875 lines from start (total: 2875 lines, 0 remaining)]
+
 [Reading 2794 lines from start (total: 2794 lines, 0 remaining)]
 
 :root {
@@ -2786,6 +2788,83 @@ textarea:focus-visible {
 }
 
 
+
+/* UI/UX Wave 2C — fixed dashboard shell and robust sidebar/content sizing */
+@media (min-width: 901px) {
+  .app-shell {
+    width: calc(100% - var(--sidebar-width));
+    max-width: calc(100% - var(--sidebar-width));
+  }
+
+  html.sidebar-collapsed .app-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.app-main.dashboard-page {
+  display: flex;
+  height: calc(100dvh - 64px);
+  max-height: calc(100dvh - 64px);
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 20px;
+}
+
+.app-main.dashboard-page + .app-footer {
+  display: none;
+}
+
+.dashboard-page > .page-heading {
+  flex: 0 0 auto;
+}
+
+.dashboard-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-color: #c8c6bf transparent;
+  scrollbar-width: thin;
+}
+
+.dashboard-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.dashboard-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c8c6bf;
+  background-clip: padding-box;
+}
+
+.dashboard-scroll > .report-filters {
+  margin-top: 0;
+}
+
+.dashboard-scroll > .dashboard-grid:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  html.sidebar-collapsed .app-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-main.dashboard-page {
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding-bottom: 14px;
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -2794,5 +2873,7 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
 
 [executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
