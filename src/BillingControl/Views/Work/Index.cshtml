@@ -8,7 +8,8 @@
 </div>
 @if(access.IsStaff) { <a class="btn btn-primary" href="/Billing/Schedule">+ Plan work period</a> }
 </div>
-<div class="panel">
+<div class="panel data-panel">
+<div class="table-scroll">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -25,7 +26,7 @@
 <tbody>
 @foreach(var w in Model) { <tr>
 <td>
-<a href="/Work/Details/@w.Id">W-@w.Id.ToString("D5")</a>
+<a class="record-link" href="/Work/Details/@w.Id">W-@w.Id.ToString("D5")</a>
 </td>
 <td>@w.BillingRecord.CustomerName</td>
 <td>@w.BillingRecord.ServiceName</td>
@@ -37,4 +38,5 @@
 </tr> }
 </tbody>
 </table>
+</div>
 </div>
