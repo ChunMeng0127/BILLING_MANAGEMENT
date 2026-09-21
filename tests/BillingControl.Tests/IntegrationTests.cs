@@ -1139,9 +1139,14 @@ public partial class IntegrationTests
         var adminDashboard = await admin.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", adminDashboard); Assert.Contains("Beta Scope Customer", adminDashboard);
         var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
         var newInvoice = await admin.GetStringAsync("/Invoices/Create");
+        Assert.Contains("id=\"invoice-create-export\"", newInvoice);
         Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
         Assert.Contains("data-manager-cap=\"650.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
+        var managerCreateCsv = await admin.GetStringAsync("/Invoices/ExportCreate?flow=ManagerToAccountingFirm");
+        Assert.Contains("Billing ID,Customer,Accounting Firm,Manager", managerCreateCsv);
+        Assert.Contains("ManagerToAccountingFirm", managerCreateCsv);
+        Assert.Contains("650.00,250.00,400.00", managerCreateCsv);
         var fullyCustomerAllocatedRow = Regex.Match(newInvoice, $"<tr class=\"invoice-allocation-row\"[^>]*data-billing-id=\"{billBId}\"[^>]*>[\\s\\S]*?</tr>").Value;
         Assert.NotEmpty(fullyCustomerAllocatedRow); Assert.Contains("data-grid-eligible=\"false\"", fullyCustomerAllocatedRow); Assert.Contains("max=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("disabled=\"disabled\"", fullyCustomerAllocatedRow);
         Assert.Contains("data-manager-allocated=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("data-lcm-allocated=\"0.00\"", fullyCustomerAllocatedRow);
