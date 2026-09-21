@@ -24,6 +24,12 @@ public class ReportModel
     public decimal WorkerCost => Assignments.Sum(x => x.Entitlement);
     public decimal WorkerPaid => Assignments.Sum(x => x.Allocations.Where(a => !a.WorkerPayment.IsCancelled).Sum(a => a.Amount));
     public decimal BillingOutstanding => Active.Sum(x => x.CustomerOutstandingAmount);
+    public decimal ManagerRetained => Share(ShareKind.Manager);
+    public decimal ManagerLcmCost => Share(ShareKind.Lcm);
+    public decimal ManagerSales => ManagerRetained + ManagerLcmCost;
+    public decimal ManagerInvoiced => Active.Sum(x => Finance.ActiveInvoiceAllocated(x, InvoiceFlow.ManagerToAccountingFirm));
+    public decimal ManagerUnbilled => Active.Sum(x => Finance.RemainingInvoiceCapacity(x, InvoiceFlow.ManagerToAccountingFirm));
+    public decimal LcmInvoicedToManager => Active.Sum(x => Finance.ActiveInvoiceAllocated(x, InvoiceFlow.LcmToManager));
     public decimal OwnShare => Access.Role switch
     {
         AppRoles.AccountingFirm => Share(ShareKind.Firm),
