@@ -31,13 +31,7 @@
         <tbody>
         @foreach(var b in bills)
         {
-            var cap = Model.Flow switch
-            {
-                InvoiceFlow.AccountingFirmToCustomer => b.Amount,
-                InvoiceFlow.ManagerToAccountingFirm => b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount,
-                InvoiceFlow.LcmToManager => b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount,
-                _ => 0m
-            };
+            var cap = Finance.InvoiceCap(b, Model.Flow);
             var allocatedElsewhere = b.InvoiceLines.Where(x => x.InvoiceId != Model.Id && x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == Model.Flow).Sum(x => x.AllocatedAmount);
             var available = Math.Max(0m, cap - allocatedElsewhere);
             var current = Model.Allocations.GetValueOrDefault(b.Id);
