@@ -1,5 +1,5 @@
 @model List<BillingSchedule>
-@{ ViewData["Title"] = "Upcoming billing"; AccessProfile access = ViewBag.Access; }
+@{ ViewData["Title"] = "Upcoming billing"; ViewData["PageClass"] = "table-page"; AccessProfile access = ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">PLAN & GENERATE</p>
@@ -8,7 +8,7 @@
 </div>
 <a class="btn btn-outline-secondary" href="/Engagements">Manage engagements</a>
 </div>
-<div class="panel">
+<div class="panel data-panel schedule-panel">
 <table class="table data-grid schedule-grid">
 <thead>
 <tr>
@@ -28,9 +28,10 @@
 <td>@Finance.Label(s.Frequency)</td>
 <td>@s.NextPeriodStart?.ToString("yyyy-MM-dd")</td>
 <td class="money">@e.BillingAmount.ToString("N2")</td>
-<td>
+<td class="schedule-actions">
 @if(access.IsStaff) {
-<a class="btn btn-outline-secondary btn-sm" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
+<div class="schedule-primary-actions">
+<a class="btn btn-outline-secondary btn-sm schedule-edit-button" href="/Billing/EditSchedule/@e.Id">Edit schedule</a>
 @if(s.NextPeriodStart != null || s.Frequency==Frequency.AdHoc) { <form method="post" asp-action="Generate" class="inline-form schedule-generate-form">
 <input type="hidden" name="engagementId" value="@e.Id" />
 <input type="hidden" name="mode" value="@(s.Frequency==Frequency.AdHoc ? "AdHocManual" : "Scheduled")" />
@@ -44,6 +45,7 @@
 }
 <button class="btn btn-primary btn-sm">Generate</button>
 </form> } else { <span class="text-muted">No next period</span> }
+</div>
 <details class="manual-period">
 <summary>Manual / replacement period</summary>
 <form asp-action="Generate" method="post" class="inline-form schedule-generate-form">
