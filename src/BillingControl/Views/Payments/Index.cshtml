@@ -1,5 +1,7 @@
+[Reading 47 lines from start (total: 47 lines, 0 remaining)]
+
 @model List<WorkerPayment>
-@{ ViewData["Title"]="Worker payments"; AccessProfile access=ViewBag.Access; }
+@{ ViewData["Title"]="Worker payments"; ViewData["PageClass"] = "table-page"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">PAYMENT REGISTER</p>
@@ -8,7 +10,7 @@
 </div>
 @if(access.IsStaff) { <a class="btn btn-primary" href="/Payments/Create">+ Record payment</a> }
 </div>
-<div class="panel">
+<div class="panel data-panel">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -45,3 +47,5 @@
 </tbody>
 </table>
 </div>
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
