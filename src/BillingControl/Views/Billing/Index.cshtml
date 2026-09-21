@@ -20,7 +20,8 @@
 <button class="btn btn-outline-secondary">Apply dates</button>
 <a href="/Billing">Reset</a>
 </form>
-<div class="panel">
+<div class="panel data-panel">
+<div class="table-scroll">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -40,7 +41,7 @@
 <tbody>
 @foreach(var b in Model) { var invoices=b.InvoiceLines.Where(x=>x.Invoice.Flow==InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status!=InvoiceStatus.Cancelled).Select(x=>x.Invoice).DistinctBy(x=>x.Id).ToList(); <tr>
 <td>
-<a href="/Billing/Details/@b.Id">B-@b.Id.ToString("D5")</a>
+<a class="record-link" href="/Billing/Details/@b.Id">B-@b.Id.ToString("D5")</a>
 </td>
 <td class="fw-semibold">@b.CustomerName</td>
 <td>@b.ServiceName</td>
@@ -53,8 +54,9 @@
 </td>
 <td class="money">@b.Amount.ToString("N2")</td>
 @if(showReceipts) { <td class="money">@b.CustomerReceivedAmount.ToString("N2")</td><td class="money">@b.CustomerOutstandingAmount.ToString("N2")</td> }
-<td><a href="/Billing/Details/@b.Id">View</a>@if(access.IsStaff && b.Status != BillingStatus.Cancelled){ <span> · </span><a href="/Billing/Edit/@b.Id">Edit</a> }</td>
+<td><div class="table-actions"><a class="table-action" href="/Billing/Details/@b.Id">View</a>@if(access.IsStaff && b.Status != BillingStatus.Cancelled){ <a class="table-action" href="/Billing/Edit/@b.Id">Edit</a> }</div></td>
 </tr> }
 </tbody>
 </table>
+</div>
 </div>
