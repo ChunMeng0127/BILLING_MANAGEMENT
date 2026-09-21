@@ -1,5 +1,6 @@
+
 @model List<Engagement>
-@{ ViewData["Title"] = "Engagements"; AccessProfile access=ViewBag.Access; }
+@{ ViewData["Title"] = "Engagements"; ViewData["PageClass"] = "table-page"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">CUSTOMER SERVICES</p>
@@ -8,7 +9,7 @@
 </div>
 @if(access.IsStaff) { <a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a> }
 </div>
-<div class="panel">
+<div class="panel data-panel">
 <table class="table data-grid">
 <thead>
 <tr>

@@ -1,5 +1,6 @@
+
 @model List<AppUser>
-@{ ViewData["Title"]="User management"; Dictionary<string,string> roles=ViewBag.Roles; List<BusinessParty> firms=ViewBag.Firms; List<Manager> managers=ViewBag.Managers; List<Worker> workers=ViewBag.Workers; }
+@{ ViewData["Title"]="User management"; ViewData["PageClass"] = "table-page"; Dictionary<string,string> roles=ViewBag.Roles; List<BusinessParty> firms=ViewBag.Firms; List<Manager> managers=ViewBag.Managers; List<Worker> workers=ViewBag.Workers; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">ADMINISTRATION</p>
@@ -8,7 +9,7 @@
 </div>
 <a class="btn btn-primary" href="/Users/Create">+ New user</a>
 </div>
-<div class="panel">
+<div class="panel data-panel">
 <table class="table data-grid">
 <thead>
 <tr>

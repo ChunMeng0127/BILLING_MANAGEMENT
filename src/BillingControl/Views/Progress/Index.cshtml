@@ -1,6 +1,7 @@
+
 @model ProgressReportModel
 @inject BusinessClock Clock
-@{ ViewData["Title"] = "Worker workflow"; var canBatch = Model.Access.IsStaff || Model.Access.IsWorker; }
+@{ ViewData["Title"] = "Worker workflow"; ViewData["PageClass"] = "table-page progress-table-page"; var canBatch = Model.Access.IsStaff || Model.Access.IsWorker; }
 <div class="page-heading">
 <div><p class="eyebrow">WORK DELIVERY</p><h1>Worker assignments and weekly updates</h1><p>An active worker assignment controls work-list visibility and weekly reporting. Billing service dates do not.</p></div>
 <a class="btn btn-outline-secondary" href="/Work">View work items →</a>
@@ -19,7 +20,7 @@
 <div class="metric"><span>Missing</span><strong>@Model.Missing</strong><p>No report exists</p></div>
 <div class="metric"><span>Late</span><strong>@Model.Late</strong><p>Submitted after Sunday</p></div>
 </div>
-<div class="panel">
+<div class="panel data-panel progress-data-panel">
 @if (Model.Rows.Count == 0) { <div class="empty-state"><h3>No assignments in this view</h3><p>Active assignments appear as soon as a worker is assigned. Completed and hidden assignments remain available in their respective filters.</p></div> }
 else {
 <form method="post" asp-action="Batch" data-workflow-batch>

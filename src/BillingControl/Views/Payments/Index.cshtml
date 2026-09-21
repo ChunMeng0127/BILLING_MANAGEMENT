@@ -1,5 +1,6 @@
+
 @model List<WorkerPayment>
-@{ ViewData["Title"]="Worker payments"; AccessProfile access=ViewBag.Access; }
+@{ ViewData["Title"]="Worker payments"; ViewData["PageClass"] = "table-page"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">PAYMENT REGISTER</p>
@@ -8,7 +9,7 @@
 </div>
 @if(access.IsStaff) { <a class="btn btn-primary" href="/Payments/Create">+ Record payment</a> }
 </div>
-<div class="panel">
+<div class="panel data-panel">
 <table class="table data-grid">
 <thead>
 <tr>

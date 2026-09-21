@@ -1,3 +1,5 @@
+
+
 :root {
   --orange: #ff6115;
   --orange-strong: #e94f08;
@@ -2202,6 +2204,691 @@ textarea:focus-visible {
   }
 }
 
+/* UI/UX Wave 1 — global hierarchy, data density and action consistency */
+:root {
+  --content-max: 1680px;
+  --shadow-elevated: 0 12px 34px rgb(28 39 55 / 7%);
+}
+
+.app-main {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding-top: 28px;
+}
+
+.topbar {
+  min-height: 64px;
+  background: rgb(255 255 255 / 92%);
+}
+
+.sidebar {
+  background: #fff;
+  box-shadow: 8px 0 28px rgb(27 38 55 / 2%);
+}
+
+.brand {
+  margin-bottom: 24px;
+}
+
+.nav-group-summary {
+  min-height: 32px;
+  color: #728096;
+}
+
+.nav-link {
+  min-height: 40px;
+  border: 1px solid transparent;
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.nav-link.active {
+  border-color: #ffd5bf;
+  box-shadow: inset 3px 0 0 var(--orange);
+}
+
+.page-heading {
+  margin-bottom: 20px;
+}
+
+.page-heading h1 {
+  margin-bottom: 8px;
+}
+
+.page-heading .eyebrow {
+  margin-bottom: 8px !important;
+}
+
+.page-heading > .btn,
+.page-heading > div:last-child .btn {
+  box-shadow: 0 7px 18px rgb(255 97 21 / 14%);
+}
+
+.panel {
+  border-color: #e5e8ec;
+  box-shadow: 0 5px 18px rgb(28 39 55 / 4%);
+}
+
+.panel:hover {
+  border-color: #dde1e6;
+}
+
+.data-panel {
+  overflow: hidden;
+}
+
+.panel-heading {
+  min-height: 68px;
+  padding: 17px 20px;
+  background: linear-gradient(180deg, #fff 0%, #fffdfb 100%);
+}
+
+.report-filters {
+  gap: 10px 12px;
+  border-color: #e5e8ec;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(28 39 55 / 3%);
+  padding: 13px 15px;
+}
+
+.report-filters > div {
+  min-width: 140px;
+}
+
+.report-filters .filter-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.btn-quiet {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none !important;
+}
+
+.btn-quiet:hover,
+.btn-quiet:focus-visible {
+  border-color: var(--line);
+  background: #f7f8fa;
+  color: var(--ink-soft);
+}
+
+.table-scroll,
+.table-responsive {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.table.data-grid {
+  min-width: 960px;
+}
+
+.table.data-grid thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  border-bottom-color: #dfe3e8;
+  background: #f8f9fb;
+  color: #53627a;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.table.data-grid tbody tr:hover {
+  background: #fff9f5;
+}
+
+.table.data-grid tbody td {
+  height: 48px;
+}
+
+.record-link {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: #f2f5f9;
+  color: #35577f;
+  padding: 4px 7px;
+  font-size: 10.5px;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-link:hover {
+  background: var(--orange-soft);
+  color: var(--orange-strong);
+}
+
+.table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.table-action {
+  display: inline-flex;
+  min-height: 29px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dfe3e8;
+  border-radius: 7px;
+  background: #fff;
+  color: #53627a !important;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  font-weight: 750 !important;
+  line-height: 1;
+}
+
+.table-action:hover,
+.table-action:focus-visible {
+  border-color: #ffc7a8;
+  background: var(--orange-wash);
+  color: var(--orange-strong) !important;
+}
+
+.metrics {
+  gap: 12px;
+}
+
+.metric {
+  min-height: 118px;
+  border-color: #e5e8ec;
+  box-shadow: 0 5px 18px rgb(28 39 55 / 4%);
+  padding: 18px 18px 16px;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.metric:hover {
+  transform: translateY(-2px);
+  border-color: #dce1e7;
+  box-shadow: var(--shadow-elevated);
+}
+
+.metric strong {
+  margin-top: 9px;
+  font-size: clamp(20px, 1.55vw, 25px);
+}
+
+.dashboard-grid {
+  align-items: start;
+}
+
+.empty-state {
+  min-height: 180px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+}
+
+.checklist-family {
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.checklist-family:hover {
+  border-color: #dce1e7;
+  box-shadow: var(--shadow-elevated);
+}
+
+.form-control,
+.form-select {
+  border-color: #d9dee5;
+  background-color: #fff;
+}
+
+.form-control:hover,
+.form-select:hover {
+  border-color: #cdd4dc;
+}
+
+@media (max-width: 900px) {
+  .app-main {
+    padding-top: 22px;
+  }
+
+  .page-heading {
+    gap: 14px;
+  }
+
+  .report-filters > div {
+    flex-basis: calc(50% - 8px);
+  }
+}
+
+@media (max-width: 680px) {
+  .page-heading {
+    display: grid;
+  }
+
+  .page-heading > .btn,
+  .page-heading > div:last-child {
+    justify-self: stretch;
+  }
+
+  .page-heading > .btn {
+    width: 100%;
+  }
+
+  .report-filters {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .report-filters > div,
+  .report-filters .filter-actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-filters .filter-actions .btn {
+    flex: 1;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric {
+    min-height: 104px;
+  }
+}
+
+@media (max-width: 420px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .table.data-grid {
+    min-width: 820px;
+  }
+}
+
+
+/* Fixed register pages own the viewport; only their inner content areas scroll. */
+.app-body.fixed-table-page {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-body.fixed-table-page .app-frame,
+.app-body.fixed-table-page .app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-body.fixed-table-page .sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* UI/UX Wave 2 — fixed register pages with inner scrolling */
+.app-main.table-page {
+  display: flex;
+  height: calc(100dvh - 64px);
+  max-height: calc(100dvh - 64px);
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 20px;
+}
+
+.app-main.table-page + .app-footer {
+  display: none;
+}
+
+.table-page > .page-heading,
+.table-page > .report-filters {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.table-page > .data-panel > .grid-toolbar {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel > .table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.table-page .table-scroll .table.data-grid thead th {
+  top: 0;
+}
+
+.page-content-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #c8c6bf transparent;
+  scrollbar-width: thin;
+}
+
+.page-content-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.page-content-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c8c6bf;
+  background-clip: padding-box;
+}
+
+.checklist-page-scroll {
+  padding-right: 4px;
+}
+
+.checklist-page-scroll > .panel:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-grid {
+  width: 100% !important;
+  min-width: 1180px !important;
+  table-layout: fixed;
+}
+
+.schedule-grid th:nth-child(1),
+.schedule-grid td:nth-child(1) {
+  width: 14%;
+}
+
+.schedule-grid th:nth-child(2),
+.schedule-grid td:nth-child(2) {
+  width: 14%;
+}
+
+.schedule-grid th:nth-child(3),
+.schedule-grid td:nth-child(3) {
+  width: 8%;
+}
+
+.schedule-grid th:nth-child(4),
+.schedule-grid td:nth-child(4) {
+  width: 10%;
+}
+
+.schedule-grid th:nth-child(5),
+.schedule-grid td:nth-child(5) {
+  width: 9%;
+}
+
+.schedule-grid th:nth-child(6),
+.schedule-grid td:nth-child(6) {
+  width: 45%;
+}
+
+.schedule-grid > tbody > tr > td {
+  height: auto;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.schedule-grid > tbody > tr > td:not(.schedule-actions) {
+  vertical-align: middle;
+}
+
+.schedule-actions {
+  min-width: 520px !important;
+  max-width: none !important;
+  vertical-align: top !important;
+}
+
+.schedule-primary-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schedule-edit-button {
+  flex: 0 0 auto;
+  margin-bottom: 1px;
+}
+
+.schedule-generate-form {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 7px;
+}
+
+.schedule-generate-form > label {
+  min-width: 0;
+  flex: 1 1 130px;
+  margin: 0;
+  font-size: 9px;
+}
+
+.schedule-generate-form > label .form-control {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+}
+
+.schedule-generate-form > button {
+  min-height: 32px;
+  flex: 0 0 auto;
+}
+
+.schedule-actions .manual-period {
+  margin-top: 7px;
+  padding-top: 7px;
+}
+
+.schedule-actions .manual-period summary {
+  font-size: 10px;
+}
+
+.schedule-actions .manual-period .schedule-generate-form {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.schedule-actions .manual-period .schedule-generate-form > label {
+  flex: 1 1 135px;
+  max-width: 190px;
+}
+
+.schedule-actions .manual-period small {
+  margin-top: 7px;
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .app-main.table-page {
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding-bottom: 14px;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-main.table-page {
+    padding-bottom: 12px;
+  }
+
+  .schedule-grid {
+    min-width: 1080px !important;
+  }
+}
+
+
+
+/* UI/UX Wave 2B — extend fixed register behavior across remaining list pages */
+.table-page > .data-panel > form {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-page > .data-panel > form > .grid-toolbar {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel > form > .table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.progress-table-page > .form-panel,
+.progress-table-page > .metrics {
+  flex: 0 0 auto;
+}
+
+.progress-table-page > .form-panel {
+  margin-bottom: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.progress-table-page > .metrics {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.progress-data-panel .workflow-batch-bar,
+.progress-data-panel form > .hint {
+  flex: 0 0 auto;
+}
+
+.progress-data-panel .workflow-batch-bar {
+  padding: 10px 14px 6px;
+}
+
+.progress-data-panel form > .hint {
+  margin: 0;
+  padding: 0 14px 8px;
+}
+
+@media (max-height: 760px) and (min-width: 901px) {
+  .progress-table-page > .page-heading {
+    margin-bottom: 12px;
+  }
+
+  .progress-table-page > .form-panel {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .progress-table-page > .metrics {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .progress-table-page .metric {
+    min-height: 86px;
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+}
+
+
+
+/* UI/UX Wave 2C — fixed dashboard shell and robust sidebar/content sizing */
+@media (min-width: 901px) {
+  .app-shell {
+    width: calc(100% - var(--sidebar-width));
+    max-width: calc(100% - var(--sidebar-width));
+  }
+
+  html.sidebar-collapsed .app-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+.app-main.dashboard-page {
+  display: flex;
+  height: calc(100dvh - 64px);
+  max-height: calc(100dvh - 64px);
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 20px;
+}
+
+.app-main.dashboard-page + .app-footer {
+  display: none;
+}
+
+.dashboard-page > .page-heading {
+  flex: 0 0 auto;
+}
+
+.dashboard-scroll {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-color: #c8c6bf transparent;
+  scrollbar-width: thin;
+}
+
+.dashboard-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.dashboard-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c8c6bf;
+  background-clip: padding-box;
+}
+
+.dashboard-scroll > .report-filters {
+  margin-top: 0;
+}
+
+.dashboard-scroll > .dashboard-grid:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .app-shell,
+  html.sidebar-collapsed .app-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .app-main.dashboard-page {
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding-bottom: 14px;
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -2210,3 +2897,4 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
