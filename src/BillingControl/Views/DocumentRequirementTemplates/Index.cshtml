@@ -23,8 +23,8 @@
             }
         </select>
     </div>
-    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
-    <a href="/DocumentRequirementTemplates">Reset</a>
+    <div class="filter-actions"><button class="btn btn-primary" type="submit">Apply filters</button>
+        <a class="btn btn-quiet" href="/DocumentRequirementTemplates">Reset</a></div>
 </form>
 
 @if (!Model.Templates.Any())
