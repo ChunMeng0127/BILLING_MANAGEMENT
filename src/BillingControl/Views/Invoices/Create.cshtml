@@ -43,7 +43,7 @@
         <tbody>
         @foreach(var b in bills)
         {
-            var managerCap = b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount;
+            var managerCap = Finance.InvoiceCap(b, InvoiceFlow.ManagerToAccountingFirm);
             var lcmCap = b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
             var customerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer).Sum(x => x.AllocatedAmount);
             var managerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);
