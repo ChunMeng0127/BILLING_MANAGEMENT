@@ -1,5 +1,5 @@
 @model List<BillingRecord>
-@{ ViewData["Title"] = "Billing records"; ReportFilter f = ViewBag.Filter; AccessProfile access = ViewBag.Access; var showReceipts = access.IsStaff || access.IsAccountingFirm; }
+@{ ViewData["Title"] = "Billing records"; ViewData["PageClass"] = "table-page"; ReportFilter f = ViewBag.Filter; AccessProfile access = ViewBag.Access; var showReceipts = access.IsStaff || access.IsAccountingFirm; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">BILLING REGISTER</p>
@@ -21,7 +21,6 @@
 <a href="/Billing">Reset</a>
 </form>
 <div class="panel data-panel">
-<div class="table-scroll">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -58,5 +57,4 @@
 </tr> }
 </tbody>
 </table>
-</div>
 </div>
