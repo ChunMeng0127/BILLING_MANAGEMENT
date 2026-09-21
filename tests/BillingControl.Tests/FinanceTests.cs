@@ -5,6 +5,13 @@ namespace BillingControl.Tests;
 public class FinanceTests
 {
     [Fact] public void StandardAllocation() => Assert.Equal(new[] { 350m, 250m, 400m }, Finance.Split(1000m, 35m, 25m, 40m));
+    [Fact] public void ManagerSalesIncludesManagerAndLcmSnapshots()
+    {
+        var bill = new BillingRecord { Amount = 1000m, Shares = [new() { Kind = ShareKind.Firm, Amount = 350m }, new() { Kind = ShareKind.Manager, Amount = 250m }, new() { Kind = ShareKind.Lcm, Amount = 400m }] };
+        Assert.Equal(650m, Finance.ManagerSalesAmount(bill));
+        Assert.Equal(650m, Finance.InvoiceCap(bill, InvoiceFlow.ManagerToAccountingFirm));
+        Assert.Equal(400m, Finance.InvoiceCap(bill, InvoiceFlow.LcmToManager));
+    }
     [Theory]
     [InlineData(35, 25, 39)]
     [InlineData(-5, 25, 80)]
