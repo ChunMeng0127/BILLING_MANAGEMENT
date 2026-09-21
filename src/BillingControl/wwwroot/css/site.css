@@ -148,7 +148,7 @@ p {
   place-items: center;
   border-radius: 10px;
   background: var(--orange);
-  box-shadow: 0 7px 15px rgb(255 97 21 / 23%);
+  box-shadow: none;
   color: #fff;
   font-size: 21px;
   font-weight: 800;
@@ -556,7 +556,7 @@ html.sidebar-collapsed .app-shell {
   border-color: var(--orange);
   background: var(--orange);
   color: #fff;
-  box-shadow: 0 6px 14px rgb(255 97 21 / 18%);
+  box-shadow: none;
 }
 
 .btn-primary:hover,
@@ -1756,9 +1756,7 @@ details summary {
   display: grid;
   min-height: 100vh;
   place-items: center;
-  background:
-    radial-gradient(circle at 82% 15%, rgb(255 97 21 / 10%), transparent 26rem),
-    linear-gradient(145deg, #fffdf7 0%, #fffcf4 70%, #fff3e9 100%);
+  background: var(--canvas);
   padding: 24px;
 }
 
@@ -1773,6 +1771,16 @@ details summary {
 
 .login-card .brand-mark {
   margin-bottom: 25px;
+  background-color: var(--orange);
+  background-image: none;
+  color: #fff;
+}
+
+.login-card .btn-primary,
+.login-card .btn-primary:focus {
+  background-color: var(--orange);
+  background-image: none;
+  color: #fff;
 }
 
 .login-card h1 {
