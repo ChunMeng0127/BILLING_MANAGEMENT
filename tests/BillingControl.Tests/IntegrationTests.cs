@@ -218,9 +218,10 @@ public partial class IntegrationTests
         Assert.Equal(1000m, bill1State.CustomerInvoicedAmount);
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-OVER", new(2026, 2, 2), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
 
-        var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 250, [bill2.Id] = 250 });
+        var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 650, [bill2.Id] = 650 });
+        Assert.Equal(1300m, consolidated.Total);
         Assert.Equal(2, consolidated.Lines.Count);
-        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = .01m }));
         var lcm = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 200, [bill2.Id] = 200 });
         Assert.Equal(400m, lcm.Total);
         Assert.Equal(2, lcm.Lines.Count);
@@ -798,7 +799,7 @@ public partial class IntegrationTests
 
         var invoices = new InvoiceService(db);
         await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BASE-CUSTOMER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 4500m });
-        await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 750m });
+        await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 1950m });
         await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "BASE-LCM", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 1200m });
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BASE-CUSTOMER-OVER", new(2026, 3, 1), new Dictionary<int, decimal> { [customBill.Id] = .01m }));
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER-OVER", new(2026, 3, 1), new Dictionary<int, decimal> { [customBill.Id] = .01m }));
@@ -1105,10 +1106,10 @@ public partial class IntegrationTests
         var managerDashboard = await managerClient.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", managerDashboard); Assert.DoesNotContain("Beta Scope Customer", managerDashboard); Assert.Contains("1,000.00", managerDashboard); Assert.DoesNotContain("2,000.00", managerDashboard);
         var managerEngagements = await managerClient.GetStringAsync("/Engagements"); Assert.Contains("Alpha Scope Customer", managerEngagements); Assert.DoesNotContain("Beta Scope Customer", managerEngagements);
         Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
-        var managerDetails = await managerClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Your manager share", managerDetails); Assert.Contains("Work status", managerDetails); Assert.DoesNotContain("Customer receipt history", managerDetails); Assert.DoesNotContain("LCM retained", managerDetails); Assert.DoesNotContain("Worker entitlement", managerDetails);
+        var managerDetails = await managerClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Manager sales", managerDetails); Assert.Contains("650.00", managerDetails); Assert.Contains("LCM cost", managerDetails); Assert.Contains("400.00", managerDetails); Assert.Contains("Gross margin", managerDetails); Assert.Contains("250.00", managerDetails); Assert.Contains("Manager unbilled", managerDetails); Assert.Contains("Work status", managerDetails); Assert.DoesNotContain("Customer receipt history", managerDetails); Assert.DoesNotContain("LCM retained", managerDetails); Assert.DoesNotContain("Worker entitlement", managerDetails);
         var managerInvoices = await managerClient.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-MGR-INV", managerInvoices); Assert.DoesNotContain("ALPHA-INV", managerInvoices); Assert.DoesNotContain("BETA-INV", managerInvoices); Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Invoices/Details/{invoiceAId}")).StatusCode);
-        var managerReport = await managerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Your manager share", managerReport); Assert.DoesNotContain("LCM MGT gross", managerReport); Assert.DoesNotContain("Worker cost", managerReport); Assert.DoesNotContain("Beta Scope Customer", managerReport);
-        var managerCsv = await managerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", managerCsv); Assert.DoesNotContain("Beta Scope Customer", managerCsv); Assert.Contains("Manager share MYR", managerCsv); Assert.DoesNotContain("LCM gross", managerCsv); Assert.DoesNotContain("Worker entitlement", managerCsv);
+        var managerReport = await managerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Manager sales", managerReport); Assert.Contains("LCM cost", managerReport); Assert.Contains("Gross margin", managerReport); Assert.Contains("Manager unbilled", managerReport); Assert.Contains("650.00", managerReport); Assert.Contains("400.00", managerReport); Assert.DoesNotContain("LCM MGT gross", managerReport); Assert.DoesNotContain("Worker cost", managerReport); Assert.DoesNotContain("Beta Scope Customer", managerReport);
+        var managerCsv = await managerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", managerCsv); Assert.DoesNotContain("Beta Scope Customer", managerCsv); Assert.Contains("Manager retained MYR", managerCsv); Assert.Contains("LCM cost MYR", managerCsv); Assert.Contains("Manager sales MYR", managerCsv); Assert.Contains("Manager unbilled MYR", managerCsv); Assert.DoesNotContain("LCM gross", managerCsv); Assert.DoesNotContain("Worker entitlement", managerCsv);
 
         using var workerClient = await SignedIn(app, "worker-a@example.com", password);
         var workerDashboard = await workerClient.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", workerDashboard); Assert.DoesNotContain("Beta Scope Customer", workerDashboard); Assert.Contains("280.00", workerDashboard); Assert.DoesNotContain("480.00", workerDashboard);
@@ -1139,7 +1140,7 @@ public partial class IntegrationTests
         var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
         var newInvoice = await admin.GetStringAsync("/Invoices/Create");
         Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
-        Assert.Contains("data-manager-cap=\"250.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
+        Assert.Contains("data-manager-cap=\"650.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
         var fullyCustomerAllocatedRow = Regex.Match(newInvoice, $"<tr class=\"invoice-allocation-row\"[^>]*data-billing-id=\"{billBId}\"[^>]*>[\\s\\S]*?</tr>").Value;
         Assert.NotEmpty(fullyCustomerAllocatedRow); Assert.Contains("data-grid-eligible=\"false\"", fullyCustomerAllocatedRow); Assert.Contains("max=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("disabled=\"disabled\"", fullyCustomerAllocatedRow);
