@@ -1,5 +1,7 @@
+[Reading 33 lines from start (total: 33 lines, 0 remaining)]
+
 @model List<Master>
-@{ string kind = ViewBag.Kind; ViewData["Title"] = kind; AccessProfile access=ViewBag.Access; }
+@{ string kind = ViewBag.Kind; ViewData["Title"] = kind; ViewData["PageClass"] = "table-page"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">DIRECTORY</p>
@@ -8,7 +10,7 @@
 </div>
 @if(access.IsStaff) { <a class="btn btn-primary" asp-action="Edit" asp-route-kind="@kind">+ Add record</a> }
 </div>
-<div class="panel">
+<div class="panel data-panel">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -31,3 +33,5 @@
 </tbody>
 </table>
 </div>
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
