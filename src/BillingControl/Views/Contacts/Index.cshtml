@@ -7,7 +7,7 @@
     <div>
         <p class="eyebrow">CONTACT MANAGEMENT</p>
         <h1>Contacts / PICs</h1>
-        <p>Staff-managed contact routing, WhatsApp addresses, consent records, and customer relationships.</p>
+        <p>Manage PIC contact details, WhatsApp routing, consent and customer relationships.</p>
     </div>
     <a class="btn btn-primary" href="/Contacts/Create">+ New Contact</a>
 </div>
@@ -47,20 +47,29 @@ else
         <div class="table-responsive">
             <table class="table data-grid">
                 <thead>
-                    <tr><th>Name</th><th>Preferred language</th><th>Status</th><th>Active addresses</th><th>Active customer links</th><th data-nosort>Actions</th></tr>
+                    <tr><th>Contact</th><th>Status</th><th>Preferred language</th><th>Active relationships</th><th data-nosort>Actions</th></tr>
                 </thead>
                 <tbody>
                 @foreach (var contact in Model.Contacts)
                 {
                     <tr>
-                        <td><strong>@contact.Name</strong></td>
-                        <td>@(contact.PreferredLanguage ?? "—")</td>
+                        <td>
+                            <div class="cell-stack">
+                                <strong>@contact.Name</strong>
+                                <span class="cell-meta">Contact #@contact.Id</span>
+                            </div>
+                        </td>
                         <td><span class="badge @(contact.IsActive ? "status-active" : "status-inactive")">@(contact.IsActive ? "Active" : "Inactive")</span></td>
-                        <td>@contact.ActiveAddressCount</td>
-                        <td>@contact.ActiveCustomerLinkCount</td>
+                        <td>@(contact.PreferredLanguage ?? "—")</td>
+                        <td>
+                            <div class="count-pair">
+                                <span class="count-pill"><strong>@contact.ActiveAddressCount</strong> WhatsApp</span>
+                                <span class="count-pill"><strong>@contact.ActiveCustomerLinkCount</strong> customers</span>
+                            </div>
+                        </td>
                         <td>
                             <div class="d-flex gap-2">
-                                <a href="/Contacts/Details/@contact.Id">Details</a>
+                                <a href="/Contacts/Details/@contact.Id">Open</a>
                                 <a href="/Contacts/Edit/@contact.Id">Edit</a>
                             </div>
                         </td>
