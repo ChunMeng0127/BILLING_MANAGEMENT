@@ -1,6 +1,7 @@
 @model ContactListViewModel
 @{
     ViewData["Title"] = "Contacts / PICs";
+    ViewData["PageClass"] = "table-page";
 }
 
 <div class="page-heading">
@@ -44,8 +45,7 @@ else
                 <p>@Model.Contacts.Count contact@(Model.Contacts.Count == 1 ? "" : "s") · active contacts shown by default</p>
             </div>
         </div>
-        <div class="table-scroll">
-            <table class="table data-grid">
+        <table class="table data-grid">
                 <thead>
                     <tr><th>Name</th><th>Preferred language</th><th>Status</th><th>Active addresses</th><th>Active customer links</th><th data-nosort>Actions</th></tr>
                 </thead>
@@ -68,6 +68,5 @@ else
                 }
                 </tbody>
             </table>
-        </div>
     </section>
 }
