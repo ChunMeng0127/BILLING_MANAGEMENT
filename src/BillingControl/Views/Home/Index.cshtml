@@ -1,5 +1,7 @@
+[Reading 55 lines from start (total: 55 lines, 0 remaining)]
+
 @model ReportModel
-@{ ViewData["Title"] = "Overview"; }
+@{ ViewData["Title"] = "Overview"; ViewData["PageClass"] = "dashboard-page"; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">YOUR WORKSPACE AT A GLANCE</p>
@@ -8,6 +10,7 @@
 </div>
 @if (Model.Access.IsStaff) { <a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a> }
 </div>
+<div class="dashboard-scroll">
 <partial name="_ReportFilters" model="Model.Filter" />
 <partial name="_Metrics" model="Model" />
 @if (Model.Access.IsStaff || Model.Access.IsManager || Model.Access.IsWorker) {
@@ -51,3 +54,6 @@
 <p class="panel-note">Totals follow the selected service periods. Cancelled records are excluded. Worker filters select whole billing records.</p>
 </section>
 </div>
+</div>
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
