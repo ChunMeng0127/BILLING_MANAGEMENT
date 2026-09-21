@@ -1,3 +1,5 @@
+[Reading 2794 lines from start (total: 2794 lines, 0 remaining)]
+
 :root {
   --orange: #ff6115;
   --orange-strong: #e94f08;
@@ -2710,6 +2712,80 @@ textarea:focus-visible {
 }
 
 
+
+/* UI/UX Wave 2B — extend fixed register behavior across remaining list pages */
+.table-page > .data-panel > form {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-page > .data-panel > form > .grid-toolbar {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel > form > .table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.progress-table-page > .form-panel,
+.progress-table-page > .metrics {
+  flex: 0 0 auto;
+}
+
+.progress-table-page > .form-panel {
+  margin-bottom: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.progress-table-page > .metrics {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.progress-data-panel .workflow-batch-bar,
+.progress-data-panel form > .hint {
+  flex: 0 0 auto;
+}
+
+.progress-data-panel .workflow-batch-bar {
+  padding: 10px 14px 6px;
+}
+
+.progress-data-panel form > .hint {
+  margin: 0;
+  padding: 0 14px 8px;
+}
+
+@media (max-height: 760px) and (min-width: 901px) {
+  .progress-table-page > .page-heading {
+    margin-bottom: 12px;
+  }
+
+  .progress-table-page > .form-panel {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .progress-table-page > .metrics {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .progress-table-page .metric {
+    min-height: 86px;
+    padding-top: 12px;
+    padding-bottom: 10px;
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -2718,3 +2794,5 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
