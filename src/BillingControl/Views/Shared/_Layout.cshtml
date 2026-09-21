@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body class="app-body">
+<body class="app-body @((ViewData["PageClass"] as string)?.Contains("table-page") == true ? "fixed-table-page" : "")">
 @{
     var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser);
     var firm = User.IsInRole(AppRoles.AccountingFirm);
