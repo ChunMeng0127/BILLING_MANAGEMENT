@@ -2499,6 +2499,217 @@ textarea:focus-visible {
 }
 
 
+/* UI/UX Wave 2 — fixed register pages with inner scrolling */
+.app-main.table-page {
+  display: flex;
+  height: calc(100dvh - 64px);
+  max-height: calc(100dvh - 64px);
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 20px;
+}
+
+.app-main.table-page + .app-footer {
+  display: none;
+}
+
+.table-page > .page-heading,
+.table-page > .report-filters {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.table-page > .data-panel > .grid-toolbar {
+  flex: 0 0 auto;
+}
+
+.table-page > .data-panel > .table-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.table-page .table-scroll .table.data-grid thead th {
+  top: 0;
+}
+
+.page-content-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #c8c6bf transparent;
+  scrollbar-width: thin;
+}
+
+.page-content-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.page-content-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c8c6bf;
+  background-clip: padding-box;
+}
+
+.checklist-page-scroll {
+  padding-right: 4px;
+}
+
+.checklist-page-scroll > .panel:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-grid {
+  width: 100% !important;
+  min-width: 1180px !important;
+  table-layout: fixed;
+}
+
+.schedule-grid th:nth-child(1),
+.schedule-grid td:nth-child(1) {
+  width: 14%;
+}
+
+.schedule-grid th:nth-child(2),
+.schedule-grid td:nth-child(2) {
+  width: 14%;
+}
+
+.schedule-grid th:nth-child(3),
+.schedule-grid td:nth-child(3) {
+  width: 8%;
+}
+
+.schedule-grid th:nth-child(4),
+.schedule-grid td:nth-child(4) {
+  width: 10%;
+}
+
+.schedule-grid th:nth-child(5),
+.schedule-grid td:nth-child(5) {
+  width: 9%;
+}
+
+.schedule-grid th:nth-child(6),
+.schedule-grid td:nth-child(6) {
+  width: 45%;
+}
+
+.schedule-grid > tbody > tr > td {
+  height: auto;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.schedule-grid > tbody > tr > td:not(.schedule-actions) {
+  vertical-align: middle;
+}
+
+.schedule-actions {
+  min-width: 520px !important;
+  max-width: none !important;
+  vertical-align: top !important;
+}
+
+.schedule-primary-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.schedule-edit-button {
+  flex: 0 0 auto;
+  margin-bottom: 1px;
+}
+
+.schedule-generate-form {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+  gap: 7px;
+}
+
+.schedule-generate-form > label {
+  min-width: 0;
+  flex: 1 1 130px;
+  margin: 0;
+  font-size: 9px;
+}
+
+.schedule-generate-form > label .form-control {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  font-size: 10.5px;
+}
+
+.schedule-generate-form > button {
+  min-height: 32px;
+  flex: 0 0 auto;
+}
+
+.schedule-actions .manual-period {
+  margin-top: 7px;
+  padding-top: 7px;
+}
+
+.schedule-actions .manual-period summary {
+  font-size: 10px;
+}
+
+.schedule-actions .manual-period .schedule-generate-form {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.schedule-actions .manual-period .schedule-generate-form > label {
+  flex: 1 1 135px;
+  max-width: 190px;
+}
+
+.schedule-actions .manual-period small {
+  margin-top: 7px;
+  font-size: 9.5px;
+  line-height: 1.4;
+}
+
+@media (max-width: 900px) {
+  .app-main.table-page {
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding-bottom: 14px;
+  }
+}
+
+@media (max-width: 680px) {
+  .app-main.table-page {
+    padding-bottom: 12px;
+  }
+
+  .schedule-grid {
+    min-width: 1080px !important;
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
