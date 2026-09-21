@@ -1,4 +1,3 @@
-[Reading 6 lines from start (total: 6 lines, 0 remaining)]
 
 @model List<Invoice>
 @{ ViewData["Title"] = "Invoices"; ViewData["PageClass"] = "table-page"; AccessProfile access = ViewBag.Access; }
@@ -6,5 +5,3 @@
 <div class="panel data-panel"><table class="table data-grid"><thead><tr><th>Invoice</th><th>Date</th><th>Flow</th><th>Issuer</th><th>Recipient</th><th data-type="amount">Total (RM)</th><th>Status</th><th data-nosort>Records</th><th data-nosort>Actions</th></tr></thead><tbody>
 @foreach(var i in Model) { <tr><td><a href="/Invoices/Details/@i.Id">@i.InvoiceNumber</a></td><td>@i.InvoiceDate.ToString("yyyy-MM-dd")</td><td>@Finance.Label(i.Flow)</td><td>@i.IssuerName</td><td>@i.RecipientName</td><td class="money">@i.Total.ToString("N2")</td><td><span class="badge status-@i.Status.ToString().ToLowerInvariant()">@Finance.Label(i.Status)</span></td><td>@i.Lines.Count</td><td><a href="/Invoices/Details/@i.Id">View</a>@if(access.IsStaff && i.Status != InvoiceStatus.Cancelled){ <span> · </span><a href="/Invoices/Edit/@i.Id">Edit</a> }</td></tr> }
 </tbody></table></div>
-
-[executed on device: srv1910481 (9737b897-bde7-4d8e-b892-5a9a817b1e39)]
