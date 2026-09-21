@@ -130,7 +130,7 @@
 <form asp-controller="Account" asp-action="Logout" method="post"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>
 </div>
 </header>
-<main class="app-main">
+<main class="app-main @(ViewData["PageClass"] as string)">
 @if (TempData["Success"] is string success) { <div class="alert alert-success" role="status">@success</div> }
 @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
 @RenderBody()</main>
