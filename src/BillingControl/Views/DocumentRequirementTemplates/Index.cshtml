@@ -1,6 +1,7 @@
 @model DocumentRequirementTemplateIndexViewModel
 @{
     ViewData["Title"] = "Document Checklists";
+    ViewData["PageClass"] = "table-page";
 }
 
 <div class="page-heading">
@@ -27,6 +28,7 @@
         <a class="btn btn-quiet" href="/DocumentRequirementTemplates">Reset</a></div>
 </form>
 
+<div class="page-content-scroll checklist-page-scroll">
 @if (!Model.Templates.Any())
 {
     <div class="panel empty-state p-4">
@@ -85,3 +87,4 @@ else
         </div>
     }
 }
+</div>
