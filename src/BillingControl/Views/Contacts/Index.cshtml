@@ -23,8 +23,8 @@
             <span class="form-check-label">Include inactive</span>
         </label>
     </div>
-    <button class="btn btn-outline-secondary" type="submit">Apply filters</button>
-    <a href="/Contacts">Reset</a>
+    <div class="filter-actions"><button class="btn btn-primary" type="submit">Apply filters</button>
+        <a class="btn btn-quiet" href="/Contacts">Reset</a></div>
 </form>
 
 @if (Model.Contacts.Count == 0)
@@ -37,14 +37,14 @@
 }
 else
 {
-    <section class="panel">
+    <section class="panel data-panel">
         <div class="panel-heading">
             <div>
                 <h2>Contact directory</h2>
                 <p>@Model.Contacts.Count contact@(Model.Contacts.Count == 1 ? "" : "s") · active contacts shown by default</p>
             </div>
         </div>
-        <div class="table-responsive">
+        <div class="table-scroll">
             <table class="table data-grid">
                 <thead>
                     <tr><th>Name</th><th>Preferred language</th><th>Status</th><th>Active addresses</th><th>Active customer links</th><th data-nosort>Actions</th></tr>
@@ -59,9 +59,9 @@ else
                         <td>@contact.ActiveAddressCount</td>
                         <td>@contact.ActiveCustomerLinkCount</td>
                         <td>
-                            <div class="d-flex gap-2">
-                                <a href="/Contacts/Details/@contact.Id">Details</a>
-                                <a href="/Contacts/Edit/@contact.Id">Edit</a>
+                            <div class="table-actions">
+                                <a class="table-action" href="/Contacts/Details/@contact.Id">Details</a>
+                                <a class="table-action" href="/Contacts/Edit/@contact.Id">Edit</a>
                             </div>
                         </td>
                     </tr>
