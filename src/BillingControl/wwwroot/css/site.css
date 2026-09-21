@@ -2503,6 +2503,24 @@ textarea:focus-visible {
 }
 
 
+/* Fixed register pages own the viewport; only their inner content areas scroll. */
+.app-body.fixed-table-page {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-body.fixed-table-page .app-frame,
+.app-body.fixed-table-page .app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-body.fixed-table-page .sidebar {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* UI/UX Wave 2 — fixed register pages with inner scrolling */
 .app-main.table-page {
   display: flex;
