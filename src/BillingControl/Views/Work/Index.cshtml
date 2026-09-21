@@ -1,5 +1,5 @@
 @model List<WorkItem>
-@{ ViewData["Title"]="Work items"; AccessProfile access=ViewBag.Access; }
+@{ ViewData["Title"]="Work items"; ViewData["PageClass"] = "table-page"; AccessProfile access=ViewBag.Access; }
 <div class="page-heading">
 <div>
 <p class="eyebrow">DELIVERY</p>
@@ -9,7 +9,6 @@
 @if(access.IsStaff) { <a class="btn btn-primary" href="/Billing/Schedule">+ Plan work period</a> }
 </div>
 <div class="panel data-panel">
-<div class="table-scroll">
 <table class="table data-grid">
 <thead>
 <tr>
@@ -38,5 +37,4 @@
 </tr> }
 </tbody>
 </table>
-</div>
 </div>
