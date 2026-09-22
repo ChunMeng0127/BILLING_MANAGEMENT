@@ -1,5 +1,5 @@
 @model BillingRecordEditForm
-@{ var bill = ViewBag.Bill as BillingRecord; var hasActiveInvoices = ViewBag.HasActiveInvoices == true; var hasActiveCustomerInvoices = ViewBag.HasActiveCustomerInvoices == true; var hasActiveShareInvoices = ViewBag.HasActiveShareInvoices == true; var hasActiveAssignments = ViewBag.HasActiveAssignments == true; var hasActiveReceipts = ViewBag.HasActiveReceipts == true; var hasActivePayments = ViewBag.HasActivePayments == true; var hasFinancialDependencies = hasActiveInvoices || hasActiveReceipts || hasActiveAssignments || hasActivePayments; ViewData["Title"] = "Edit billing record"; }
+@{ var bill = ViewBag.Bill as BillingRecord; var hasActiveInvoices = ViewBag.HasActiveInvoices == true; var hasActiveCustomerInvoices = ViewBag.HasActiveCustomerInvoices == true; var hasActiveShareInvoices = ViewBag.HasActiveShareInvoices == true; var hasActiveAssignments = ViewBag.HasActiveAssignments == true; var hasActiveReceipts = ViewBag.HasActiveReceipts == true; var hasActivePayments = ViewBag.HasActivePayments == true; var hasFinancialDependencies = hasActiveInvoices || hasActiveReceipts || hasActiveAssignments || hasActivePayments; var revenueShareLocked = hasActiveShareInvoices || hasActiveAssignments || hasActivePayments; ViewData["Title"] = "Edit billing record"; }
 <a class="back-link" href="/Billing/Details/@Model.Id">← Billing details</a>
 <div class="page-heading"><div><p class="eyebrow">BILLING CORRECTION</p><h1>Edit billing record</h1><p>@bill?.CustomerName · @bill?.ServiceName</p></div></div>
 @if(hasFinancialDependencies) { <div class="alert alert-warning">Period changes remain locked while active downstream records exist. Customer billing amount may be corrected even after invoicing or receipt, provided the revised amount is not lower than the amount already invoiced or received for this billing record. Revenue-share base changes remain locked by active manager/LCM invoices, worker assignments or worker payments. Operational notes remain available.</div> }
@@ -10,7 +10,14 @@
 <label asp-for="PeriodStart" class="form-label">Period start<input asp-for="PeriodStart" type="date" class="form-control" required /></label>
 <label asp-for="PeriodEnd" class="form-label">Period end<input asp-for="PeriodEnd" type="date" class="form-control" required /></label>
 <label asp-for="CustomerBillingAmount" class="form-label">Customer billing amount (RM)<input asp-for="CustomerBillingAmount" type="number" min="0.01" max="9999999999.99" step="0.01" class="form-control" required /></label>
+@if(revenueShareLocked)
+{
+<label asp-for="RevenueShareBaseAmount" class="form-label">Revenue-share base (RM)<input asp-for="RevenueShareBaseAmount" type="number" class="form-control" readonly /><span class="hint">Locked because this billing record already has Manager/LCM invoicing, worker assignments or worker payments.</span></label>
+}
+else
+{
 <label asp-for="RevenueShareBaseAmount" class="form-label">Revenue-share base (RM)<input asp-for="RevenueShareBaseAmount" type="number" min="0.01" max="9999999999.99" step="0.01" class="form-control" required /></label>
+}
 <div>
 @if(Model.Status <= BillingStatus.ReadyToBill) { <label asp-for="Status" class="form-label">Operational status</label><select asp-for="Status" class="form-select">@foreach(var status in Enum.GetValues<BillingStatus>().Where(x=>x<=BillingStatus.ReadyToBill)){<option value="@status" selected="@(status==Model.Status)">@Finance.Label(status)</option>}</select> }
 else { <span class="form-label">Financial status</span><p class="form-control-plaintext">@Finance.Label(Model.Status)</p><input asp-for="Status" type="hidden" /> }
