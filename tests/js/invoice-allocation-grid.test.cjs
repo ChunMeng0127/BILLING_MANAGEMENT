@@ -193,6 +193,13 @@ test("external page initialization preserves values until a user flow change", (
   assert.deepEqual(events, ["grid:refresh", "grid:refresh", "grid:refresh"]);
 });
 
+test("invoice create export link follows the selected flow", () => {
+  assert.equal(
+    invoiceGrid.exportHref("/Invoices/ExportCreate", "ManagerToAccountingFirm"),
+    "/Invoices/ExportCreate?flow=ManagerToAccountingFirm",
+  );
+});
+
 test("workflow version helpers require and suggest versions only for versioned stages", () => {
   assert.equal(dataGrid.workflowVersionRequired("QueriesSent"), true);
   assert.equal(dataGrid.workflowVersionRequired("DraftManagementReportSent"), true);

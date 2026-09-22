@@ -24,8 +24,13 @@
             </select>
         </label>
     </div>
-    <h2>Billing allocations</h2>
-    <p class="hint">Amounts are in RM. The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
+    <div class="panel-heading">
+        <div>
+            <h2>Billing allocations</h2>
+            <p class="hint">Amounts are in RM. The cap, allocated amount and remaining balance below follow the selected invoice flow. Server-side snapshot limits remain authoritative.</p>
+        </div>
+        <a id="invoice-create-export" class="btn btn-outline-secondary" asp-action="ExportCreate" asp-route-flow="@Model.Flow" data-base-url="@Url.Action("ExportCreate", "Invoices")">Export CSV</a>
+    </div>
     <table class="table data-grid invoice-allocation-table" id="invoice-allocation-grid"
            data-empty-eligible-message="No billing records have a remaining amount for this invoice flow.">
         <colgroup>
@@ -43,7 +48,7 @@
         <tbody>
         @foreach(var b in bills)
         {
-            var managerCap = b.Shares.Single(x => x.Kind == ShareKind.Manager).Amount;
+            var managerCap = Finance.InvoiceCap(b, InvoiceFlow.ManagerToAccountingFirm);
             var lcmCap = b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
             var customerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer).Sum(x => x.AllocatedAmount);
             var managerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);

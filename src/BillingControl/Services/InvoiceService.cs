@@ -73,13 +73,7 @@ public sealed class InvoiceService(AppDbContext db)
                         .ToDictionaryAsync(x => x.BillingRecordId, x => x.Amount);
                     foreach (var bill in bills)
                     {
-                        var cap = invoice.Flow switch
-                        {
-                            InvoiceFlow.AccountingFirmToCustomer => bill.Amount,
-                            InvoiceFlow.ManagerToAccountingFirm => bill.Shares.Single(x => x.Kind == ShareKind.Manager).Amount,
-                            InvoiceFlow.LcmToManager => bill.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount,
-                            _ => 0m
-                        };
+                        var cap = InvoiceCap(bill, invoice.Flow);
                         Require(existing.GetValueOrDefault(bill.Id) + allocations[bill.Id] <= cap,
                             $"Invoice allocation exceeds the {FlowLabel(invoice.Flow)} amount for billing record B-{bill.Id:D5}.");
                     }
@@ -152,13 +146,7 @@ public sealed class InvoiceService(AppDbContext db)
             .ToDictionaryAsync(x => x.BillingRecordId, x => x.Amount);
         foreach (var bill in bills)
         {
-            var cap = flow switch
-            {
-                InvoiceFlow.AccountingFirmToCustomer => bill.Amount,
-                InvoiceFlow.ManagerToAccountingFirm => bill.Shares.Single(x => x.Kind == ShareKind.Manager).Amount,
-                InvoiceFlow.LcmToManager => bill.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount,
-                _ => 0m
-            };
+            var cap = InvoiceCap(bill, flow);
             Require(existing.GetValueOrDefault(bill.Id) + allocations[bill.Id] <= cap,
                 $"Invoice allocation exceeds the {FlowLabel(flow)} amount for billing record B-{bill.Id:D5}.");
         }
@@ -387,7 +375,7 @@ public sealed class InvoiceService(AppDbContext db)
         }
     }
 
-    public static string FlowLabel(InvoiceFlow flow) => flow switch { InvoiceFlow.AccountingFirmToCustomer => "accounting firm customer invoice", InvoiceFlow.ManagerToAccountingFirm => "manager share", InvoiceFlow.LcmToManager => "LCM share", _ => "invoice" };
+    public static string FlowLabel(InvoiceFlow flow) => flow switch { InvoiceFlow.AccountingFirmToCustomer => "accounting firm customer invoice", InvoiceFlow.ManagerToAccountingFirm => "manager sales entitlement", InvoiceFlow.LcmToManager => "LCM share", _ => "invoice" };
     private static void RequireReason(string reason) => Require(!string.IsNullOrWhiteSpace(reason) && reason.Trim().Length <= 2000, "A cancellation reason is required (up to 2,000 characters).");
     private static PostgresException? FindPostgres(Exception? exception)
     {
