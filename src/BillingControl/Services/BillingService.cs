@@ -103,16 +103,43 @@ public class BillingService
             }
             if (shareBaseChanged)
             {
-                Require(!bill.InvoiceLines.Any(x => x.Invoice.Status != InvoiceStatus.Cancelled && (x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm || x.Invoice.Flow == InvoiceFlow.LcmToManager)), "Cancel active manager and LCM invoices before correcting the revenue-share base.");
-                Require(!bill.WorkItem.Assignments.Any(x => !x.IsCancelled), "Cancel active worker assignments before correcting the revenue-share base.");
-                Require(!bill.WorkItem.Assignments.SelectMany(x => x.Allocations).Any(x => !x.WorkerPayment.IsCancelled), "Cancel active worker payments before correcting the revenue-share base.");
-            }
-            if (shareBaseChanged)
-            {
                 var shares = bill.Shares.OrderBy(x => x.Kind).ToList();
                 Require(shares.Count == 3 && shares.Select(x => x.Kind).Distinct().Count() == 3, "Revenue-share snapshots are incomplete and cannot be corrected safely.");
                 var correctedShares = Split(correctedShareBaseAmount, shares[0].Percent, shares[1].Percent, shares[2].Percent);
+                var correctedManagerSales = correctedShares[(int)ShareKind.Manager] + correctedShares[(int)ShareKind.Lcm];
+                var correctedLcmShare = correctedShares[(int)ShareKind.Lcm];
+
+                var activeManagerAllocated = bill.InvoiceLines
+                    .Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm)
+                    .Sum(x => x.AllocatedAmount);
+                var activeLcmAllocated = bill.InvoiceLines
+                    .Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.LcmToManager)
+                    .Sum(x => x.AllocatedAmount);
+                Require(activeManagerAllocated <= correctedManagerSales,
+                    $"The corrected revenue-share base would reduce Manager sales below the RM {activeManagerAllocated:N2} already allocated to active Manager invoices.");
+                Require(activeLcmAllocated <= correctedLcmShare,
+                    $"The corrected revenue-share base would reduce the LCM share below the RM {activeLcmAllocated:N2} already allocated to active LCM invoices.");
+
+                var activeAssignments = bill.WorkItem.Assignments.Where(x => !x.IsCancelled).ToList();
+                var correctedAssignmentEntitlements = activeAssignments.ToDictionary(
+                    x => x.Id,
+                    x => WorkerEntitlement(correctedLcmShare, x.Percent));
+                Require(correctedAssignmentEntitlements.Values.Sum() <= correctedLcmShare,
+                    "The corrected revenue-share base would make rounded worker entitlements exceed the recalculated LCM share.");
+                foreach (var assignment in activeAssignments)
+                {
+                    var activePaid = assignment.Allocations.Where(x => !x.WorkerPayment.IsCancelled).Sum(x => x.Amount);
+                    var correctedEntitlement = correctedAssignmentEntitlements[assignment.Id];
+                    Require(activePaid <= correctedEntitlement,
+                        $"The corrected revenue-share base would reduce {assignment.WorkerName}'s entitlement below the RM {activePaid:N2} already paid.");
+                }
+
                 for (var i = 0; i < shares.Count; i++) shares[i].Amount = correctedShares[i];
+                foreach (var assignment in activeAssignments)
+                {
+                    assignment.LcmGrossSnapshot = correctedLcmShare;
+                    assignment.Entitlement = correctedAssignmentEntitlements[assignment.Id];
+                }
             }
             if (customerAmountChanged) bill.Amount = correctedCustomerAmount;
             if (shareBaseChanged) bill.RevenueShareBaseAmount = correctedShareBaseAmount;

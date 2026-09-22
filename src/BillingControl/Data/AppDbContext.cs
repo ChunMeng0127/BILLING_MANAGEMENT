@@ -786,7 +786,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         WhatsAppOutboundEngagementScopeSnapshot => [],
                         WhatsAppOutboundMessage => ["State", "AttemptCount", "NextAttemptAt", "ProviderMessageId", "LastErrorCategory", "LastErrorCode", "ProviderRetryAfterUntil", "ProviderTimestamp"],
                         WhatsAppOutboundMessageAttempt => [],
-                        WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
+                        WorkerAssignment => allowBillingSnapshotCorrection
+                            ? ["WorkerId", "WorkerName", "Percent", "LcmGrossSnapshot", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"]
+                            : ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                         WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                         CustomerReceipt => allowReceiptAllocationCorrection
                             ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
