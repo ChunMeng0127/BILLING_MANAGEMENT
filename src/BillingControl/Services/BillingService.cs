@@ -90,10 +90,16 @@ public class BillingService
                 .ToList();
             if (customerAmountChanged)
             {
-                Require(!activeCustomerLines.SelectMany(x => x.Invoice.ReceiptAllocations).Any(x => !x.CustomerReceipt.IsCancelled), "This billing amount cannot be changed while an active customer receipt exists. Correct or cancel the receipt first.");
                 var activeCustomerAllocated = activeCustomerLines.Sum(x => x.AllocatedAmount);
+                var activeCustomerReceived = activeCustomerLines
+                    .Where(x => x.Invoice.Total > 0)
+                    .Sum(x => x.Invoice.ReceiptAllocations
+                        .Where(y => !y.CustomerReceipt.IsCancelled)
+                        .Sum(y => y.Amount) * x.AllocatedAmount / x.Invoice.Total);
                 Require(activeCustomerAllocated <= correctedCustomerAmount,
                     $"The corrected customer billing amount cannot be lower than the RM {activeCustomerAllocated:N2} already allocated to active customer invoices.");
+                Require(activeCustomerReceived <= correctedCustomerAmount,
+                    $"The corrected customer billing amount cannot be lower than the RM {activeCustomerReceived:N2} already received for this billing record.");
             }
             if (shareBaseChanged)
             {
