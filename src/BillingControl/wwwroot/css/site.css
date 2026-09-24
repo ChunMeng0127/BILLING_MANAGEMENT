@@ -1459,7 +1459,11 @@ input[type="checkbox"] {
 }
 
 .invoice-allocation-table col.invoice-col-customer {
-  width: 15%;
+  width: 14%;
+}
+
+.invoice-allocation-table col.invoice-col-service {
+  width: 11%;
 }
 
 .invoice-allocation-table col.invoice-col-firm {
@@ -1500,20 +1504,21 @@ input[type="checkbox"] {
   overflow-wrap: break-word;
 }
 
-.invoice-allocation-table th:nth-child(n + 8),
-.invoice-allocation-table td:nth-child(n + 8) {
+.invoice-allocation-table th:nth-child(n + 9),
+.invoice-allocation-table td:nth-child(n + 9) {
   text-align: right;
 }
 
 .invoice-allocation-table td:nth-child(1),
-.invoice-allocation-table td:nth-child(5),
-.invoice-allocation-table td:nth-child(n + 8) {
+.invoice-allocation-table td:nth-child(6),
+.invoice-allocation-table td:nth-child(n + 9) {
   white-space: nowrap;
 }
 
 .invoice-allocation-table td:nth-child(2),
 .invoice-allocation-table td:nth-child(3),
-.invoice-allocation-table td:nth-child(4) {
+.invoice-allocation-table td:nth-child(4),
+.invoice-allocation-table td:nth-child(5) {
   overflow: hidden;
   text-overflow: ellipsis;
 }

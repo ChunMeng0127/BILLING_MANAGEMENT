@@ -106,7 +106,7 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
         var bills = await InvoiceCreateBills();
         string Csv(string value) => "\"" + ((value.Length > 0 && "=+-@\t\r\n".Contains(value[0])) ? "'" : "") + value.Replace("\"", "\"\"") + "\"";
         string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
-        var rows = new List<string> { "Billing ID,Customer,Accounting Firm,Manager,Period Start,Period End,Accounting Firm Invoice(s),Payment Received Date(s),Payment Status,Invoice Flow,Customer Billing MYR,Flow Cap MYR,Allocated MYR,Remaining MYR" };
+        var rows = new List<string> { "Billing ID,Customer,Service,Accounting Firm,Manager,Period Start,Period End,Accounting Firm Invoice(s),Payment Received Date(s),Payment Status,Invoice Flow,Customer Billing MYR,Flow Cap MYR,Allocated MYR,Remaining MYR" };
         foreach (var bill in bills)
         {
             var cap = Finance.InvoiceCap(bill, flow);
@@ -132,7 +132,7 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
                 paymentStates.Add(received <= 0 ? "Unpaid" : received < line.Invoice.Total ? "Partially Paid" : "Paid");
             }
 
-            rows.Add(string.Join(',', $"B-{bill.Id:D5}", Csv(bill.CustomerName), Csv(bill.Engagement.BusinessParty.Name), Csv(bill.Engagement.Manager.Name), bill.PeriodStart.ToString("yyyy-MM-dd"), bill.PeriodEnd.ToString("yyyy-MM-dd"), Csv(upstreamInvoices), Csv(string.Join("; ", paymentDates)), Csv(string.Join("; ", paymentStates)), flow, Money(bill.Amount), Money(cap), Money(allocated), Money(remaining)));
+            rows.Add(string.Join(',', $"B-{bill.Id:D5}", Csv(bill.CustomerName), Csv(bill.Engagement.Service.Name), Csv(bill.Engagement.BusinessParty.Name), Csv(bill.Engagement.Manager.Name), bill.PeriodStart.ToString("yyyy-MM-dd"), bill.PeriodEnd.ToString("yyyy-MM-dd"), Csv(upstreamInvoices), Csv(string.Join("; ", paymentDates)), Csv(string.Join("; ", paymentStates)), flow, Money(bill.Amount), Money(cap), Money(allocated), Money(remaining)));
         }
         var fileName = $"invoice-create-{flow}.csv";
         return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(string.Join("\r\n", rows))).ToArray(), "text/csv", fileName);
@@ -203,6 +203,7 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
 
     private Task<List<BillingRecord>> InvoiceCreateBills() => db.BillingRecords
         .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
+        .Include(x => x.Engagement).ThenInclude(x => x.Service)
         .Include(x => x.Engagement).ThenInclude(x => x.Manager)
         .Include(x => x.Shares)
         .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)

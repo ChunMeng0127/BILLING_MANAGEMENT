@@ -1177,6 +1177,7 @@ public partial class IntegrationTests
         var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
         var newInvoice = await admin.GetStringAsync("/Invoices/Create");
         Assert.Contains("id=\"invoice-create-export\"", newInvoice);
+        Assert.Contains("<th>Service</th>", newInvoice);
         Assert.Contains("Accounting Firm Invoice", newInvoice);
         Assert.Contains("Payment Received Date", newInvoice);
         Assert.Contains("ALPHA-INV", newInvoice);
@@ -1186,7 +1187,7 @@ public partial class IntegrationTests
         Assert.Contains("data-manager-cap=\"650.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
         var managerCreateCsv = await admin.GetStringAsync("/Invoices/ExportCreate?flow=ManagerToAccountingFirm");
-        Assert.Contains("Billing ID,Customer,Accounting Firm,Manager", managerCreateCsv);
+        Assert.Contains("Billing ID,Customer,Service,Accounting Firm,Manager", managerCreateCsv);
         Assert.Contains("Accounting Firm Invoice(s),Payment Received Date(s),Payment Status", managerCreateCsv);
         Assert.Contains("ALPHA-INV (2026-01-31)", managerCreateCsv);
         Assert.Contains("2026-01-31", managerCreateCsv);

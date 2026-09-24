@@ -36,6 +36,7 @@
         <colgroup>
             <col class="invoice-col-billing" />
             <col class="invoice-col-customer" />
+            <col class="invoice-col-service" />
             <col class="invoice-col-firm" />
             <col class="invoice-col-manager" />
             <col class="invoice-col-period" />
@@ -46,7 +47,7 @@
             <col class="invoice-col-money-wide" />
             <col class="invoice-col-allocate" />
         </colgroup>
-        <thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-nosort>Accounting Firm Invoice</th><th data-nosort>Payment Received Date</th><th data-type="amount" title="Maximum amount for the selected invoice flow">Flow cap</th><th data-type="amount" title="Allocated for the selected invoice flow">Allocated</th><th data-type="amount">Remaining</th><th data-nosort title="Amount to allocate in this invoice">Allocate</th></tr></thead>
+        <thead><tr><th>Billing</th><th>Customer</th><th>Service</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-nosort>Accounting Firm Invoice</th><th data-nosort>Payment Received Date</th><th data-type="amount" title="Maximum amount for the selected invoice flow">Flow cap</th><th data-type="amount" title="Allocated for the selected invoice flow">Allocated</th><th data-type="amount">Remaining</th><th data-nosort title="Amount to allocate in this invoice">Allocate</th></tr></thead>
         <tbody>
         @foreach(var b in bills)
         {
@@ -67,6 +68,7 @@
                 data-lcm-cap="@DataMoney(lcmCap)" data-lcm-allocated="@DataMoney(lcmAllocated)">
                 <td>B-@b.Id.ToString("D5")</td>
                 <td>@b.CustomerName</td>
+                <td>@b.Engagement.Service.Name</td>
                 <td>@b.Engagement.BusinessParty.Name</td>
                 <td>@b.Engagement.Manager.Name</td>
                 <td><span class="invoice-period">@b.PeriodStart.ToString("yyyy-MM-dd") — @b.PeriodEnd.ToString("yyyy-MM-dd")</span></td>
