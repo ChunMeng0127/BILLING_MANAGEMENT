@@ -39,12 +39,14 @@
             <col class="invoice-col-firm" />
             <col class="invoice-col-manager" />
             <col class="invoice-col-period" />
+            <col class="invoice-col-upstream" />
+            <col class="invoice-col-payment" />
             <col class="invoice-col-money" />
             <col class="invoice-col-money-wide" />
             <col class="invoice-col-money-wide" />
             <col class="invoice-col-allocate" />
         </colgroup>
-        <thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-type="amount" title="Maximum amount for the selected invoice flow">Flow cap</th><th data-type="amount" title="Allocated for the selected invoice flow">Allocated</th><th data-type="amount">Remaining</th><th data-nosort title="Amount to allocate in this invoice">Allocate</th></tr></thead>
+        <thead><tr><th>Billing</th><th>Customer</th><th>Accounting firm</th><th>Manager</th><th>Period</th><th data-nosort>Accounting Firm Invoice</th><th data-nosort>Payment Received Date</th><th data-type="amount" title="Maximum amount for the selected invoice flow">Flow cap</th><th data-type="amount" title="Allocated for the selected invoice flow">Allocated</th><th data-type="amount">Remaining</th><th data-nosort title="Amount to allocate in this invoice">Allocate</th></tr></thead>
         <tbody>
         @foreach(var b in bills)
         {
@@ -54,6 +56,10 @@
             var managerAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);
             var lcmAllocated = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.LcmToManager).Sum(x => x.AllocatedAmount);
             var customerRemaining = Math.Max(0m, b.Amount - customerAllocated);
+            var accountingFirmInvoiceLines = b.InvoiceLines
+                .Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer)
+                .OrderBy(x => x.Invoice.InvoiceDate).ThenBy(x => x.Invoice.Id)
+                .ToList();
             <tr class="invoice-allocation-row"
                 data-billing-id="@b.Id" data-grid-eligible="@(customerRemaining > 0 ? "true" : "false")"
                 data-customer-cap="@DataMoney(b.Amount)" data-customer-allocated="@DataMoney(customerAllocated)"
@@ -64,6 +70,44 @@
                 <td>@b.Engagement.BusinessParty.Name</td>
                 <td>@b.Engagement.Manager.Name</td>
                 <td><span class="invoice-period">@b.PeriodStart.ToString("yyyy-MM-dd") — @b.PeriodEnd.ToString("yyyy-MM-dd")</span></td>
+                <td class="invoice-upstream-detail">
+                    @if(accountingFirmInvoiceLines.Count == 0)
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                    else
+                    {
+                        @foreach(var line in accountingFirmInvoiceLines)
+                        {
+                            <div class="invoice-upstream-item">
+                                <a href="/Invoices/Details/@line.InvoiceId">@line.Invoice.InvoiceNumber</a>
+                                <span>@line.Invoice.InvoiceDate.ToString("yyyy-MM-dd")</span>
+                            </div>
+                        }
+                    }
+                </td>
+                <td class="invoice-payment-detail">
+                    @if(accountingFirmInvoiceLines.Count == 0)
+                    {
+                        <span class="text-muted">—</span>
+                    }
+                    else
+                    {
+                        @foreach(var line in accountingFirmInvoiceLines)
+                        {
+                            var activeReceipts = line.Invoice.ReceiptAllocations
+                                .Where(x => !x.CustomerReceipt.IsCancelled)
+                                .OrderBy(x => x.CustomerReceipt.ReceiptDate).ThenBy(x => x.CustomerReceiptId)
+                                .ToList();
+                            var received = activeReceipts.Sum(x => x.Amount);
+                            var paymentState = received <= 0 ? "Unpaid" : received < line.Invoice.Total ? "Partially Paid" : "Paid";
+                            <div class="invoice-upstream-item">
+                                <span>@(activeReceipts.Count == 0 ? "—" : activeReceipts[^1].CustomerReceipt.ReceiptDate.ToString("yyyy-MM-dd"))</span>
+                                <span class="hint">@paymentState</span>
+                            </div>
+                        }
+                    }
+                </td>
                 <td data-flow-cap class="money">@b.Amount.ToString("N2")</td>
                 <td data-flow-allocated class="money">@customerAllocated.ToString("N2")</td>
                 <td data-flow-remaining class="money">@customerRemaining.ToString("N2")</td>

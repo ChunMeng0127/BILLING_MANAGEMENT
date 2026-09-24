@@ -1446,7 +1446,7 @@ input[type="checkbox"] {
 
 .invoice-allocation-table {
   width: 100%;
-  min-width: 1060px;
+  min-width: 1420px;
   table-layout: fixed;
 }
 
@@ -1474,6 +1474,14 @@ input[type="checkbox"] {
   width: 15%;
 }
 
+.invoice-allocation-table col.invoice-col-upstream {
+  width: 190px;
+}
+
+.invoice-allocation-table col.invoice-col-payment {
+  width: 150px;
+}
+
 .invoice-allocation-table col.invoice-col-money {
   width: 7%;
 }
@@ -1492,14 +1500,14 @@ input[type="checkbox"] {
   overflow-wrap: break-word;
 }
 
-.invoice-allocation-table th:nth-child(n + 6),
-.invoice-allocation-table td:nth-child(n + 6) {
+.invoice-allocation-table th:nth-child(n + 8),
+.invoice-allocation-table td:nth-child(n + 8) {
   text-align: right;
 }
 
 .invoice-allocation-table td:nth-child(1),
 .invoice-allocation-table td:nth-child(5),
-.invoice-allocation-table td:nth-child(n + 6) {
+.invoice-allocation-table td:nth-child(n + 8) {
   white-space: nowrap;
 }
 
@@ -1512,6 +1520,27 @@ input[type="checkbox"] {
 
 .invoice-period {
   white-space: nowrap;
+}
+
+.invoice-upstream-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.invoice-upstream-item:last-child {
+  margin-bottom: 0;
+}
+
+.invoice-upstream-item > span {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.invoice-payment-detail .invoice-upstream-item > span:first-child {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 .invoice-allocation-table input[type="number"] {
