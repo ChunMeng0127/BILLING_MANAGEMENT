@@ -41,3 +41,14 @@ test("sidebar groups keep navigation compact", () => {
   assert.equal(home.open, true);
   assert.equal(billing.open, false);
 });
+
+
+test("data grid pagination helpers produce stable DataTables-style ranges", () => {
+  assert.equal(site.gridPageCount(0, 25), 1);
+  assert.equal(site.gridPageCount(26, 25), 2);
+  assert.equal(site.gridPageCount(200, 0), 1);
+  assert.equal(site.gridRangeText(1, 25, 77), "Showing 1–25 of 77");
+  assert.equal(site.gridRangeText(4, 25, 77), "Showing 76–77 of 77");
+  assert.equal(site.gridRangeText(1, 25, 0), "Showing 0 records");
+  assert.equal(site.gridRangeText(1, 0, 77), "Showing 1–77 of 77");
+});
