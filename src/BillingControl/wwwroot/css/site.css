@@ -4393,3 +4393,100 @@ div.dt-container .dt-columns-button { white-space: nowrap; }
     overflow-x: auto;
   }
 }
+
+
+/* DataTables: scrollable body with fixed header and a top horizontal scrollbar. */
+div.dt-container .dt-scroll {
+  width: 100%;
+  min-width: 0;
+}
+
+div.dt-container .dt-scroll-head {
+  position: relative;
+  z-index: 3;
+  overflow: hidden !important;
+  border-bottom: 1px solid #d4d4d8;
+  background: #fafafa;
+}
+
+div.dt-container .dt-scroll-head table.dataTable {
+  margin-bottom: 0 !important;
+}
+
+div.dt-container .dt-scroll-body {
+  position: relative;
+  max-height: 52vh !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border-bottom: 0 !important;
+  background: #fff;
+}
+
+div.dt-container .dt-scroll-body table.dataTable {
+  margin-top: 0 !important;
+}
+
+div.dt-container .dt-scroll-top {
+  position: relative;
+  z-index: 4;
+  width: 100%;
+  height: 13px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--line);
+  background: #fafafa;
+  scrollbar-width: thin;
+  scrollbar-color: #a1a1aa #f4f4f5;
+}
+
+div.dt-container .dt-scroll-top[hidden] {
+  display: none;
+}
+
+div.dt-container .dt-scroll-top-spacer {
+  height: 1px;
+}
+
+div.dt-container .dt-scroll-top::-webkit-scrollbar {
+  height: 10px;
+}
+
+div.dt-container .dt-scroll-top::-webkit-scrollbar-track {
+  background: #f4f4f5;
+}
+
+div.dt-container .dt-scroll-top::-webkit-scrollbar-thumb {
+  border: 2px solid #f4f4f5;
+  border-radius: 999px;
+  background: #a1a1aa;
+}
+
+div.dt-container .dt-scroll-top::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
+div.dt-container .dt-scroll-body::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+div.dt-container .dt-scroll-body::-webkit-scrollbar-track {
+  background: #f4f4f5;
+}
+
+div.dt-container .dt-scroll-body::-webkit-scrollbar-thumb {
+  border: 2px solid #f4f4f5;
+  border-radius: 999px;
+  background: #a1a1aa;
+}
+
+div.dt-container .dt-scroll-body::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
+@media (max-width: 680px) {
+  div.dt-container .dt-scroll-body {
+    max-height: 58vh !important;
+  }
+}
