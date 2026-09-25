@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>@ViewData["Title"] · Billing Control</title>
 <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+<link rel="stylesheet" href="~/vendor/datatables/dataTables.dataTables.min.css" asp-append-version="true" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
 <body class="app-body @((ViewData["PageClass"] as string)?.Contains("table-page") == true ? "fixed-table-page" : "")">
@@ -139,6 +140,8 @@
 </div>
 </div>
 } else { <main class="login-shell">@RenderBody()</main> }
+<script src="~/vendor/datatables/dataTables.min.js" asp-append-version="true"></script>
+<script src="~/vendor/datatables/dataTables.dataTables.min.js" asp-append-version="true"></script>
 <script src="~/js/searchable-dropdown.js" asp-append-version="true"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
 @await RenderSectionAsync("Scripts", required: false)
