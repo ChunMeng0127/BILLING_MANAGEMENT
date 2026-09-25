@@ -66,9 +66,6 @@
   const navGroups = sidebar
     ? [...sidebar.querySelectorAll("[data-nav-group]")]
     : [];
-  const railGroupButtons = sidebar
-    ? [...sidebar.querySelectorAll("[data-sidebar-group-target]")]
-    : [];
   const isMobileSidebar = () => sidebarMode(window.innerWidth) === "mobile";
   const readSidebarPreference = () => {
     try {
@@ -106,11 +103,11 @@
     syncSidebarToggle();
   };
   const resetSidebarForViewport = () => {
+    root.classList.remove("sidebar-collapsed");
     if (isMobileSidebar()) {
-      root.classList.remove("sidebar-collapsed", "sidebar-mobile-open");
+      root.classList.remove("sidebar-mobile-open");
     } else {
       root.classList.remove("sidebar-mobile-open");
-      root.classList.toggle("sidebar-collapsed", readSidebarPreference());
     }
     syncSidebarToggle();
   };
@@ -121,9 +118,7 @@
         if (isMobileSidebar()) {
           root.classList.toggle("sidebar-mobile-open");
         } else {
-          const collapsed = !root.classList.contains("sidebar-collapsed");
-          root.classList.toggle("sidebar-collapsed", collapsed);
-          writeSidebarPreference(collapsed);
+          root.classList.remove("sidebar-collapsed");
         }
         syncSidebarToggle();
       }),
@@ -157,27 +152,6 @@
       if (group) {
         group.open = true;
         keepOneNavGroupOpen(navGroups, group);
-      }
-      syncSidebarToggle();
-    }),
-  );
-
-  railGroupButtons.forEach((button) =>
-    button.addEventListener("click", () => {
-      const name = button.dataset.sidebarGroupTarget;
-      const group = navGroups.find((item) => item.dataset.navGroup === name);
-      if (isMobileSidebar()) {
-        root.classList.add("sidebar-mobile-open");
-      } else {
-        root.classList.remove("sidebar-collapsed");
-        writeSidebarPreference(false);
-      }
-      if (group) {
-        group.open = true;
-        keepOneNavGroupOpen(navGroups, group);
-        requestAnimationFrame(() =>
-          group.scrollIntoView({ block: "nearest", behavior: "smooth" }),
-        );
       }
       syncSidebarToggle();
     }),
