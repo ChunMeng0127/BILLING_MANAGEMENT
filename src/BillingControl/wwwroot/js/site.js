@@ -209,8 +209,15 @@
       )
       .filter(Boolean);
 
+    const scrollOptions = {
+      scrollX: true,
+      scrollY: "52vh",
+      scrollCollapse: true,
+    };
+
     const options = transactional
       ? {
+          ...scrollOptions,
           paging: false,
           searching: false,
           ordering: false,
@@ -224,6 +231,7 @@
           },
         }
       : {
+          ...scrollOptions,
           pageLength: 25,
           lengthMenu: [10, 25, 50, 100, -1],
           order: [],
@@ -260,8 +268,54 @@
     table.dataset.dataTables = "active";
     table.dataset.dataTablesMode = transactional ? "transactional" : "register";
 
+    const container = dataTable.table().container();
+    const scrollBody = container.querySelector(".dt-scroll-body");
+    const scrollHead = container.querySelector(".dt-scroll-head");
+
+    if (scrollBody && scrollHead) {
+      const topScroll = element("div", "dt-scroll-top");
+      topScroll.setAttribute("role", "region");
+      topScroll.setAttribute("aria-label", "Horizontal table scroll");
+      topScroll.tabIndex = 0;
+      const topScrollSpacer = element("div", "dt-scroll-top-spacer");
+      topScroll.append(topScrollSpacer);
+      scrollHead.insertAdjacentElement("afterend", topScroll);
+
+      let syncingScroll = false;
+      const syncTopScrollWidth = () => {
+        topScrollSpacer.style.width = `${scrollBody.scrollWidth}px`;
+        topScroll.hidden = scrollBody.scrollWidth <= scrollBody.clientWidth + 1;
+        topScroll.scrollLeft = scrollBody.scrollLeft;
+      };
+      const syncScrollLeft = (source, target) => {
+        if (syncingScroll || source.scrollLeft === target.scrollLeft) return;
+        syncingScroll = true;
+        target.scrollLeft = source.scrollLeft;
+        syncingScroll = false;
+      };
+
+      topScroll.addEventListener("scroll", () =>
+        syncScrollLeft(topScroll, scrollBody),
+      );
+      scrollBody.addEventListener("scroll", () =>
+        syncScrollLeft(scrollBody, topScroll),
+      );
+
+      if (typeof ResizeObserver === "function") {
+        const observer = new ResizeObserver(() =>
+          requestAnimationFrame(syncTopScrollWidth),
+        );
+        observer.observe(scrollBody);
+        observer.observe(table);
+      }
+      dataTable.on("draw", () =>
+        requestAnimationFrame(syncTopScrollWidth),
+      );
+      window.addEventListener("resize", syncTopScrollWidth, { passive: true });
+      requestAnimationFrame(syncTopScrollWidth);
+    }
+
     if (!transactional) {
-      const container = dataTable.table().container();
       const firstLayoutRow = container.querySelector(".dt-layout-row");
       const columnButton = button(
         "Columns",
