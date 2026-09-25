@@ -62,3 +62,13 @@ test("DataTables integration mode keeps transactional grids safe", () => {
   assert.match(source, /paging: false/);
   assert.match(source, /searchPlaceholder: "Search records…"/);
 });
+
+
+test("DataTables scrolls every grid below a fixed header", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../../src/BillingControl/wwwroot/js/site.js"), "utf8");
+  assert.match(source, /scrollX: true/);
+  assert.match(source, /scrollY: "52vh"/);
+  assert.match(source, /scrollCollapse: true/);
+  assert.match(source, /dt-scroll-top/);
+  assert.match(source, /Horizontal table scroll/);
+});
