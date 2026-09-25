@@ -52,3 +52,12 @@ test("data grid pagination helpers produce stable DataTables-style ranges", () =
   assert.equal(site.gridRangeText(1, 25, 0), "Showing 0 records");
   assert.equal(site.gridRangeText(1, 0, 77), "Showing 1–77 of 77");
 });
+
+
+test("DataTables integration mode keeps transactional grids safe", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../../src/BillingControl/wwwroot/js/site.js"), "utf8");
+  assert.match(source, /window\.DataTable/);
+  assert.match(source, /dataTableTransactional/);
+  assert.match(source, /paging: false/);
+  assert.match(source, /searchPlaceholder: "Search records…"/);
+});
