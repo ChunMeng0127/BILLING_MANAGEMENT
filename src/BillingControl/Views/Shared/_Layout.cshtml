@@ -28,37 +28,9 @@
 @if (User.Identity?.IsAuthenticated == true) {
 <div class="app-frame">
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
-<div class="sidebar-rail" aria-label="Navigation shortcuts">
-<a class="rail-brand" href="/" aria-label="Billing Control overview" title="Overview"><span aria-hidden="true">B</span></a>
-<nav class="sidebar-rail-nav" aria-label="Navigation shortcuts">
-<button type="button" class="rail-link @(homeOpen ? "active" : "")" data-sidebar-group-target="home" title="Home" aria-label="Home"><span aria-hidden="true">⌂</span></button>
-@if (staff || firm || manager)
-{
-<button type="button" class="rail-link @(billingOpen ? "active" : "")" data-sidebar-group-target="billing" title="Billing" aria-label="Billing"><span aria-hidden="true">▥</span></button>
-}
-@if (staff || manager || worker)
-{
-<button type="button" class="rail-link @(workOpen ? "active" : "")" data-sidebar-group-target="work" title="Work Management" aria-label="Work Management"><span aria-hidden="true">✓</span></button>
-}
-@if (staff)
-{
-<button type="button" class="rail-link @(documentOpen ? "active" : "")" data-sidebar-group-target="documents" title="Document Collection" aria-label="Document Collection"><span aria-hidden="true">▤</span></button>
-}
-@if (staff || firm || manager)
-{
-<button type="button" class="rail-link @(directoryOpen ? "active" : "")" data-sidebar-group-target="directory" title="Directory" aria-label="Directory"><span aria-hidden="true">◎</span></button>
-}
-<button type="button" class="rail-link @(reportsOpen ? "active" : "")" data-sidebar-group-target="reports" title="Reports" aria-label="Reports"><span aria-hidden="true">◔</span></button>
-@if (User.IsInRole(AppRoles.Admin))
-{
-<button type="button" class="rail-link @(administrationOpen ? "active" : "")" data-sidebar-group-target="administration" title="Administration" aria-label="Administration"><span aria-hidden="true">⚙</span></button>
-}
-</nav>
-</div>
 <div class="sidebar-panel">
 <div class="sidebar-panel-header">
 <div class="sidebar-panel-title"><strong>Navigation</strong><small>Billing Control</small></div>
-<button class="sidebar-edge-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" aria-label="Hide navigation"><span aria-hidden="true">«</span></button>
 </div>
 <details class="nav-group" data-nav-group="home" @Html.Raw(homeOpen ? "open" : "")>
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⌂</span><span class="nav-group-label">Home</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
