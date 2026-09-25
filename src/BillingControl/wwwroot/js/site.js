@@ -66,6 +66,9 @@
   const navGroups = sidebar
     ? [...sidebar.querySelectorAll("[data-nav-group]")]
     : [];
+  const railGroupButtons = sidebar
+    ? [...sidebar.querySelectorAll("[data-sidebar-group-target]")]
+    : [];
   const isMobileSidebar = () => sidebarMode(window.innerWidth) === "mobile";
   const readSidebarPreference = () => {
     try {
@@ -154,6 +157,27 @@
       if (group) {
         group.open = true;
         keepOneNavGroupOpen(navGroups, group);
+      }
+      syncSidebarToggle();
+    }),
+  );
+
+  railGroupButtons.forEach((button) =>
+    button.addEventListener("click", () => {
+      const name = button.dataset.sidebarGroupTarget;
+      const group = navGroups.find((item) => item.dataset.navGroup === name);
+      if (isMobileSidebar()) {
+        root.classList.add("sidebar-mobile-open");
+      } else {
+        root.classList.remove("sidebar-collapsed");
+        writeSidebarPreference(false);
+      }
+      if (group) {
+        group.open = true;
+        keepOneNavGroupOpen(navGroups, group);
+        requestAnimationFrame(() =>
+          group.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+        );
       }
       syncSidebarToggle();
     }),
