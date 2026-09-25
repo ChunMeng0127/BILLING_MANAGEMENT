@@ -26,6 +26,15 @@
   );
   const gridRowCountText = (shown, total) =>
     `${shown} of ${total} Rows shown`;
+  const gridPageCount = (total, pageSize) =>
+    pageSize > 0 ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+  const gridRangeText = (page, pageSize, total) => {
+    if (total === 0) return "Showing 0 records";
+    if (pageSize <= 0) return `Showing 1–${total} of ${total}`;
+    const start = (page - 1) * pageSize + 1;
+    const end = Math.min(total, page * pageSize);
+    return `Showing ${start}–${end} of ${total}`;
+  };
   const defaultGridEmptyMessage =
     "No rows to show. Add a record or clear your filters.";
   const versionedWorkflow = new Set([
@@ -46,6 +55,8 @@
       isGridEligible,
       eligibleGridRows,
       gridRowCountText,
+      gridPageCount,
+      gridRangeText,
       gridEmptyMessage,
       workflowVersionRequired,
       workflowSuggestedVersion,
@@ -176,42 +187,46 @@
     return b;
   };
   document.querySelectorAll("table.data-grid").forEach((table) => {
-    const body = table.tBodies[0],
-      rows = [...body.rows],
-      headers = [...table.tHead.rows[0].cells];
+    const body = table.tBodies[0];
+    const headerRow = table.tHead?.rows[0];
+    if (!body || !headerRow) return;
+
+    const rows = [...body.rows];
+    const headers = [...headerRow.cells];
     const values = (row) => [...row.cells].map((c) => c.textContent.trim());
     const data = rows.map((row, i) => ({ row, i, values: values(row) }));
-    let filters = new Map(),
-      sorts = [],
-      limit = 500;
+
+    let filters = new Map();
+    let sorts = [];
+    let searchText = "";
+    let pageSize = 25;
+    let currentPage = 1;
     const hidden = new Set();
-    const toolbar = element("div", "grid-toolbar"),
-      count = element("span", "grid-count"),
-      tools = element("div", "grid-tools");
-    const clear = button("Clear filters", () => {
+
+    const toolbar = element("div", "grid-toolbar");
+    const searchWrap = element("label", "grid-search");
+    const searchLabel = element("span", "visually-hidden", "Search records");
+    const search = element("input", "form-control grid-search-input");
+    search.type = "search";
+    search.placeholder = "Search records…";
+    search.setAttribute("aria-label", "Search records");
+    searchWrap.append(searchLabel, search);
+
+    const tools = element("div", "grid-tools");
+    const reset = button("Reset", () => {
       filters.clear();
+      searchText = "";
+      search.value = "";
+      currentPage = 1;
       render();
-    });
-    const limitSelect = element("select", "form-select grid-limit");
-    limitSelect.setAttribute("aria-label", "Row limit");
-    [
-      [500, "500 rows"],
-      [1000, "1,000 rows"],
-      [0, "All rows"],
-    ].forEach(([v, t]) => {
-      const o = element("option", "", t);
-      o.value = v;
-      limitSelect.append(o);
-    });
-    limitSelect.onchange = () => {
-      limit = Number(limitSelect.value);
-      render();
-    };
+    }, "btn btn-sm btn-outline-secondary grid-reset");
+
     const columns = button("Columns", () => {
       const d = dialog("Visible columns");
+      const list = element("div", "column-picker");
       headers.forEach((h, i) => {
-        const label = element("label", "check-line"),
-          check = element("input");
+        const label = element("label", "check-line");
+        const check = element("input");
         check.type = "checkbox";
         check.checked = !hidden.has(i);
         check.onchange = () => {
@@ -219,20 +234,54 @@
           render();
         };
         label.append(check, document.createTextNode(h.dataset.title));
-        d.append(label);
+        list.append(label);
       });
-      d.append(button("Done", () => d.close(), "btn btn-primary"));
+      d.append(list, button("Done", () => d.close(), "btn btn-primary"));
       d.showModal();
     });
-    tools.append(clear, columns, limitSelect);
-    toolbar.append(count, tools);
+
+    const pageSizeWrap = element("label", "grid-page-size");
+    pageSizeWrap.append(element("span", "", "Rows"));
+    const pageSizeSelect = element("select", "form-select grid-limit");
+    pageSizeSelect.setAttribute("aria-label", "Rows per page");
+    [
+      [10, "10"],
+      [25, "25"],
+      [50, "50"],
+      [100, "100"],
+      [0, "All"],
+    ].forEach(([v, t]) => {
+      const o = element("option", "", t);
+      o.value = v;
+      if (v === pageSize) o.selected = true;
+      pageSizeSelect.append(o);
+    });
+    pageSizeSelect.onchange = () => {
+      pageSize = Number(pageSizeSelect.value);
+      currentPage = 1;
+      render();
+    };
+    pageSizeWrap.append(pageSizeSelect);
+
+    tools.append(reset, columns, pageSizeWrap);
+    toolbar.append(searchWrap, tools);
     table.before(toolbar);
+
     const scroll = element("div", "table-scroll");
     table.before(scroll);
     scroll.append(table);
+
     const defaultEmptyMessage = gridEmptyMessage(1, table.dataset);
     const empty = element("div", "empty-state", defaultEmptyMessage);
     scroll.append(empty);
+
+    const footer = element("div", "grid-footer");
+    const count = element("span", "grid-count");
+    const pagination = element("nav", "grid-pagination");
+    pagination.setAttribute("aria-label", "Table pagination");
+    footer.append(count, pagination);
+    scroll.after(footer);
+
     const numeric = (s) => Number(s.replace(/,/g, ""));
     const matches = (value, f) => {
       if (f.values) return f.values.has(value);
@@ -248,20 +297,52 @@
         "><": n >= Math.min(f.a, f.b) && n <= Math.max(f.a, f.b),
       }[f.op];
     };
+
     const eligible = () => eligibleGridRows(data);
-    const loaded = () => {
-      const items = eligible();
-      return limit ? items.slice(0, limit) : items;
-    };
-    const render = () => {
-      const loadedRows = loaded();
-      const shown = loadedRows.filter((r) =>
-        [...filters].every(([i, f]) => matches(r.values[i], f)),
+    const searchable = (item) =>
+      !searchText ||
+      item.values.some((value, i) =>
+        !hidden.has(i) && value.toLowerCase().includes(searchText),
       );
-      shown.sort((a, b) => {
+
+    function renderPagination(pageCount) {
+      pagination.replaceChildren();
+      if (pageCount <= 1) return;
+
+      const pageButton = (label, page, current = false, disabled = false) => {
+        const b = button(label, () => {
+          if (disabled || page === currentPage) return;
+          currentPage = page;
+          render();
+        }, current ? "grid-page active" : "grid-page");
+        b.disabled = disabled;
+        if (current) b.setAttribute("aria-current", "page");
+        return b;
+      };
+
+      pagination.append(pageButton("‹", Math.max(1, currentPage - 1), false, currentPage === 1));
+      const candidates = new Set([1, pageCount, currentPage - 1, currentPage, currentPage + 1]);
+      const pages = [...candidates].filter((p) => p >= 1 && p <= pageCount).sort((a, b) => a - b);
+      let previous = 0;
+      pages.forEach((page) => {
+        if (previous && page - previous > 1)
+          pagination.append(element("span", "grid-page-gap", "…"));
+        pagination.append(pageButton(String(page), page, page === currentPage));
+        previous = page;
+      });
+      pagination.append(pageButton("›", Math.min(pageCount, currentPage + 1), false, currentPage === pageCount));
+    }
+
+    const render = () => {
+      const eligibleRows = eligible();
+      const filtered = eligibleRows.filter((r) =>
+        searchable(r) && [...filters].every(([i, f]) => matches(r.values[i], f)),
+      );
+
+      filtered.sort((a, b) => {
         for (const s of sorts) {
-          const av = a.values[s.i],
-            bv = b.values[s.i];
+          const av = a.values[s.i];
+          const bv = b.values[s.i];
           const c =
             headers[s.i].dataset.type === "amount"
               ? numeric(av) - numeric(bv)
@@ -270,11 +351,20 @@
         }
         return a.i - b.i;
       });
+
+      const pageCount = gridPageCount(filtered.length, pageSize);
+      currentPage = Math.min(Math.max(1, currentPage), pageCount);
+      const pageRows =
+        pageSize > 0
+          ? filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+          : filtered;
+
       rows.forEach((r) => (r.hidden = true));
-      shown.forEach((r) => {
+      pageRows.forEach((r) => {
         r.row.hidden = false;
         body.append(r.row);
       });
+
       headers.forEach((h, i) => {
         h.hidden = hidden.has(i);
         rows.forEach((r) => (r.cells[i].hidden = hidden.has(i)));
@@ -295,11 +385,14 @@
               : "");
         }
       });
-      count.textContent = gridRowCountText(shown.length, loadedRows.length);
-      clear.hidden = filters.size === 0;
-      empty.textContent = gridEmptyMessage(eligible().length, table.dataset);
-      empty.hidden = shown.length !== 0;
+
+      count.textContent = gridRangeText(currentPage, pageSize, filtered.length);
+      reset.hidden = filters.size === 0 && !searchText;
+      empty.textContent = gridEmptyMessage(eligibleRows.length, table.dataset);
+      empty.hidden = filtered.length !== 0;
+      renderPagination(pageCount);
     };
+
     function dialog(title) {
       const d = element("dialog", "filter-dialog");
       d.setAttribute("aria-label", title);
@@ -308,19 +401,21 @@
       d.addEventListener("close", () => d.remove());
       return d;
     }
+
     function openFilter(i) {
-      const h = headers[i],
-        d = dialog(h.dataset.title),
-        type = h.dataset.type;
+      const h = headers[i];
+      const d = dialog(h.dataset.title);
+      const type = h.dataset.type;
+
       if (type === "amount") {
         const op = element("select", "form-select");
         ["=", "<>", ">=", ">", "<=", "<", "><"].forEach((s) => {
           const o = element("option", "", s);
           op.append(o);
         });
-        const a = element("input", "form-control"),
-          b = element("input", "form-control"),
-          error = element("p", "text-danger");
+        const a = element("input", "form-control");
+        const b = element("input", "form-control");
+        const error = element("p", "text-danger");
         a.type = b.type = "number";
         a.step = b.step = "any";
         a.setAttribute("aria-label", "Amount");
@@ -350,6 +445,7 @@
             a: Number(a.value),
             b: Number(b.value),
           });
+          currentPage = 1;
           render();
           d.close();
         };
@@ -362,34 +458,37 @@
           }),
         );
         d.append(op, a, b, error);
-        const footer = element("div", "filter-footer");
-        footer.append(
+        const dialogFooter = element("div", "filter-footer");
+        dialogFooter.append(
           button("Clear", () => {
             filters.delete(i);
+            currentPage = 1;
             render();
             d.close();
           }),
           button("Cancel", () => d.close()),
           button("Apply", apply, "btn btn-primary btn-sm"),
         );
-        d.append(footer);
+        d.append(dialogFooter);
         d.showModal();
         return;
       }
-      const all = [...new Set(loaded().map((r) => r.values[i]))].sort((a, b) =>
+
+      const all = [...new Set(eligible().map((r) => r.values[i]))].sort((a, b) =>
         a.localeCompare(b, undefined, { numeric: true }),
       );
-      let selected = new Set(filters.get(i)?.values ?? all),
-        searchText = "";
-      const search = element("input", "form-control");
-      search.placeholder = "Search values";
-      search.setAttribute("aria-label", "Search values");
-      const list = element("div", "filter-values"),
-        selectLabel = element("label", "check-line"),
-        selectAll = element("input");
+      let selected = new Set(filters.get(i)?.values ?? all);
+      let filterSearchText = "";
+      const filterSearch = element("input", "form-control");
+      filterSearch.placeholder = "Search values";
+      filterSearch.setAttribute("aria-label", "Search values");
+      const list = element("div", "filter-values");
+      const selectLabel = element("label", "check-line");
+      const selectAll = element("input");
       selectAll.type = "checkbox";
       const selectText = element("span", "", "Select all");
       selectLabel.append(selectAll, selectText);
+
       const dateMatches = (v, q) => {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.toLowerCase().includes(q);
         const [y, m, day] = v.split("-");
@@ -397,17 +496,15 @@
         if (/^\d{4}$/.test(q)) return y === q;
         if (/^\d{2}$/.test(q)) return day === q;
         return (
-          date
-            .toLocaleString("en", { month: "long" })
-            .toLowerCase()
-            .includes(q) || v.includes(q)
+          date.toLocaleString("en", { month: "long" }).toLowerCase().includes(q) ||
+          v.includes(q)
         );
       };
       const visible = () =>
         all.filter((v) =>
           type === "date"
-            ? dateMatches(v, searchText)
-            : v.toLowerCase().includes(searchText),
+            ? dateMatches(v, filterSearchText)
+            : v.toLowerCase().includes(filterSearchText),
         );
       const sync = () => {
         const vv = visible();
@@ -415,44 +512,41 @@
         selectAll.indeterminate =
           vv.some((v) => selected.has(v)) && !selectAll.checked;
         list.querySelectorAll("input[data-group]").forEach((c) => {
-          const vv = JSON.parse(c.dataset.group);
-          c.checked = vv.every((v) => selected.has(v));
-          c.indeterminate = vv.some((v) => selected.has(v)) && !c.checked;
+          const grouped = JSON.parse(c.dataset.group);
+          c.checked = grouped.every((v) => selected.has(v));
+          c.indeterminate =
+            grouped.some((v) => selected.has(v)) && !c.checked;
         });
       };
       function leaf(v, parent) {
-        const l = element("label"),
-          c = element("input");
-        c.type = "checkbox";
-        c.checked = selected.has(v);
-        c.onchange = () => {
-          c.checked ? selected.add(v) : selected.delete(v);
+        const label = element("label");
+        const check = element("input");
+        check.type = "checkbox";
+        check.checked = selected.has(v);
+        check.onchange = () => {
+          check.checked ? selected.add(v) : selected.delete(v);
           sync();
         };
-        l.append(
-          c,
-          document.createTextNode(
-            type === "date" && v ? v.slice(8) : v || "(Blank)",
-          ),
+        label.append(
+          check,
+          document.createTextNode(type === "date" && v ? v.slice(8) : v || "(Blank)"),
         );
-        parent.append(l);
+        parent.append(label);
       }
       function group(title, vv, parent, child) {
-        const details = element("details"),
-          summary = element("summary"),
-          c = element("input");
-        details.open = Boolean(searchText);
-        c.type = "checkbox";
-        c.dataset.group = JSON.stringify(vv);
-        c.addEventListener("click", (e) => e.stopPropagation());
-        c.onchange = () => {
-          vv.forEach((v) => (c.checked ? selected.add(v) : selected.delete(v)));
-          details
-            .querySelectorAll("input")
-            .forEach((k) => (k.checked = c.checked));
+        const details = element("details");
+        const summary = element("summary");
+        const check = element("input");
+        details.open = Boolean(filterSearchText);
+        check.type = "checkbox";
+        check.dataset.group = JSON.stringify(vv);
+        check.addEventListener("click", (e) => e.stopPropagation());
+        check.onchange = () => {
+          vv.forEach((v) => (check.checked ? selected.add(v) : selected.delete(v)));
+          details.querySelectorAll("input").forEach((k) => (k.checked = check.checked));
           sync();
         };
-        summary.append(c, document.createTextNode(title));
+        summary.append(check, document.createTextNode(title));
         details.append(summary);
         parent.append(details);
         child(details);
@@ -460,16 +554,11 @@
       function draw() {
         list.replaceChildren();
         const vv = visible();
-        selectText.textContent = searchText
-          ? "Select All Search Results"
-          : "Select all";
-        if (!vv.length)
-          list.append(element("p", "hint", "No matching values."));
+        selectText.textContent = filterSearchText ? "Select search results" : "Select all";
+        if (!vv.length) list.append(element("p", "hint", "No matching values."));
         if (type === "date") {
           const years = [
-            ...new Set(
-              vv.filter((v) => /^\d{4}-/.test(v)).map((v) => v.slice(0, 4)),
-            ),
+            ...new Set(vv.filter((v) => /^\d{4}-/.test(v)).map((v) => v.slice(0, 4))),
           ];
           years.forEach((y) => {
             const dates = vv.filter((v) => v.startsWith(y + "-"));
@@ -477,9 +566,7 @@
               [...new Set(dates.map((v) => v.slice(5, 7)))].forEach((m) => {
                 const days = dates.filter((v) => v.slice(5, 7) === m);
                 group(
-                  new Date(2000, Number(m) - 1, 1).toLocaleString("en", {
-                    month: "short",
-                  }),
+                  new Date(2000, Number(m) - 1, 1).toLocaleString("en", { month: "short" }),
                   days,
                   year,
                   (month) => days.forEach((v) => leaf(v, month)),
@@ -489,14 +576,14 @@
           });
           vv.filter((v) => !/^\d{4}-/.test(v)).forEach((v) => leaf(v, list));
         } else {
-          vv.sort(
-            (a, b) => Number(selected.has(b)) - Number(selected.has(a)),
-          ).forEach((v) => leaf(v, list));
+          vv.sort((a, b) => Number(selected.has(b)) - Number(selected.has(a)))
+            .forEach((v) => leaf(v, list));
         }
         sync();
       }
-      search.oninput = () => {
-        searchText = search.value.trim().toLowerCase();
+
+      filterSearch.oninput = () => {
+        filterSearchText = filterSearch.value.trim().toLowerCase();
         draw();
       };
       selectAll.onchange = () => {
@@ -506,60 +593,72 @@
         draw();
       };
       const apply = () => {
-        if (searchText) selected = new Set(visible());
+        if (filterSearchText) selected = new Set(visible());
         if (all.every((v) => selected.has(v))) filters.delete(i);
         else filters.set(i, { values: new Set(selected) });
+        currentPage = 1;
         render();
         d.close();
       };
-      search.addEventListener("keydown", (e) => {
+      filterSearch.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           apply();
         }
       });
-      const footer = element("div", "filter-footer");
-      footer.append(
+      const dialogFooter = element("div", "filter-footer");
+      dialogFooter.append(
         button("Clear", () => {
           selected.clear();
-          search.value = "";
-          searchText = "";
+          filterSearch.value = "";
+          filterSearchText = "";
           draw();
         }),
         button("Cancel", () => d.close()),
         button("Apply", apply, "btn btn-primary btn-sm"),
       );
-      d.append(search, selectLabel, list, footer);
+      d.append(filterSearch, selectLabel, list, dialogFooter);
       draw();
       d.showModal();
-      search.focus();
+      filterSearch.focus();
     }
+
     headers.forEach((h, i) => {
       h.dataset.title = h.textContent.trim();
       if (h.hasAttribute("data-nosort")) return;
       h.textContent = "";
-      const s = button(
+      const sort = button(
         h.dataset.title,
-        (e) => {
+        (event) => {
           const current = sorts.find((x) => x.i === i);
           const next = { i, dir: current ? -current.dir : 1 };
-          sorts = e.shiftKey
+          sorts = event.shiftKey
             ? current
               ? sorts.map((x) => (x.i === i ? next : x))
               : [...sorts, next]
             : [next];
+          currentPage = 1;
           render();
         },
         "sort-button",
       );
-      const f = button("▾", () => openFilter(i), "filter-button");
-      f.setAttribute("aria-label", `Filter ${h.dataset.title}`);
-      h.append(s, f);
+      const filter = button("⌄", () => openFilter(i), "filter-button");
+      filter.setAttribute("aria-label", `Filter ${h.dataset.title}`);
+      h.append(sort, filter);
     });
-    table.addEventListener("grid:refresh", () => {
-      data.forEach((item) => (item.values = values(item.row)));
+
+    search.addEventListener("input", () => {
+      searchText = search.value.trim().toLowerCase();
+      currentPage = 1;
       render();
     });
+
+    table.addEventListener("grid:refresh", () => {
+      data.forEach((item) => (item.values = values(item.row)));
+      currentPage = 1;
+      render();
+    });
+
     render();
   });
 
