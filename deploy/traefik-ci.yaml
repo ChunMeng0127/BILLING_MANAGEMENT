@@ -1,0 +1,4 @@
+tls:
+  certificates:
+    - certFile: /etc/traefik/tls/fullchain.pem
+      keyFile: /etc/traefik/tls/privkey.pem

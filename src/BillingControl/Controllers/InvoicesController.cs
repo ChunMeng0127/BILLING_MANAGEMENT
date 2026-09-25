@@ -95,13 +95,47 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
     public async Task<IActionResult> Create()
     {
         ViewBag.Access = await access.CurrentAsync();
-        ViewBag.Bills = await db.BillingRecords
-            .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
-            .Include(x => x.Engagement).ThenInclude(x => x.Manager)
-            .Include(x => x.Shares)
-            .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice)
-            .Where(x => x.Status != BillingStatus.Cancelled).OrderByDescending(x => x.PeriodStart).ToListAsync();
+        ViewBag.Bills = await InvoiceCreateBills();
         return View(new InvoiceForm());
+    }
+
+    [Authorize(Roles = AppRoles.Staff)]
+    public async Task<IActionResult> ExportCreate(InvoiceFlow flow)
+    {
+        if (!Enum.IsDefined(typeof(InvoiceFlow), flow)) return BadRequest();
+        var bills = await InvoiceCreateBills();
+        string Csv(string value) => "\"" + ((value.Length > 0 && "=+-@\t\r\n".Contains(value[0])) ? "'" : "") + value.Replace("\"", "\"\"") + "\"";
+        string Money(decimal value) => value.ToString("0.00", CultureInfo.InvariantCulture);
+        var rows = new List<string> { "Billing ID,Customer,Service,Accounting Firm,Manager,Period Start,Period End,Accounting Firm Invoice(s),Payment Received Date(s),Payment Status,Invoice Flow,Customer Billing MYR,Flow Cap MYR,Allocated MYR,Remaining MYR" };
+        foreach (var bill in bills)
+        {
+            var cap = Finance.InvoiceCap(bill, flow);
+            var allocated = Finance.ActiveInvoiceAllocated(bill, flow);
+            var remaining = Math.Max(0m, cap - allocated);
+            if (remaining <= 0) continue;
+
+            var upstreamLines = bill.InvoiceLines
+                .Where(x => x.Invoice.Flow == InvoiceFlow.AccountingFirmToCustomer && x.Invoice.Status != InvoiceStatus.Cancelled)
+                .OrderBy(x => x.Invoice.InvoiceDate).ThenBy(x => x.Invoice.Id)
+                .ToList();
+            var upstreamInvoices = string.Join("; ", upstreamLines.Select(x => $"{x.Invoice.InvoiceNumber} ({x.Invoice.InvoiceDate:yyyy-MM-dd})"));
+            var paymentDates = new List<string>();
+            var paymentStates = new List<string>();
+            foreach (var line in upstreamLines)
+            {
+                var activeReceipts = line.Invoice.ReceiptAllocations
+                    .Where(x => !x.CustomerReceipt.IsCancelled)
+                    .OrderBy(x => x.CustomerReceipt.ReceiptDate).ThenBy(x => x.CustomerReceiptId)
+                    .ToList();
+                var received = activeReceipts.Sum(x => x.Amount);
+                paymentDates.Add(activeReceipts.Count == 0 ? "" : activeReceipts[^1].CustomerReceipt.ReceiptDate.ToString("yyyy-MM-dd"));
+                paymentStates.Add(received <= 0 ? "Unpaid" : received < line.Invoice.Total ? "Partially Paid" : "Paid");
+            }
+
+            rows.Add(string.Join(',', $"B-{bill.Id:D5}", Csv(bill.CustomerName), Csv(bill.Engagement.Service.Name), Csv(bill.Engagement.BusinessParty.Name), Csv(bill.Engagement.Manager.Name), bill.PeriodStart.ToString("yyyy-MM-dd"), bill.PeriodEnd.ToString("yyyy-MM-dd"), Csv(upstreamInvoices), Csv(string.Join("; ", paymentDates)), Csv(string.Join("; ", paymentStates)), flow, Money(bill.Amount), Money(cap), Money(allocated), Money(remaining)));
+        }
+        var fileName = $"invoice-create-{flow}.csv";
+        return File(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(string.Join("\r\n", rows))).ToArray(), "text/csv", fileName);
     }
 
     [HttpPost, Authorize(Roles = AppRoles.Staff)]
@@ -166,4 +200,15 @@ public class InvoicesController(AppDbContext db, AccessScope access, InvoiceServ
         TempData["Success"] = "Invoice cancelled; history retained.";
         return RedirectToAction(nameof(Details), new { id });
     }
+
+    private Task<List<BillingRecord>> InvoiceCreateBills() => db.BillingRecords
+        .Include(x => x.Engagement).ThenInclude(x => x.BusinessParty)
+        .Include(x => x.Engagement).ThenInclude(x => x.Service)
+        .Include(x => x.Engagement).ThenInclude(x => x.Manager)
+        .Include(x => x.Shares)
+        .Include(x => x.InvoiceLines).ThenInclude(x => x.Invoice).ThenInclude(x => x.ReceiptAllocations).ThenInclude(x => x.CustomerReceipt)
+        .Where(x => x.Status != BillingStatus.Cancelled)
+        .OrderByDescending(x => x.PeriodStart)
+        .AsSplitQuery()
+        .ToListAsync();
 }

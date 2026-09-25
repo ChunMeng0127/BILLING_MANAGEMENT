@@ -1,0 +1,21 @@
+[Unit]
+Description=Billing Control PostgreSQL backup
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/docker/billing-control/docker-compose.yml
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Environment=PROJECT_DIR=/docker/billing-control
+Environment=BACKUP_DIR=/docker/billing-control/backups
+Environment=STATUS_DIR=/var/lib/billing-control-backup
+Environment=APPLY_RETENTION=1
+EnvironmentFile=-/etc/billing-control/backup.env
+ExecStart=/usr/local/lib/billing-control/backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=30min

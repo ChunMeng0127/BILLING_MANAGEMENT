@@ -18,12 +18,12 @@ public class PostgresFactAttribute : FactAttribute
 public partial class IntegrationTests
 {
     private static string Connection => Environment.GetEnvironmentVariable("BILLING_TEST_CONNECTION")!;
-    private static AppDbContext Db() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Connection).Options);
-    private static async Task<AppDbContext> Fresh()
+    private static AppDbContext Db(TimeProvider? time = null) => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(Connection).Options, null, time);
+    private static async Task<AppDbContext> Fresh(TimeProvider? time = null)
     {
         var cs = new Npgsql.NpgsqlConnectionStringBuilder(Connection);
         Assert.EndsWith("_test", cs.Database);
-        var db = Db(); await db.Database.EnsureDeletedAsync(); await db.Database.MigrateAsync(); return db;
+        var db = Db(time); await db.Database.EnsureDeletedAsync(); await db.Database.MigrateAsync(); return db;
     }
     private static async Task<int> Engagement(AppDbContext db)
     {
@@ -218,9 +218,10 @@ public partial class IntegrationTests
         Assert.Equal(1000m, bill1State.CustomerInvoicedAmount);
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "CUST-001-OVER", new(2026, 2, 2), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
 
-        var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 250, [bill2.Id] = 250 });
+        var consolidated = await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 650, [bill2.Id] = 650 });
+        Assert.Equal(1300m, consolidated.Total);
         Assert.Equal(2, consolidated.Lines.Count);
-        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = 1 }));
+        await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "MGR-OVER", new(2026, 2, 1), new Dictionary<int, decimal> { [bill1.Id] = .01m }));
         var lcm = await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "LCM-001", new(2026, 1, 31), new Dictionary<int, decimal> { [bill1.Id] = 200, [bill2.Id] = 200 });
         Assert.Equal(400m, lcm.Total);
         Assert.Equal(2, lcm.Lines.Count);
@@ -798,11 +799,33 @@ public partial class IntegrationTests
 
         var invoices = new InvoiceService(db);
         await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BASE-CUSTOMER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 4500m });
-        await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 750m });
+        await invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 1950m });
         await invoices.CreateInvoice(InvoiceFlow.LcmToManager, "BASE-LCM", new(2026, 2, 28), new Dictionary<int, decimal> { [customBill.Id] = 1200m });
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "BASE-CUSTOMER-OVER", new(2026, 3, 1), new Dictionary<int, decimal> { [customBill.Id] = .01m }));
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.ManagerToAccountingFirm, "BASE-MANAGER-OVER", new(2026, 3, 1), new Dictionary<int, decimal> { [customBill.Id] = .01m }));
         await Assert.ThrowsAsync<BusinessException>(() => invoices.CreateInvoice(InvoiceFlow.LcmToManager, "BASE-LCM-OVER", new(2026, 3, 1), new Dictionary<int, decimal> { [customBill.Id] = .01m }));
+
+        var customVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking()
+            .Where(x => x.Id == customBill.Id)
+            .Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version })
+            .SingleAsync();
+        await billing.Correct(customBill.Id, customBill.PeriodStart, customBill.PeriodEnd, customVersions.Status, "Increase share base with active invoices", customVersions.Version, customVersions.WorkItemVersion, 4500m, 3200m);
+        db.ChangeTracker.Clear();
+        var customRecalculated = await db.BillingRecords.Include(x => x.Shares).AsNoTracking().SingleAsync(x => x.Id == customBill.Id);
+        Assert.Equal(3200m, customRecalculated.RevenueShareBaseAmount);
+        Assert.Equal(1120m, customRecalculated.Shares.Single(x => x.Kind == ShareKind.Firm).Amount);
+        Assert.Equal(800m, customRecalculated.Shares.Single(x => x.Kind == ShareKind.Manager).Amount);
+        Assert.Equal(1280m, customRecalculated.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
+        Assert.Equal(1950m, await db.Invoices.Where(x => x.InvoiceNumber == "BASE-MANAGER").Select(x => x.Total).SingleAsync());
+        Assert.Equal(1200m, await db.Invoices.Where(x => x.InvoiceNumber == "BASE-LCM").Select(x => x.Total).SingleAsync());
+
+        var customReducedVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking()
+            .Where(x => x.Id == customBill.Id)
+            .Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version })
+            .SingleAsync();
+        var managerCommitmentError = await Assert.ThrowsAsync<BusinessException>(() =>
+            billing.Correct(customBill.Id, customBill.PeriodStart, customBill.PeriodEnd, customReducedVersions.Status, "Too low for manager invoice", customReducedVersions.Version, customReducedVersions.WorkItemVersion, 4500m, 2900m));
+        Assert.Contains("active Manager invoices", managerCommitmentError.Message);
 
         var correctionBill = await billing.Generate(engagementId, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled, 4500m, 3000m);
         var createdAt = correctionBill.CreatedAt;
@@ -827,9 +850,24 @@ public partial class IntegrationTests
         await billing.Assign(assignmentBill.WorkItem.Id, worker.Id, 50m);
         var assignment = await db.WorkerAssignments.SingleAsync(x => x.WorkItemId == assignmentBill.WorkItem.Id);
         Assert.Equal(600m, assignment.Entitlement);
-        var assignmentVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == assignmentBill.Id).Select(x => new { x.Version, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
-        var assignmentLock = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, assignmentBill.Status, "Assignment lock", assignmentVersions.Version, assignmentVersions.WorkItemVersion, 4500m, 3001m));
-        Assert.Contains("worker assignments", assignmentLock.Message);
+        var assignmentVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == assignmentBill.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
+        await billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, assignmentVersions.Status, "Recalculate assignment", assignmentVersions.Version, assignmentVersions.WorkItemVersion, 4500m, 2500m);
+        db.ChangeTracker.Clear();
+        var recalculatedAssignment = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == assignment.Id);
+        Assert.Equal(1000m, recalculatedAssignment.LcmGrossSnapshot);
+        Assert.Equal(500m, recalculatedAssignment.Entitlement);
+
+        await billing.Pay(worker.Id, new(2026, 4, 30), "BASE-WORKER-PAYMENT", Guid.NewGuid(), new Dictionary<int, decimal> { [assignment.Id] = 400m });
+        var paidVersions = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == assignmentBill.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
+        var paidCommitmentError = await Assert.ThrowsAsync<BusinessException>(() =>
+            billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, paidVersions.Status, "Too low for paid worker", paidVersions.Version, paidVersions.WorkItemVersion, 4500m, 1500m));
+        Assert.Contains("already paid", paidCommitmentError.Message);
+
+        await billing.Correct(assignmentBill.Id, assignmentBill.PeriodStart, assignmentBill.PeriodEnd, paidVersions.Status, "Reduce to paid floor", paidVersions.Version, paidVersions.WorkItemVersion, 4500m, 2000m);
+        db.ChangeTracker.Clear();
+        var paidFloorAssignment = await db.WorkerAssignments.AsNoTracking().SingleAsync(x => x.Id == assignment.Id);
+        Assert.Equal(800m, paidFloorAssignment.LcmGrossSnapshot);
+        Assert.Equal(400m, paidFloorAssignment.Entitlement);
 
         var replacement = await billing.Generate(engagementId, new(2026, 5, 1), new(2026, 5, 15), BillingGenerationMode.Replacement, 6000m, 3000m);
         Assert.Equal(6000m, replacement.Amount); Assert.Equal(3000m, replacement.RevenueShareBaseAmount); Assert.Equal(1200m, replacement.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount);
@@ -1105,10 +1143,10 @@ public partial class IntegrationTests
         var managerDashboard = await managerClient.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", managerDashboard); Assert.DoesNotContain("Beta Scope Customer", managerDashboard); Assert.Contains("1,000.00", managerDashboard); Assert.DoesNotContain("2,000.00", managerDashboard);
         var managerEngagements = await managerClient.GetStringAsync("/Engagements"); Assert.Contains("Alpha Scope Customer", managerEngagements); Assert.DoesNotContain("Beta Scope Customer", managerEngagements);
         Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Billing/Details/{billBId}")).StatusCode);
-        var managerDetails = await managerClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Your manager share", managerDetails); Assert.Contains("Work status", managerDetails); Assert.DoesNotContain("Customer receipt history", managerDetails); Assert.DoesNotContain("LCM retained", managerDetails); Assert.DoesNotContain("Worker entitlement", managerDetails);
+        var managerDetails = await managerClient.GetStringAsync($"/Billing/Details/{billAId}"); Assert.Contains("Manager sales", managerDetails); Assert.Contains("650.00", managerDetails); Assert.Contains("LCM cost", managerDetails); Assert.Contains("400.00", managerDetails); Assert.Contains("Gross margin", managerDetails); Assert.Contains("250.00", managerDetails); Assert.Contains("Manager unbilled", managerDetails); Assert.Contains("Work status", managerDetails); Assert.DoesNotContain("Customer receipt history", managerDetails); Assert.DoesNotContain("LCM retained", managerDetails); Assert.DoesNotContain("Worker entitlement", managerDetails);
         var managerInvoices = await managerClient.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-MGR-INV", managerInvoices); Assert.DoesNotContain("ALPHA-INV", managerInvoices); Assert.DoesNotContain("BETA-INV", managerInvoices); Assert.Equal(HttpStatusCode.NotFound, (await managerClient.GetAsync($"/Invoices/Details/{invoiceAId}")).StatusCode);
-        var managerReport = await managerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Your manager share", managerReport); Assert.DoesNotContain("LCM MGT gross", managerReport); Assert.DoesNotContain("Worker cost", managerReport); Assert.DoesNotContain("Beta Scope Customer", managerReport);
-        var managerCsv = await managerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", managerCsv); Assert.DoesNotContain("Beta Scope Customer", managerCsv); Assert.Contains("Manager share MYR", managerCsv); Assert.DoesNotContain("LCM gross", managerCsv); Assert.DoesNotContain("Worker entitlement", managerCsv);
+        var managerReport = await managerClient.GetStringAsync("/Home/Reports"); Assert.Contains("Manager sales", managerReport); Assert.Contains("LCM cost", managerReport); Assert.Contains("Gross margin", managerReport); Assert.Contains("Manager unbilled", managerReport); Assert.Contains("650.00", managerReport); Assert.Contains("400.00", managerReport); Assert.DoesNotContain("LCM MGT gross", managerReport); Assert.DoesNotContain("Worker cost", managerReport); Assert.DoesNotContain("Beta Scope Customer", managerReport);
+        var managerCsv = await managerClient.GetStringAsync("/Home/Export"); Assert.Contains("Alpha Scope Customer", managerCsv); Assert.DoesNotContain("Beta Scope Customer", managerCsv); Assert.Contains("Manager retained MYR", managerCsv); Assert.Contains("LCM cost MYR", managerCsv); Assert.Contains("Manager sales MYR", managerCsv); Assert.Contains("Manager unbilled MYR", managerCsv); Assert.DoesNotContain("LCM gross", managerCsv); Assert.DoesNotContain("Worker entitlement", managerCsv);
 
         using var workerClient = await SignedIn(app, "worker-a@example.com", password);
         var workerDashboard = await workerClient.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", workerDashboard); Assert.DoesNotContain("Beta Scope Customer", workerDashboard); Assert.Contains("280.00", workerDashboard); Assert.DoesNotContain("480.00", workerDashboard);
@@ -1138,9 +1176,24 @@ public partial class IntegrationTests
         var adminDashboard = await admin.GetStringAsync("/"); Assert.Contains("Alpha Scope Customer", adminDashboard); Assert.Contains("Beta Scope Customer", adminDashboard);
         var adminInvoices = await admin.GetStringAsync("/Invoices"); Assert.Contains("ALPHA-INV", adminInvoices); Assert.Contains("ALPHA-MGR-INV", adminInvoices); Assert.Contains("BETA-INV", adminInvoices);
         var newInvoice = await admin.GetStringAsync("/Invoices/Create");
+        Assert.Contains("id=\"invoice-create-export\"", newInvoice);
+        Assert.Contains("<th>Service</th>", newInvoice);
+        Assert.Contains("Accounting Firm Invoice", newInvoice);
+        Assert.Contains("Payment Received Date", newInvoice);
+        Assert.Contains("ALPHA-INV", newInvoice);
+        Assert.Contains("2026-01-31", newInvoice);
+        Assert.Contains("Partially Paid", newInvoice);
         Assert.Contains("data-customer-cap=\"1000.00\"", newInvoice); Assert.Contains("data-customer-allocated=\"1000.00\"", newInvoice);
-        Assert.Contains("data-manager-cap=\"250.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
+        Assert.Contains("data-manager-cap=\"650.00\"", newInvoice); Assert.Contains("data-manager-allocated=\"250.00\"", newInvoice);
         Assert.Contains("data-lcm-cap=\"400.00\"", newInvoice); Assert.Contains("data-lcm-allocated=\"0.00\"", newInvoice); Assert.Contains("id=\"invoice-flow\"", newInvoice);
+        var managerCreateCsv = await admin.GetStringAsync("/Invoices/ExportCreate?flow=ManagerToAccountingFirm");
+        Assert.Contains("Billing ID,Customer,Service,Accounting Firm,Manager", managerCreateCsv);
+        Assert.Contains("Accounting Firm Invoice(s),Payment Received Date(s),Payment Status", managerCreateCsv);
+        Assert.Contains("ALPHA-INV (2026-01-31)", managerCreateCsv);
+        Assert.Contains("2026-01-31", managerCreateCsv);
+        Assert.Contains("Partially Paid", managerCreateCsv);
+        Assert.Contains("ManagerToAccountingFirm", managerCreateCsv);
+        Assert.Contains("650.00,250.00,400.00", managerCreateCsv);
         var fullyCustomerAllocatedRow = Regex.Match(newInvoice, $"<tr class=\"invoice-allocation-row\"[^>]*data-billing-id=\"{billBId}\"[^>]*>[\\s\\S]*?</tr>").Value;
         Assert.NotEmpty(fullyCustomerAllocatedRow); Assert.Contains("data-grid-eligible=\"false\"", fullyCustomerAllocatedRow); Assert.Contains("max=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("disabled=\"disabled\"", fullyCustomerAllocatedRow);
         Assert.Contains("data-manager-allocated=\"0.00\"", fullyCustomerAllocatedRow); Assert.Contains("data-lcm-allocated=\"0.00\"", fullyCustomerAllocatedRow);
@@ -1254,10 +1307,16 @@ public partial class IntegrationTests
         var lowerError = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, correctedFirst.Status, "Too low", correctedVersion, workItemVersion, 1400m, 1500m));
         Assert.Contains("cannot be lower", lowerError.Message);
 
-        await invoices.CreateReceipt(new(2026, 2, 1), "PART46-HISTORICAL-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [firstInvoice.Id] = 100m });
-        var receiptBlockedVersion = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == first.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
-        var receiptBlock = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, receiptBlockedVersion.Status, "Receipt dependency", receiptBlockedVersion.Version, receiptBlockedVersion.WorkItemVersion, 1600m, 1500m));
-        Assert.Contains("active customer receipt", receiptBlock.Message);
+        var historicalReceipt = await invoices.CreateReceipt(new(2026, 2, 1), "PART46-HISTORICAL-RECEIPT", Guid.NewGuid(), new Dictionary<int, decimal> { [firstInvoice.Id] = 100m });
+        var receiptAllowedVersion = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().Where(x => x.Id == first.Id).Select(x => new { x.Version, x.Status, WorkItemVersion = x.WorkItem.Version }).SingleAsync();
+        await billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, receiptAllowedVersion.Status, "Receipt-safe amount correction", receiptAllowedVersion.Version, receiptAllowedVersion.WorkItemVersion, 1600m, 1500m);
+        var receiptSafeCorrection = await db.BillingRecords.Include(x => x.WorkItem).AsNoTracking().SingleAsync(x => x.Id == first.Id);
+        Assert.Equal(1600m, receiptSafeCorrection.Amount);
+        Assert.Equal(BillingStatus.ReadyToBill, receiptSafeCorrection.Status);
+        Assert.Equal(1500m, await db.Invoices.Where(x => x.Id == firstInvoice.Id).Select(x => x.Total).SingleAsync());
+        Assert.Equal(100m, await db.CustomerReceipts.Where(x => x.Id == historicalReceipt.Id).Select(x => x.Amount).SingleAsync());
+        var belowCommitted = await Assert.ThrowsAsync<BusinessException>(() => billing.Correct(first.Id, first.PeriodStart, first.PeriodEnd, receiptSafeCorrection.Status, "Below committed invoice", receiptSafeCorrection.Version, receiptSafeCorrection.WorkItem.Version, 1499m, 1500m));
+        Assert.Contains("already allocated to active customer invoices", belowCommitted.Message);
 
         var third = await billing.Generate(engagementId, new(2026, 3, 1), new(2026, 3, 31), BillingGenerationMode.Scheduled);
         var invoiceA = await invoices.CreateInvoice(InvoiceFlow.AccountingFirmToCustomer, "PART46-A", new(2026, 3, 31), new Dictionary<int, decimal> { [second.Id] = 1500m });

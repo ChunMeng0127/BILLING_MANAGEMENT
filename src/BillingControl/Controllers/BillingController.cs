@@ -119,7 +119,7 @@ public class BillingController(AppDbContext db, BillingService billing, BillingS
         var firm = a.IsAccountingFirm;
         var manager = a.IsManager;
         var b = await access.BillingRecords(a)
-            .Include(x => x.Shares.Where(s => staff || (firm && s.Kind == ShareKind.Firm) || (manager && s.Kind == ShareKind.Manager)))
+            .Include(x => x.Shares.Where(s => staff || (firm && s.Kind == ShareKind.Firm) || (manager && (s.Kind == ShareKind.Manager || s.Kind == ShareKind.Lcm))))
             .Include(x => x.InvoiceLines)
             .ThenInclude(x => x.Invoice)
             .ThenInclude(x => x.ReceiptAllocations)

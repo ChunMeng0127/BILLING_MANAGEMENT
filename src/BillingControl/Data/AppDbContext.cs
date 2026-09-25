@@ -6,8 +6,9 @@ using System.Security.Claims;
 
 namespace BillingControl.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null) : IdentityDbContext<AppUser>(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? http = null, TimeProvider? time = null) : IdentityDbContext<AppUser>(options)
 {
+    private readonly TimeProvider auditTime = time ?? TimeProvider.System;
     private bool allowInvoiceLineDeletion;
     private bool allowBillingSnapshotCorrection;
     private bool allowReceiptAllocationCorrection;
@@ -718,6 +719,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
     {
         ChangeTracker.DetectChanges();
         var usedTemplateIds = await LoadUsedTemplateIdsAsync(cancellationToken);
+        var now = auditTime.GetUtcNow().UtcDateTime;
         foreach (var e in ChangeTracker.Entries<Record>().Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (e.State == EntityState.Deleted)
@@ -784,7 +786,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                         WhatsAppOutboundEngagementScopeSnapshot => [],
                         WhatsAppOutboundMessage => ["State", "AttemptCount", "NextAttemptAt", "ProviderMessageId", "LastErrorCategory", "LastErrorCode", "ProviderRetryAfterUntil", "ProviderTimestamp"],
                         WhatsAppOutboundMessageAttempt => [],
-                        WorkerAssignment => ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
+                        WorkerAssignment => allowBillingSnapshotCorrection
+                            ? ["WorkerId", "WorkerName", "Percent", "LcmGrossSnapshot", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"]
+                            : ["WorkerId", "WorkerName", "Percent", "Entitlement", "IsCancelled", "CancellationReason", "CurrentWorkflowStatus", "CurrentWorkflowVersion", "CurrentProgressPercent", "IsHidden", "HiddenAt", "HiddenBy", "ReportingResumedFromWeek"],
                         WorkerPayment => ["PaymentDate", "Reference", "IsCancelled", "CancellationReason"],
                         CustomerReceipt => allowReceiptAllocationCorrection
                             ? ["ReceiptDate", "Reference", "Amount", "IsCancelled", "CancellationReason"]
@@ -796,8 +800,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAc
                     throw new InvalidOperationException("Historical snapshots and audit origins cannot be edited.");
             }
             var actor = http?.HttpContext?.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
-            if (e.State == EntityState.Added) { e.Entity.CreatedAt = DateTime.UtcNow; e.Entity.CreatedBy = actor; }
-            e.Entity.UpdatedAt = DateTime.UtcNow; e.Entity.UpdatedBy = actor; e.Entity.Version++;
+            if (e.State == EntityState.Added) { e.Entity.CreatedAt = now; e.Entity.CreatedBy = actor; }
+            e.Entity.UpdatedAt = now; e.Entity.UpdatedBy = actor; e.Entity.Version++;
         }
         return await base.SaveChangesAsync(cancellationToken);
     }

@@ -22,7 +22,7 @@ public class HomeController(AppDbContext db, AccessScope access, BusinessClock c
         var worker = a.IsWorker;
         var q = access.BillingRecords(a)
             .Include(x => x.Engagement)
-            .Include(x => x.Shares.Where(s => staff || (firm && s.Kind == ShareKind.Firm) || (manager && s.Kind == ShareKind.Manager)))
+            .Include(x => x.Shares.Where(s => staff || (firm && s.Kind == ShareKind.Firm) || (manager && (s.Kind == ShareKind.Manager || s.Kind == ShareKind.Lcm))))
             .Include(x => x.InvoiceLines.Where(_ => staff || firm || manager))
             .ThenInclude(x => x.Invoice)
             .ThenInclude(x => x.ReceiptAllocations)
@@ -106,12 +106,15 @@ public class HomeController(AppDbContext db, AccessScope access, BusinessClock c
         }
         else if (r.Access.IsManager)
         {
-            lines.Add("Billing ID,Customer,Service,Period start,Period end,Billing status,Work status,Customer billing MYR,Manager percent,Manager share MYR,Manager invoice MYR");
+            lines.Add("Billing ID,Customer,Service,Period start,Period end,Billing status,Work status,Customer billing MYR,Manager retained percent,Manager retained MYR,LCM cost MYR,Manager sales MYR,Manager invoiced MYR,Manager unbilled MYR");
             foreach (var b in r.Bills)
             {
-                var share = b.Shares.Single(x => x.Kind == ShareKind.Manager);
-                var invoiced = b.InvoiceLines.Where(x => x.Invoice.Status != InvoiceStatus.Cancelled && x.Invoice.Flow == InvoiceFlow.ManagerToAccountingFirm).Sum(x => x.AllocatedAmount);
-                lines.Add(string.Join(',', b.Id, Csv(b.CustomerName), Csv(b.ServiceName), b.PeriodStart.ToString("yyyy-MM-dd"), b.PeriodEnd.ToString("yyyy-MM-dd"), b.Status, b.WorkItem.Status, N(b.Amount), N(share.Percent), N(share.Amount), N(invoiced)));
+                var managerShare = b.Shares.Single(x => x.Kind == ShareKind.Manager);
+                var lcmCost = b.Shares.Single(x => x.Kind == ShareKind.Lcm).Amount;
+                var sales = managerShare.Amount + lcmCost;
+                var invoiced = Finance.ActiveInvoiceAllocated(b, InvoiceFlow.ManagerToAccountingFirm);
+                var unbilled = Math.Max(0m, sales - invoiced);
+                lines.Add(string.Join(',', b.Id, Csv(b.CustomerName), Csv(b.ServiceName), b.PeriodStart.ToString("yyyy-MM-dd"), b.PeriodEnd.ToString("yyyy-MM-dd"), b.Status, b.WorkItem.Status, N(b.Amount), N(managerShare.Percent), N(managerShare.Amount), N(lcmCost), N(sales), N(invoiced), N(unbilled)));
             }
         }
         else
