@@ -144,6 +144,21 @@
     root.dataset.sidebarMode = sidebarMode(window.innerWidth);
   }
 
+  sidebar?.querySelectorAll(".nav-group-summary").forEach((summary) =>
+    summary.addEventListener("click", (event) => {
+      if (isMobileSidebar() || !root.classList.contains("sidebar-collapsed")) return;
+      event.preventDefault();
+      const group = summary.closest("[data-nav-group]");
+      root.classList.remove("sidebar-collapsed");
+      writeSidebarPreference(false);
+      if (group) {
+        group.open = true;
+        keepOneNavGroupOpen(navGroups, group);
+      }
+      syncSidebarToggle();
+    }),
+  );
+
   navGroups.forEach((group) =>
     group.addEventListener("toggle", () => {
       if (group.open) keepOneNavGroupOpen(navGroups, group);
