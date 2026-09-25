@@ -2932,3 +2932,288 @@ textarea:focus-visible {
   }
 }
 
+
+
+/* 2026-09 sidebar refresh: compact neutral navigation inspired by the approved reference. */
+:root {
+  --sidebar-width: 252px;
+  --sidebar-rail-width: 72px;
+  --nav-neutral: #f1f2f4;
+  --nav-neutral-hover: #f6f7f8;
+  --shell-canvas: #f4f6f8;
+}
+
+html,
+body {
+  background: var(--shell-canvas);
+}
+
+.sidebar {
+  overflow: visible;
+  border-right: 1px solid #e7e9ec;
+  background: #fff;
+  padding: 20px 14px 18px;
+  box-shadow: none;
+}
+
+.brand {
+  gap: 11px;
+  margin: 0 8px 24px;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+  border-radius: 12px;
+  background: #24272c;
+  color: #fff;
+  font-size: 18px;
+  box-shadow: none;
+}
+
+.brand-copy strong {
+  color: #25282e;
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.brand-copy small {
+  color: #9a9fa8;
+  font-size: 9px;
+}
+
+.sidebar-edge-toggle {
+  position: absolute;
+  z-index: 3;
+  top: 92px;
+  right: -14px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #e5e7ea;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgb(30 35 42 / 7%);
+  color: #6f757f;
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 180ms ease, color 130ms ease, box-shadow 130ms ease;
+}
+
+.sidebar-edge-toggle:hover {
+  color: #24272c;
+  box-shadow: 0 5px 14px rgb(30 35 42 / 11%);
+}
+
+.sidebar-edge-toggle > span {
+  transform: translateY(-1px);
+  transition: transform 180ms ease;
+}
+
+.nav-group + .nav-group {
+  margin-top: 4px;
+}
+
+.nav-group-summary {
+  min-height: 42px;
+  gap: 10px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: #6f747d;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: background-color 130ms ease, color 130ms ease;
+}
+
+.nav-group-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
+.nav-group-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  color: #777d86;
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.nav-group-summary:hover {
+  background: var(--nav-neutral-hover);
+  color: #24272c;
+}
+
+.nav-group[open] > .nav-group-summary {
+  background: var(--nav-neutral);
+  color: #24272c;
+  font-weight: 720;
+}
+
+.nav-group[open] > .nav-group-summary .nav-group-icon {
+  color: #24272c;
+}
+
+.nav-group-chevron {
+  color: #969ba3;
+  font-size: 14px;
+}
+
+.nav-group-links {
+  position: relative;
+  gap: 2px;
+  padding: 5px 0 4px 31px;
+}
+
+.nav-group-links::before {
+  position: absolute;
+  top: 6px;
+  bottom: 8px;
+  left: 18px;
+  width: 1px;
+  background: #e9ebee;
+  content: "";
+}
+
+.nav-group-links .nav-link {
+  min-height: 36px;
+  gap: 0;
+  border-radius: 9px;
+  padding: 7px 10px;
+  color: #7a7f87;
+  font-size: 12px;
+  font-weight: 520;
+}
+
+.nav-group-links .nav-icon {
+  display: none;
+}
+
+.nav-link:hover {
+  background: var(--nav-neutral-hover);
+  color: #2d3036;
+}
+
+.nav-link.active {
+  background: #eceef0;
+  color: #202328;
+  font-weight: 700;
+}
+
+.sidebar-foot {
+  padding: 24px 9px 2px;
+  color: #9a9fa8;
+}
+
+.topbar {
+  min-height: 64px;
+  border-bottom: 1px solid #e8eaed;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 1px 0 rgb(24 30 38 / 2%);
+}
+
+.app-main {
+  background: var(--shell-canvas);
+}
+
+html.sidebar-collapsed .sidebar {
+  width: var(--sidebar-rail-width);
+  transform: none;
+  border-right: 1px solid #e7e9ec;
+  background: #fff;
+  padding: 20px 11px 18px;
+  pointer-events: auto;
+}
+
+html.sidebar-collapsed .app-shell {
+  margin-left: var(--sidebar-rail-width);
+}
+
+html.sidebar-collapsed .brand {
+  justify-content: center;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+html.sidebar-collapsed .brand-copy,
+html.sidebar-collapsed .nav-group-label,
+html.sidebar-collapsed .nav-group-chevron,
+html.sidebar-collapsed .nav-group-links,
+html.sidebar-collapsed .sidebar-foot .nav-text {
+  display: none;
+}
+
+html.sidebar-collapsed .nav-group-summary {
+  justify-content: center;
+  width: 48px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0 auto 4px;
+  padding: 8px;
+}
+
+html.sidebar-collapsed .nav-group-title {
+  justify-content: center;
+  gap: 0;
+}
+
+html.sidebar-collapsed .nav-group-icon {
+  color: #6e737c;
+}
+
+html.sidebar-collapsed .nav-group[open] > .nav-group-summary,
+html.sidebar-collapsed .nav-group-summary:hover {
+  background: var(--nav-neutral);
+}
+
+html.sidebar-collapsed .sidebar-foot {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+html.sidebar-collapsed .sidebar-edge-toggle > span {
+  transform: rotate(180deg) translateY(1px);
+}
+
+@media (min-width: 901px) {
+  .topbar .sidebar-toggle {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: min(84vw, 300px);
+    overflow-y: auto;
+    padding: 20px 14px 18px;
+  }
+
+  .sidebar-edge-toggle {
+    display: none;
+  }
+
+  .topbar .sidebar-toggle {
+    display: grid;
+  }
+
+  .nav-group-links {
+    padding-left: 31px;
+  }
+
+  .app-shell,
+  html.sidebar-collapsed .app-shell {
+    margin-left: 0;
+  }
+}

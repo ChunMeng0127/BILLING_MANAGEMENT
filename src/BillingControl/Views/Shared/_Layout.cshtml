@@ -32,8 +32,9 @@
 <span class="brand-mark" aria-hidden="true">B</span>
 <span class="brand-copy"><strong>Billing Control</strong><small>Accounting operations, simplified.</small></span>
 </a>
+<button class="sidebar-edge-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" aria-label="Hide navigation"><span aria-hidden="true">‹</span></button>
 <details class="nav-group" data-nav-group="home" @Html.Raw(homeOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Home</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⌂</span><span class="nav-group-label">Home</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Home">
 <a class="nav-link @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
 </nav>
@@ -41,7 +42,7 @@
 @if (staff || firm || manager)
 {
 <details class="nav-group" data-nav-group="billing" @Html.Raw(billingOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Billing</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▥</span><span class="nav-group-label">Billing</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Billing">
 <a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a>
 <a class="nav-link @(path == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a>
@@ -52,7 +53,7 @@
 @if (staff || manager || worker)
 {
 <details class="nav-group" data-nav-group="work" @Html.Raw(workOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Work Management</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">✓</span><span class="nav-group-label">Work Management</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Work Management">
 <a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a>
 <a class="nav-link @(path.StartsWith("/Progress", StringComparison.Ordinal) ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a>
@@ -67,7 +68,7 @@
 @if (staff)
 {
 <details class="nav-group" data-nav-group="documents" @Html.Raw(documentOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Document Collection</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▤</span><span class="nav-group-label">Document Collection</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Document Collection">
 <a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
 <a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a>
@@ -78,7 +79,7 @@
 @if (staff || firm || manager)
 {
 <details class="nav-group" data-nav-group="directory" @Html.Raw(directoryOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Directory</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◎</span><span class="nav-group-label">Directory</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Directory">
 @if (staff)
 {
@@ -102,7 +103,7 @@
 </details>
 }
 <details class="nav-group" data-nav-group="reports" @Html.Raw(reportsOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Reports</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◔</span><span class="nav-group-label">Reports</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Reports">
 <a class="nav-link @(path == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
 </nav>
@@ -110,7 +111,7 @@
 @if (User.IsInRole(AppRoles.Admin))
 {
 <details class="nav-group" data-nav-group="administration" @Html.Raw(administrationOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-label">Administration</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⚙</span><span class="nav-group-label">Administration</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <nav class="sidebar-nav nav-group-links" aria-label="Administration">
 <a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a>
 </nav>
