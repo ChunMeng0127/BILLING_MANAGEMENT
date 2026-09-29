@@ -1,146 +1,168 @@
+@using BillingControl.Services
+@{
+    var path = Context.Request.Path.Value ?? "/";
+    var isAuthenticated = User.Identity?.IsAuthenticated == true;
+    var isOverview = path == "/" || path.Equals("/Home/Index", StringComparison.OrdinalIgnoreCase);
+    var isBilling = path.StartsWith("/Billing", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Invoices", StringComparison.OrdinalIgnoreCase);
+    var isWork = path.StartsWith("/Work", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Payments", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Progress", StringComparison.OrdinalIgnoreCase);
+    var isDocuments = path.StartsWith("/Document", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Contacts", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/WhatsAppConversations", StringComparison.OrdinalIgnoreCase);
+    var isMasters = path.StartsWith("/Masters", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Engagements", StringComparison.OrdinalIgnoreCase);
+    var isAdministration = path.StartsWith("/Users", StringComparison.OrdinalIgnoreCase);
+    var navLabel = isOverview ? "Overview" : isBilling ? "Billing" : isWork ? "Work management" : isDocuments ? "Documents & communication" : isMasters ? "Master data" : isAdministration ? "Administration" : "Workspace";
+}
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>@ViewData["Title"] · Billing Control</title>
-<link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
-<link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] · Billing Control</title>
+    <meta name="theme-color" content="#152331" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body class="app-body @((ViewData["PageClass"] as string)?.Contains("table-page") == true ? "fixed-table-page" : "")">
-@{
-    var staff = User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser);
-    var firm = User.IsInRole(AppRoles.AccountingFirm);
-    var manager = User.IsInRole(AppRoles.Manager);
-    var worker = User.IsInRole(AppRoles.Worker);
-    var path = Context.Request.Path.Value ?? "";
-    var masterKind = Context.Request.Query["kind"].ToString();
-    var accountName = User.Identity?.Name;
-    var accountInitial = string.IsNullOrWhiteSpace(accountName) ? "U" : accountName[..1].ToUpperInvariant();
-    var homeOpen = path == "/";
-    var billingOpen = path == "/Billing" || path == "/Billing/Schedule" || path.StartsWith("/Invoices", StringComparison.Ordinal);
-    var workOpen = path == "/Work" || path.StartsWith("/Progress", StringComparison.Ordinal) || path == "/Work/Assignments" || path == "/Payments";
-    var documentOpen = path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) || path.StartsWith("/Contacts", StringComparison.Ordinal) || path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal);
-    var directoryOpen = path == "/Masters" || path.StartsWith("/Engagements", StringComparison.Ordinal);
-    var reportsOpen = path == "/Home/Reports";
-    var administrationOpen = path.StartsWith("/Users", StringComparison.Ordinal);
-}
-@if (User.Identity?.IsAuthenticated == true) {
-<div class="app-frame">
-<aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
-<div class="sidebar-panel">
-<div class="sidebar-panel-header">
-<div class="sidebar-panel-title"><strong>Navigation</strong><small>Billing Control</small></div>
-</div>
-<details class="nav-group" data-nav-group="home" @Html.Raw(homeOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⌂</span><span class="nav-group-label">Home</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Home">
-<a class="nav-link @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
-</nav>
-</details>
-@if (staff || firm || manager)
-{
-<details class="nav-group" data-nav-group="billing" @Html.Raw(billingOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▥</span><span class="nav-group-label">Billing</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Billing">
-<a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a>
-<a class="nav-link @(path == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a>
-<a class="nav-link @(path.StartsWith("/Invoices", StringComparison.Ordinal) ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a>
-</nav>
-</details>
-}
-@if (staff || manager || worker)
-{
-<details class="nav-group" data-nav-group="work" @Html.Raw(workOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">✓</span><span class="nav-group-label">Work Management</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Work Management">
-<a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a>
-<a class="nav-link @(path.StartsWith("/Progress", StringComparison.Ordinal) ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a>
-@if (staff || worker)
-{
-<a class="nav-link @(path == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker assignments</span></a>
-<a class="nav-link @(path == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker payments</span></a>
-}
-</nav>
-</details>
-}
-@if (staff)
-{
-<details class="nav-group" data-nav-group="documents" @Html.Raw(documentOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▤</span><span class="nav-group-label">Document Collection</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Document Collection">
-<a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
-<a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a>
-<a class="nav-link @(path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal) ? "active" : "")" href="/WhatsAppConversations" title="WhatsApp Conversations"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">WhatsApp Conversations</span></a>
-</nav>
-</details>
-}
-@if (staff || firm || manager)
-{
-<details class="nav-group" data-nav-group="directory" @Html.Raw(directoryOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◎</span><span class="nav-group-label">Directory</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Directory">
-@if (staff)
-{
-@foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" })
-{
-    var label = kind == "Firms" ? "Accounting firms" : kind;
-    var icon = kind switch { "Customers" => "◎", "Services" => "◇", "Firms" => "▣", "Managers" => "◉", _ => "♙" };
-    <a class="nav-link @(path == "/Masters" && masterKind == kind ? "active" : "")" href="/Masters?kind=@kind" title="@label"><span class="nav-icon" aria-hidden="true">@icon</span><span class="nav-text">@label</span></a>
-}
-}
-@if (firm || manager)
-{
-<a class="nav-link @(path == "/Masters" && masterKind == "Customers" ? "active" : "")" href="/Masters?kind=Customers" title="Customers"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Customers</span></a>
-<a class="nav-link @(path == "/Masters" && masterKind == "Services" ? "active" : "")" href="/Masters?kind=Services" title="Services"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Services</span></a>
-}
-@if (staff || firm || manager)
-{
-<a class="nav-link @(path.StartsWith("/Engagements", StringComparison.Ordinal) ? "active" : "")" href="/Engagements" title="Engagements"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">Engagements</span></a>
-}
-</nav>
-</details>
-}
-<details class="nav-group" data-nav-group="reports" @Html.Raw(reportsOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◔</span><span class="nav-group-label">Reports</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Reports">
-<a class="nav-link @(path == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
-</nav>
-</details>
-@if (User.IsInRole(AppRoles.Admin))
-{
-<details class="nav-group" data-nav-group="administration" @Html.Raw(administrationOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⚙</span><span class="nav-group-label">Administration</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Administration">
-<a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a>
-</nav>
-</details>
-}
-<div class="sidebar-foot"><span class="live-dot"></span><span class="nav-text">Internal accounting workspace</span></div>
-</div>
-</aside>
-<button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>
-<div class="app-shell">
-<header class="topbar">
-<div class="topbar-leading">
-<button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" aria-label="Hide navigation"><span aria-hidden="true">☰</span></button>
-<div class="topbar-context"><span class="topbar-kicker">Accounting operations</span><span class="topbar-page">@ViewData["Title"]</span></div>
-</div>
-<div class="account">
-<a class="account-identity" href="/Account/Password"><span class="account-avatar" aria-hidden="true">@accountInitial</span><span class="account-copy"><strong>@accountName</strong><small>Account settings</small></span></a>
-<form asp-controller="Account" asp-action="Logout" method="post"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>
-</div>
-</header>
-<main class="app-main @(ViewData["PageClass"] as string)">
-@if (TempData["Success"] is string success) { <div class="alert alert-success" role="status">@success</div> }
-@if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
-@RenderBody()</main>
-<footer class="app-footer"><span>Billing Control</span><span>MYR · Financial records retain their original snapshots</span></footer>
-</div>
-</div>
-} else { <main class="login-shell">@RenderBody()</main> }
-<script src="~/js/searchable-dropdown.js" asp-append-version="true"></script>
-<script src="~/js/site.js" asp-append-version="true"></script>
-@await RenderSectionAsync("Scripts", required: false)
+<body class="@(isAuthenticated ? "app-body" : "auth-body")">
+    @if (isAuthenticated)
+    {
+        <div class="app-shell" data-app-shell>
+            <aside class="app-sidebar" id="primary-navigation" aria-label="Primary navigation">
+                <div class="brand-block">
+                    <a class="brand-lockup" asp-controller="Home" asp-action="Index" aria-label="Billing Control home">
+                        <span class="brand-mark" aria-hidden="true"></span>
+                        <span>
+                            <strong>Billing Control</strong>
+                            <small>Accounting control room</small>
+                        </span>
+                    </a>
+                    <button class="icon-button sidebar-close" type="button" data-sidebar-toggle aria-label="Close navigation">
+                        <span class="close-mark" aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <nav class="nav-groups">
+                    <div class="nav-group">
+                        <p class="nav-group-title">Overview</p>
+                        <a class="nav-item @(isOverview ? "is-active" : "")" href="/" aria-current="@(isOverview ? "page" : null)"><span class="nav-mark" aria-hidden="true"></span><span>Dashboard</span></a>
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.AccountingFirm) || User.IsInRole(AppRoles.Manager))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Billing/Schedule", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Billing/Schedule"><span class="nav-mark" aria-hidden="true"></span><span>Upcoming Billing</span></a>
+                            <a class="nav-item @(path.Equals("/Billing", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/Billing/Index", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Billing"><span class="nav-mark" aria-hidden="true"></span><span>Billing Records</span></a>
+                            <a class="nav-item @(path.StartsWith("/Invoices", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("/Invoices/Receipt", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Invoices"><span class="nav-mark" aria-hidden="true"></span><span>Invoices</span></a>
+                        }
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Invoices/Receipt", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Invoices/Receipt"><span class="nav-mark" aria-hidden="true"></span><span>Receipts</span></a>
+                        }
+                    </div>
+
+                    <div class="nav-group">
+                        <p class="nav-group-title">Work management</p>
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Worker))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Work", StringComparison.OrdinalIgnoreCase) && !path.StartsWith("/Work/Assignments", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Work"><span class="nav-mark" aria-hidden="true"></span><span>Work Items</span></a>
+                        }
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Worker))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Work/Assignments", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Work/Assignments"><span class="nav-mark" aria-hidden="true"></span><span>Worker Assignments</span></a>
+                        }
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.Worker))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Payments", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Payments"><span class="nav-mark" aria-hidden="true"></span><span>Worker Payments</span></a>
+                        }
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.Manager) || User.IsInRole(AppRoles.Worker))
+                        {
+                            <a class="nav-item @(path.StartsWith("/Progress", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Progress"><span class="nav-mark" aria-hidden="true"></span><span>Weekly Progress</span></a>
+                        }
+                    </div>
+
+                    @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser))
+                    {
+                        <div class="nav-group">
+                            <p class="nav-group-title">Documents &amp; communication</p>
+                            <a class="nav-item @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/DocumentRequirementTemplates"><span class="nav-mark" aria-hidden="true"></span><span>Document Checklists</span></a>
+                            <a class="nav-item @(path.StartsWith("/Contacts", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Contacts"><span class="nav-mark" aria-hidden="true"></span><span>Contacts / PIC</span></a>
+                            <a class="nav-item @(path.StartsWith("/WhatsAppConversations", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/WhatsAppConversations"><span class="nav-mark" aria-hidden="true"></span><span>WhatsApp Conversations</span></a>
+                        </div>
+                    }
+
+                    <div class="nav-group">
+                        <p class="nav-group-title">Master data</p>
+                        @if (User.IsInRole(AppRoles.Admin) || User.IsInRole(AppRoles.InternalUser) || User.IsInRole(AppRoles.AccountingFirm) || User.IsInRole(AppRoles.Manager))
+                        {
+                            <a class="nav-item @(Context.Request.Query["kind"] == "Customers" ? "is-active" : "")" href="/Masters?kind=Customers"><span class="nav-mark" aria-hidden="true"></span><span>Customers</span></a>
+                            <a class="nav-item @(Context.Request.Query["kind"] == "Services" ? "is-active" : "")" href="/Masters?kind=Services"><span class="nav-mark" aria-hidden="true"></span><span>Services</span></a>
+                            <a class="nav-item @(Context.Request.Query["kind"] == "Firms" ? "is-active" : "")" href="/Masters?kind=Firms"><span class="nav-mark" aria-hidden="true"></span><span>Accounting Firms</span></a>
+                            <a class="nav-item @(Context.Request.Query["kind"] == "Managers" ? "is-active" : "")" href="/Masters?kind=Managers"><span class="nav-mark" aria-hidden="true"></span><span>Managers</span></a>
+                            <a class="nav-item @(Context.Request.Query["kind"] == "Workers" ? "is-active" : "")" href="/Masters?kind=Workers"><span class="nav-mark" aria-hidden="true"></span><span>Workers</span></a>
+                            <a class="nav-item @(path.StartsWith("/Engagements", StringComparison.OrdinalIgnoreCase) ? "is-active" : "")" href="/Engagements"><span class="nav-mark" aria-hidden="true"></span><span>Engagements</span></a>
+                        }
+                    </div>
+
+                    @if (User.IsInRole(AppRoles.Admin))
+                    {
+                        <div class="nav-group">
+                            <p class="nav-group-title">Administration</p>
+                            <a class="nav-item @(isAdministration ? "is-active" : "")" href="/Users"><span class="nav-mark" aria-hidden="true"></span><span>User Management</span></a>
+                        </div>
+                    }
+                </nav>
+
+                <div class="sidebar-footer">
+                    <span class="workspace-status"><span class="status-dot is-positive" aria-hidden="true"></span>Internal workspace</span>
+                    <small>Access follows your assigned role.</small>
+                </div>
+            </aside>
+
+            <button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>
+
+            <div class="app-main">
+                <header class="topbar">
+                    <div class="topbar-leading">
+                        <button class="icon-button sidebar-open" type="button" data-sidebar-toggle aria-controls="primary-navigation" aria-expanded="false" aria-label="Open navigation">
+                            <span class="menu-mark" aria-hidden="true"></span>
+                        </button>
+                        <span class="topbar-context">@navLabel</span>
+                    </div>
+                    <div class="topbar-actions">
+                        <span class="role-label">@(User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Workspace user")</span>
+                        <details class="account-menu">
+                            <summary class="account-trigger"><span class="account-avatar" aria-hidden="true">@(User.Identity?.Name?.Substring(0, 1).ToUpperInvariant() ?? "U")</span><span class="account-name">@User.Identity?.Name</span><span class="chevron" aria-hidden="true"></span></summary>
+                            <div class="account-panel">
+                                <a href="/Account/Password">Change password</a>
+                                <form method="post" action="/Account/Logout">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit">Sign out</button>
+                                </form>
+                            </div>
+                        </details>
+                    </div>
+                </header>
+
+                @if (TempData["Success"] is string success)
+                {
+                    <div class="flash-message is-success" role="status">@success</div>
+                }
+                @if (TempData["Error"] is string error)
+                {
+                    <div class="flash-message is-error" role="alert">@error</div>
+                }
+                @if (TempData["Info"] is string info)
+                {
+                    <div class="flash-message is-info" role="status">@info</div>
+                }
+
+                <main class="page-content @ViewData["ContentClass"]">
+                    @RenderBody()
+                </main>
+            </div>
+        </div>
+    }
+    else
+    {
+        <main class="auth-frame">
+            @RenderBody()
+        </main>
+    }
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

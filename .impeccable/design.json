@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 2,
+  "title": "Billing Control Clean-room Design System",
+  "direction": "Reconciliation Desk",
+  "mode": "operate",
+  "buildPath": "code",
+  "tokens": {
+    "colors": {
+      "ink950": "#152331",
+      "ink700": "#3F5262",
+      "ink500": "#71818C",
+      "paper": "#EFF2F1",
+      "sheet": "#FBFCFA",
+      "line": "#CFD8D7",
+      "copper": "#C66A3C",
+      "copperDeep": "#9D4E2A",
+      "copperWash": "#F8ECE5",
+      "sage": "#547866",
+      "amber": "#A87524",
+      "rose": "#A84F56",
+      "blue": "#416985"
+    },
+    "spacing": [4, 8, 12, 16, 24, 32],
+    "radius": {
+      "control": "7px",
+      "sheet": "10px",
+      "pill": "999px"
+    },
+    "motion": {
+      "control": "140ms ease-out",
+      "shell": "180ms ease-out"
+    }
+  },
+  "surfaces": {
+    "shell": "fixed navigation rail with flexible working area",
+    "dashboard": "attention register followed by operational two-column lane",
+    "register": "working sheet with sticky headers and honest inner scrolling"
+  }
+}
