@@ -1,56 +1,194 @@
-
 @model ReportModel
-@{ ViewData["Title"] = "Overview"; ViewData["PageClass"] = "dashboard-page"; }
-<div class="page-heading">
-<div>
-<p class="eyebrow">YOUR WORKSPACE AT A GLANCE</p>
-<h1>Business overview</h1>
-<p>Keep your accounting work, billing and team payments in view.</p>
-</div>
-@if (Model.Access.IsStaff) { <a class="btn btn-primary" href="/Engagements/Edit">+ New engagement</a> }
-</div>
-<div class="dashboard-scroll">
-<partial name="_ReportFilters" model="Model.Filter" />
-<partial name="_Metrics" model="Model" />
-@if (Model.Access.IsStaff || Model.Access.IsManager || Model.Access.IsWorker) {
-<section class="panel progress-summary"><div class="panel-heading"><div><h2>Weekly worker progress</h2><p>Current Monday–Sunday week; active worker assignments determine reporting responsibility</p></div><a href="/Progress">Open progress register →</a></div><div class="flow-list"><div><span>Required</span><strong>@Model.ProgressRequired</strong></div><div><span>Submitted</span><strong>@Model.ProgressSubmitted</strong></div><div><span>Missing</span><strong>@Model.ProgressMissing</strong></div><div><span>Late</span><strong>@Model.ProgressLate</strong></div></div></section>
+@{
+    ViewData["Title"] = "Overview";
+    ViewData["PageClass"] = "dashboard-page";
+    var filtersApplied = Context.Request.Query.Count > 0;
+    var hasAttention = Model.ProgressMissing > 0
+        || Model.ProgressLate > 0
+        || (Model.Access.IsManager && Model.ManagerUnbilled > 0)
+        || (!Model.Access.IsWorker && !Model.Access.IsManager && Model.BillingOutstanding > 0)
+        || (Model.Access.IsWorker && Model.Bills.Count > 0);
 }
-<div class="dashboard-grid">
-@if (!Model.Access.IsWorker) { <section class="panel">
-<div class="panel-heading">
-<div>
-<h2>Upcoming billing</h2>
-<p>Next scheduled service periods in your access scope</p>
+
+<div class="page-heading dashboard-heading">
+    <div>
+        <h1>Accounting control room</h1>
+        <p>Start with items that need attention, then open the registers when you need detail.</p>
+    </div>
+    @if (Model.Access.IsStaff)
+    {
+        <a class="btn btn-primary" href="/Engagements/Edit">New engagement</a>
+    }
 </div>
-<a href="/Billing/Schedule">View schedule →</a>
-</div>
-@if (Model.Upcoming.Count == 0) { <div class="empty-state">
-<h3>Your schedule starts here</h3>
-<p>Add a customer, service and engagement to plan your first billing period.</p>
-@if (Model.Access.IsStaff) { <a href="/Engagements/Edit">Create engagement →</a> }
-</div> }
-@foreach(var s in Model.Upcoming) { <a class="upcoming-row" href="/Billing/Schedule">
-<div class="date-chip">@s.NextPeriodStart?.ToString("dd")<small>@s.NextPeriodStart?.ToString("MMM")</small>
-</div>
-<div class="grow">
-<strong>@s.Engagement.Customer.Name</strong>
-<small>@s.Engagement.Service.Name · @Finance.Label(s.Frequency)</small>
-</div>
-<strong class="money">RM @s.Engagement.BillingAmount.ToString("N2")</strong>
-</a> }
-</section> } else { <section class="panel">
-<div class="panel-heading"><div><h2>Your assigned work</h2><p>Only active assignments linked to your worker account</p></div><a href="/Work">View work →</a></div>
-@foreach(var b in Model.Bills.Take(6)) { <a class="upcoming-row" href="/Work/Details/@b.WorkItem.Id"><div class="grow"><strong>@b.CustomerName</strong><small>@b.ServiceName · @b.PeriodStart.ToString("dd MMM yyyy") — @b.PeriodEnd.ToString("dd MMM yyyy")</small></div><strong>@Finance.Label(b.WorkItem.Status)</strong></a> }
-</section> }
-<section class="panel">
-<div class="panel-heading">
-<h2>Work & billing flow</h2>
-</div>
-<div class="flow-list">@foreach (var s in new[] { BillingStatus.Upcoming, BillingStatus.WorkInProgress, BillingStatus.Completed, BillingStatus.ReadyToBill, BillingStatus.Billed, BillingStatus.PartiallyPaid, BillingStatus.Paid }) { <div>
-<span>@Finance.Label(s)</span>
-<strong>@Model.Bills.Count(x => x.Status == s)</strong>
-</div> }</div>
-<p class="panel-note">Totals follow the selected service periods. Cancelled records are excluded. Worker filters select whole billing records.</p>
-</section>
-</div>
+
+<div class="dashboard-scroll">
+    <section class="panel dashboard-attention" aria-labelledby="dashboard-attention-title">
+        <div class="panel-heading dashboard-attention-heading">
+            <div>
+                <h2 id="dashboard-attention-title">Needs attention</h2>
+                <p>Start here for work that may need review or follow-up.</p>
+            </div>
+            <a href="/Progress">Open progress register</a>
+        </div>
+
+        <div class="attention-grid">
+            @if (Model.ProgressMissing > 0)
+            {
+                <a class="attention-item attention-item-warning" href="/Progress">
+                    <span>Missing weekly updates</span>
+                    <strong>@Model.ProgressMissing</strong>
+                    <small>Review worker progress</small>
+                </a>
+            }
+            @if (Model.ProgressLate > 0)
+            {
+                <a class="attention-item attention-item-warning" href="/Progress">
+                    <span>Late weekly updates</span>
+                    <strong>@Model.ProgressLate</strong>
+                    <small>Follow up on late submissions</small>
+                </a>
+            }
+            @if (Model.Access.IsManager && Model.ManagerUnbilled > 0)
+            {
+                <a class="attention-item attention-item-finance" href="/Billing">
+                    <span>Manager unbilled</span>
+                    <strong>RM @Model.ManagerUnbilled.ToString("N2")</strong>
+                    <small>Review remaining sales entitlement</small>
+                </a>
+            }
+            @if (!Model.Access.IsWorker && !Model.Access.IsManager && Model.BillingOutstanding > 0)
+            {
+                <a class="attention-item attention-item-finance" href="/Billing">
+                    <span>Billing outstanding</span>
+                    <strong>RM @Model.BillingOutstanding.ToString("N2")</strong>
+                    <small>Posted bills less receipts</small>
+                </a>
+            }
+            @if (Model.Access.IsWorker && Model.Bills.Count > 0)
+            {
+                <a class="attention-item attention-item-neutral" href="/Work">
+                    <span>Assigned work</span>
+                    <strong>@Model.Bills.Count</strong>
+                    <small>Open work items in your scope</small>
+                </a>
+            }
+            @if (!hasAttention)
+            {
+                <div class="attention-clear">
+                    <strong>Nothing needs attention right now.</strong>
+                    <span>Weekly progress and billing are up to date for this scope.</span>
+                </div>
+            }
+        </div>
+
+        <div class="attention-meta">
+            <span>Weekly progress <strong>@Model.ProgressSubmitted / @Model.ProgressRequired submitted</strong></span>
+            <span>Selected scope <strong>Use filters below to adjust</strong></span>
+        </div>
+    </section>
+
+    <details class="dashboard-disclosure dashboard-filter-disclosure" @(filtersApplied ? "open" : null)>
+        <summary>
+            <span>
+                <strong>Filter overview</strong>
+                <small>Customer, service, worker, date and status scope</small>
+            </span>
+            <span class="disclosure-action">Adjust filters</span>
+        </summary>
+        <partial name="_ReportFilters" model="Model.Filter" />
+    </details>
+
+    <details class="dashboard-disclosure dashboard-financial-disclosure">
+        <summary>
+            <span>
+                <strong>Financial snapshot</strong>
+                <small>Role-specific totals and outstanding balances</small>
+            </span>
+            <span class="disclosure-action">View snapshot</span>
+        </summary>
+        <div class="dashboard-disclosure-body">
+            <partial name="_Metrics" model="Model" />
+        </div>
+    </details>
+
+    <div class="dashboard-grid">
+        @if (!Model.Access.IsWorker)
+        {
+            <section class="panel dashboard-primary-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h2>Upcoming billing</h2>
+                        <p>Next scheduled service periods in your access scope.</p>
+                    </div>
+                    <a href="/Billing/Schedule">View schedule</a>
+                </div>
+                @if (Model.Upcoming.Count == 0)
+                {
+                    <div class="empty-state">
+                        <h3>Your schedule starts here</h3>
+                        <p>Add a customer, service and engagement to plan your first billing period.</p>
+                        @if (Model.Access.IsStaff)
+                        {
+                            <a href="/Engagements/Edit">Create engagement</a>
+                        }
+                    </div>
+                }
+                @foreach (var s in Model.Upcoming)
+                {
+                    <a class="upcoming-row" href="/Billing/Schedule">
+                        <div class="date-chip">@s.NextPeriodStart?.ToString("dd")<small>@s.NextPeriodStart?.ToString("MMM")</small></div>
+                        <div class="grow">
+                            <strong>@s.Engagement.Customer.Name</strong>
+                            <small>@s.Engagement.Service.Name · @Finance.Label(s.Frequency)</small>
+                        </div>
+                        <strong class="money">RM @s.Engagement.BillingAmount.ToString("N2")</strong>
+                    </a>
+                }
+            </section>
+        }
+        else
+        {
+            <section class="panel dashboard-primary-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h2>Your assigned work</h2>
+                        <p>Only active assignments linked to your worker account.</p>
+                    </div>
+                    <a href="/Work">View work</a>
+                </div>
+                @foreach (var b in Model.Bills.Take(6))
+                {
+                    <a class="upcoming-row" href="/Work/Details/@b.WorkItem.Id">
+                        <div class="grow">
+                            <strong>@b.CustomerName</strong>
+                            <small>@b.ServiceName · @b.PeriodStart.ToString("dd MMM yyyy") — @b.PeriodEnd.ToString("dd MMM yyyy")</small>
+                        </div>
+                        <strong>@Finance.Label(b.WorkItem.Status)</strong>
+                    </a>
+                }
+            </section>
+        }
+
+        <details class="dashboard-disclosure dashboard-flow-disclosure panel">
+            <summary>
+                <span>
+                    <strong>Work and billing flow</strong>
+                    <small>Totals for the selected service periods.</small>
+                </span>
+                <span class="disclosure-action">View flow</span>
+            </summary>
+            <div class="dashboard-disclosure-body">
+                <div class="flow-list">
+                    @foreach (var s in new[] { BillingStatus.Upcoming, BillingStatus.WorkInProgress, BillingStatus.Completed, BillingStatus.ReadyToBill, BillingStatus.Billed, BillingStatus.PartiallyPaid, BillingStatus.Paid })
+                    {
+                        <div>
+                            <span>@Finance.Label(s)</span>
+                            <strong>@Model.Bills.Count(x => x.Status == s)</strong>
+                        </div>
+                    }
+                </div>
+                <p class="panel-note">Totals follow the selected service periods. Cancelled records are excluded. Worker filters select whole billing records.</p>
+            </div>
+        </details>
+    </div>
 </div>

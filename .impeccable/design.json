@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-29T15:20:36.5663582+08:00",
+  "title": "Design System: Billing Control",
+  "extensions": {
+    "colorMeta": {
+      "orange-primary": {
+        "role": "primary",
+        "displayName": "Ledger Orange",
+        "canonical": "#ff6115",
+        "tonalRamp": ["#2a1105", "#5d210c", "#9a3f15", "#e94f08", "#ff6115", "#ff8c5b", "#ffc3a8", "#fff0e7"]
+      },
+      "orange-strong": {
+        "role": "primary",
+        "displayName": "Ember Orange",
+        "canonical": "#e94f08",
+        "tonalRamp": ["#260d03", "#521907", "#852c0b", "#bd3d0a", "#e94f08", "#f7773f", "#ffb18e", "#fff0e7"]
+      },
+      "orange-soft": {
+        "role": "primary",
+        "displayName": "Orange Soft",
+        "canonical": "#fff0e7",
+        "tonalRamp": ["#3b1609", "#7a2c12", "#b84e21", "#e17c53", "#f0a47f", "#f8c3a9", "#fddfd0", "#fff0e7"]
+      },
+      "orange-wash": {
+        "role": "primary",
+        "displayName": "Orange Wash",
+        "canonical": "#fff8f3",
+        "tonalRamp": ["#401b0d", "#87391b", "#c7673d", "#e79a75", "#f5c4ab", "#faddcf", "#fceee6", "#fff8f3"]
+      },
+      "navy-ink": {
+        "role": "neutral",
+        "displayName": "Navy Ink",
+        "canonical": "#102545",
+        "tonalRamp": ["#07101f", "#102545", "#1c3555", "#40536e", "#73839a", "#aab5c2", "#d8dee6", "#f4f6f8"]
+      },
+      "slate-ink": {
+        "role": "neutral",
+        "displayName": "Slate Ink",
+        "canonical": "#40536e",
+        "tonalRamp": ["#172337", "#2b3d56", "#40536e", "#60718a", "#8290a2", "#acb6c3", "#d8dde4", "#f4f6f8"]
+      },
+      "muted-slate": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "#73839a",
+        "tonalRamp": ["#253144", "#4b5a70", "#73839a", "#929faf", "#b6bec9", "#d4d9df", "#e8ebef", "#f7f8fa"]
+      },
+      "cool-shell": {
+        "role": "neutral",
+        "displayName": "Cool Shell",
+        "canonical": "#f4f6f8",
+        "tonalRamp": ["#1d2733", "#3b4857", "#617080", "#8a96a3", "#b5bdc6", "#d2d7dd", "#e6e9ed", "#f4f6f8"]
+      },
+      "cream-canvas": {
+        "role": "neutral",
+        "displayName": "Cream Canvas",
+        "canonical": "#fffcf4",
+        "tonalRamp": ["#332a1b", "#67543a", "#9e865f", "#c7b18d", "#dfcfb2", "#eee4ce", "#f8f2e4", "#fffcf4"]
+      },
+      "white-surface": {
+        "role": "neutral",
+        "displayName": "White Surface",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#22252a", "#4a4e55", "#737981", "#9da2a9", "#bec2c7", "#d9dce0", "#eceef0", "#ffffff"]
+      },
+      "surface-muted": {
+        "role": "neutral",
+        "displayName": "Warm Muted Surface",
+        "canonical": "#fffaf5",
+        "tonalRamp": ["#332719", "#6a4f36", "#a37c59", "#c8a98a", "#dfc6aa", "#eedfcd", "#f8f0e6", "#fffaf5"]
+      },
+      "panel-line": {
+        "role": "neutral",
+        "displayName": "Panel Line",
+        "canonical": "#e5e8ec",
+        "tonalRamp": ["#242a31", "#535c66", "#858e98", "#adb4bc", "#c7ccd2", "#d8dce1", "#e1e4e8", "#e5e8ec"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Success Green",
+        "canonical": "#159669",
+        "tonalRamp": ["#063322", "#075c3b", "#087b4e", "#159669", "#42b98b", "#8bd8b9", "#c8efdd", "#e8f8f0"]
+      },
+      "success-soft": {
+        "role": "tertiary",
+        "displayName": "Success Soft",
+        "canonical": "#e8f8f0",
+        "tonalRamp": ["#063322", "#075c3b", "#087b4e", "#159669", "#42b98b", "#8bd8b9", "#c8efdd", "#e8f8f0"]
+      },
+      "info": {
+        "role": "tertiary",
+        "displayName": "Information Blue",
+        "canonical": "#3978df",
+        "tonalRamp": ["#0c1c45", "#173b88", "#245bb2", "#3978df", "#6c9ce9", "#a9c4f3", "#d6e3fb", "#edf4ff"]
+      },
+      "info-soft": {
+        "role": "tertiary",
+        "displayName": "Information Soft",
+        "canonical": "#edf4ff",
+        "tonalRamp": ["#0c1c45", "#173b88", "#245bb2", "#3978df", "#6c9ce9", "#a9c4f3", "#d6e3fb", "#edf4ff"]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Warning Amber",
+        "canonical": "#c77810",
+        "tonalRamp": ["#3a2104", "#704205", "#9a5c08", "#c77810", "#e5a343", "#f0c47d", "#f8e0b2", "#fff4dd"]
+      },
+      "warning-soft": {
+        "role": "tertiary",
+        "displayName": "Warning Soft",
+        "canonical": "#fff4dd",
+        "tonalRamp": ["#3a2104", "#704205", "#9a5c08", "#c77810", "#e5a343", "#f0c47d", "#f8e0b2", "#fff4dd"]
+      },
+      "purple": {
+        "role": "tertiary",
+        "displayName": "Review Purple",
+        "canonical": "#8157db",
+        "tonalRamp": ["#211044", "#45228a", "#6037b1", "#8157db", "#a483e8", "#c3aff1", "#e1d6fa", "#f2edff"]
+      },
+      "purple-soft": {
+        "role": "tertiary",
+        "displayName": "Review Soft",
+        "canonical": "#f2edff",
+        "tonalRamp": ["#211044", "#45228a", "#6037b1", "#8157db", "#a483e8", "#c3aff1", "#e1d6fa", "#f2edff"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger Rose",
+        "canonical": "#dc4d59",
+        "tonalRamp": ["#43141b", "#7f2430", "#ad3541", "#dc4d59", "#e87982", "#f0aeb4", "#f9d9dc", "#fff0f1"]
+      },
+      "danger-soft": {
+        "role": "tertiary",
+        "displayName": "Danger Soft",
+        "canonical": "#fff0f1",
+        "tonalRamp": ["#43141b", "#7f2430", "#ad3541", "#dc4d59", "#e87982", "#f0aeb4", "#f9d9dc", "#fff0f1"]
+      },
+      "nav-neutral": {
+        "role": "neutral",
+        "displayName": "Navigation Neutral",
+        "canonical": "#f4f4f5",
+        "tonalRamp": ["#25272b", "#4c4f55", "#777b82", "#9da1a8", "#c0c3c8", "#d9dade", "#ebebed", "#f4f4f5"]
+      },
+      "nav-neutral-hover": {
+        "role": "neutral",
+        "displayName": "Navigation Hover",
+        "canonical": "#f7f7f8",
+        "tonalRamp": ["#25272b", "#4c4f55", "#777b82", "#9da1a8", "#c0c3c8", "#d9dade", "#eeeeef", "#f7f7f8"]
+      },
+      "nav-accent-soft": {
+        "role": "primary",
+        "displayName": "Navigation Accent Soft",
+        "canonical": "#fff1e8",
+        "tonalRamp": ["#3a1508", "#762b12", "#b64d20", "#e17b52", "#f2a27d", "#f8c4ac", "#fce0d1", "#fff1e8"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Workspace Display",
+        "purpose": "Page titles and major operational headings."
+      },
+      "body": {
+        "displayName": "Operational Body",
+        "purpose": "Readable application copy and workflow descriptions."
+      },
+      "label": {
+        "displayName": "Signal Label",
+        "purpose": "Compact page eyebrows and category signals."
+      }
+    },
+    "shadows": [
+      {
+        "name": "quiet-card",
+        "value": "0 2px 8px rgb(38 32 22 / 3%)",
+        "purpose": "Default low-contrast separation for panels and metrics."
+      },
+      {
+        "name": "elevated-interaction",
+        "value": "0 12px 34px rgb(28 39 55 / 7%)",
+        "purpose": "Hover elevation for metrics and checklist families."
+      },
+      {
+        "name": "dialog",
+        "value": "0 20px 70px rgb(44 34 20 / 17%)",
+        "purpose": "Strong separation for filter dialogs and overlays."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "130ms ease",
+        "purpose": "Small hover, focus, color, and border transitions."
+      },
+      {
+        "name": "shell-state",
+        "value": "190ms ease",
+        "purpose": "Sidebar and drawer movement."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Collapse transitions and smooth scrolling when the user requests reduced motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sidebar-drawer",
+        "value": "900px"
+      },
+      {
+        "name": "compact-layout",
+        "value": "680px"
+      },
+      {
+        "name": "single-column-metrics",
+        "value": "420px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main action for a page or form.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Save changes</button>",
+      "css": ".ds-btn-primary { min-height: 38px; border: 1px solid var(--orange); border-radius: 8px; background: var(--orange); color: #fff; padding: 8px 14px; font: 700 12px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 130ms ease, border-color 130ms ease, transform 130ms ease, outline-color 130ms ease; } .ds-btn-primary:hover { border-color: var(--orange-strong); background: var(--orange-strong); transform: translateY(-1px); } .ds-btn-primary:focus-visible { outline: 3px solid rgb(255 97 21 / 32%); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A quiet alternative or navigation action.",
+      "html": "<button class=\"ds-btn-secondary\" type=\"button\">Cancel</button>",
+      "css": ".ds-btn-secondary { min-height: 38px; border: 1px solid #dedbd3; border-radius: 8px; background: #fff; color: #516078; padding: 8px 14px; font: 700 12px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease, transform 130ms ease; } .ds-btn-secondary:hover { border-color: #ffc29e; background: var(--orange-wash); color: var(--orange-strong); transform: translateY(-1px); } .ds-btn-secondary:focus-visible { outline: 3px solid rgb(255 97 21 / 32%); outline-offset: 2px; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "Compact white field used in filters and forms.",
+      "html": "<label class=\"ds-field-label\">Service period<input class=\"ds-input\" type=\"text\" placeholder=\"Choose a period\" /></label>",
+      "css": ".ds-field-label { display: grid; gap: 6px; color: var(--ink-soft); font: 750 10px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; } .ds-input { min-height: 39px; border: 1px solid #d9dee5; border-radius: 8px; background: #fff; color: var(--ink); padding: 8px 11px; font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; transition: border-color 130ms ease, box-shadow 130ms ease; } .ds-input:hover { border-color: #cdd4dc; } .ds-input:focus { border-color: #ff9c6d; box-shadow: 0 0 0 0.2rem rgb(255 97 21 / 13%); outline: 0; }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-neutral",
+      "description": "Grouped operational navigation with a quiet active rail.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Primary navigation\"><div class=\"ds-nav-group\"><strong>Billing</strong><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\">Billing records</a><a class=\"ds-nav-link\" href=\"#\">Invoices</a></div></nav>",
+      "css": ".ds-nav { width: 224px; background: #fff; color: #676d76; padding: 16px 12px; font: 400 12px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; } .ds-nav-group { display: grid; gap: 2px; } .ds-nav-group strong { min-height: 40px; display: flex; align-items: center; border-radius: 9px; color: #676d76; padding: 8px 9px; font-size: 12.5px; font-weight: 600; } .ds-nav-link { position: relative; min-height: 35px; border-radius: 9px; color: #777d86; padding: 7px 9px; text-decoration: none; } .ds-nav-link:hover { background: #f6f7f8; color: #2c3036; } .ds-nav-link-active { background: #f0f1f2; color: #202328; font-weight: 700; } .ds-nav-link-active::before { position: absolute; top: 7px; bottom: 7px; left: -14px; width: 2px; border-radius: 99px; background: var(--orange); content: \"\"; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "status-chip",
+      "description": "Named workflow state presented as a compact semantic pill.",
+      "html": "<span class=\"ds-chip ds-chip-success\">Submitted</span>",
+      "css": ".ds-chip { display: inline-flex; max-width: 100%; align-items: center; border-radius: 999px; padding: 4px 8px; font: 750 10px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; } .ds-chip-success { background: var(--success-soft); color: #14784f; } .ds-chip-warning { background: var(--warning-soft); color: #9f6411; } .ds-chip-danger { background: var(--danger-soft); color: #b53b49; }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "White working surface with layered neutral separation.",
+      "html": "<section class=\"ds-panel\"><div class=\"ds-panel-heading\"><h2>Upcoming billing</h2><a href=\"#\">View schedule</a></div><p class=\"ds-panel-copy\">Next scheduled service periods in your access scope.</p></section>",
+      "css": ".ds-panel { overflow: hidden; border: 1px solid #e5e8ec; border-radius: 12px; background: #fff; box-shadow: 0 5px 18px rgb(28 39 55 / 4%); color: var(--ink); } .ds-panel-heading { display: flex; min-height: 68px; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgb(233 231 225 / 78%); background: linear-gradient(180deg, #fff 0%, #fffdfb 100%); padding: 17px 20px; } .ds-panel-heading h2 { margin: 0; font: 750 17px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.35px; } .ds-panel-heading a { color: var(--orange-strong); font: 750 11px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; text-decoration: none; } .ds-panel-copy { margin: 0; color: var(--muted); padding: 16px 20px 20px; font: 400 12px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Data Record Link",
+      "kind": "custom",
+      "refersTo": "record-link",
+      "description": "Compact identifier treatment for registers and detail navigation.",
+      "html": "<a class=\"ds-record-link\" href=\"#\">B-00042</a>",
+      "css": ".ds-record-link { display: inline-flex; align-items: center; border-radius: 6px; background: #f2f5f9; color: #35577f; padding: 4px 7px; font: 800 10.5px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; text-decoration: none; } .ds-record-link:hover { background: var(--orange-soft); color: var(--orange-strong); } .ds-record-link:focus-visible { outline: 3px solid rgb(255 97 21 / 32%); outline-offset: 2px; }"
+    },
+    {
+      "name": "Metric Card",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "A compact KPI surface with a semantic top signal.",
+      "html": "<article class=\"ds-metric\"><span>Outstanding</span><strong>RM 12,480.00</strong><p>Across current scope</p></article>",
+      "css": ".ds-metric { position: relative; min-height: 118px; overflow: hidden; border: 1px solid #e5e8ec; border-radius: 12px; background: #fff; box-shadow: 0 5px 18px rgb(28 39 55 / 4%); padding: 18px 18px 16px; transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease; } .ds-metric::before { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: var(--orange); content: \"\"; } .ds-metric span { display: block; color: var(--ink-soft); font: 750 10px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; } .ds-metric strong { display: block; margin: 9px 0 4px; color: var(--ink); font: 780 clamp(20px, 1.55vw, 25px)/1.1 Inter, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; } .ds-metric p { margin: 0; color: var(--muted); font: 400 10px/1.5 Inter, ui-sans-serif, system-ui, sans-serif; } .ds-metric:hover { transform: translateY(-2px); border-color: #dce1e7; box-shadow: 0 12px 34px rgb(28 39 55 / 7%); } @media (prefers-reduced-motion: reduce) { .ds-metric { transition: none; } .ds-metric:hover { transform: none; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Accounting Control Room",
+    "overview": "Billing Control is a calm operational interface for people who need to read financial state, move work forward, and make careful corrections. Its visual language is precise, practical, and professional: cool paper surrounds white working surfaces, typography carries hierarchy, and a small orange signal marks action, attention, and current location.\n\nThe system is layered rather than decorative. Thin neutral borders establish structure first; restrained ambient shadows and tonal changes provide just enough depth for panels, dialogs, drawers, and interactive metrics. Dense registers remain readable through sticky headers, tabular numbers, deliberate column widths, and predictable inner scrolling.",
+    "keyCharacteristics": [
+      "Cool gray application shell with white work surfaces.",
+      "Ledger Orange reserved for primary actions, active navigation, focus, and selected states.",
+      "Compact, evidence-led information density for registers and financial data.",
+      "Calm status semantics through restrained green, blue, amber, purple, and rose chips.",
+      "Responsive single-panel navigation and viewport-owned register/dashboard scrolling."
+    ],
+    "rules": [
+      {
+        "name": "The Signal Rarity Rule",
+        "body": "Orange marks action, location, focus, and attention; it is not a decorative background color.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Semantics Rule",
+        "body": "Status hues communicate workflow meaning. Do not repurpose success, warning, danger, or review colors as ornament.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operational Hierarchy Rule",
+        "body": "Let short labels, strong headings, quiet helper copy, and tabular figures make dense data scannable; do not solve hierarchy with decorative typography.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stable Frame Rule",
+        "body": "Keep navigation, page context, filters, and register controls stable while the data region scrolls.",
+        "section": "layout"
+      },
+      {
+        "name": "The Honest Density Rule",
+        "body": "Preserve readable column widths and scroll wide financial tables rather than compressing or hiding meaning to fit a narrow viewport.",
+        "section": "layout"
+      },
+      {
+        "name": "The Layered-Not-Lifted Rule",
+        "body": "Use tonal surfaces and hairline borders first; use shadow as ambient support, never as the primary visual language.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Ledger Orange rare and purposeful: primary action, active rail, focus ring, and attention signal.",
+      "Do use Navy Ink for decisions and Slate/Mute for supporting context.",
+      "Do keep registers scannable with sticky headers, stable widths, right-aligned money, and inner scrolling.",
+      "Do preserve the 8px / 12px / 16px radius hierarchy and compact control heights.",
+      "Do make focus-visible states obvious and preserve the existing keyboard-friendly disclosure, dialog, and drawer behavior.",
+      "Do reduce density gracefully at 900px, 680px, and 420px rather than introducing a second visual language.",
+      "Do honor reduced-motion preferences for transitions and scrolling."
+    ],
+    "donts": [
+      "Don't introduce playful illustrations, flashy gradients, futuristic effects, decorative patterns, or overly corporate visual ceremony.",
+      "Don't add new font families or expressive type treatments without an explicit identity decision.",
+      "Don't use orange as a large-area background or treat semantic status colors as decoration.",
+      "Don't compress financial tables until labels or values become ambiguous; scroll them honestly instead.",
+      "Don't replace named workflow/status text with color-only indicators.",
+      "Don't remove the fixed-frame and inner-scroll behavior that keeps registers usable during long sessions."
+    ]
+  }
+}
