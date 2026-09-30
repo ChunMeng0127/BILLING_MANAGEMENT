@@ -502,7 +502,128 @@ textarea:focus-visible {
     display: grid;
     min-height: 100vh;
     place-items: center;
-    padding: 24px;
+    padding: clamp(20px, 5vw, 64px);
+}
+
+.login-card {
+    width: min(100%, 440px);
+    padding: clamp(26px, 5vw, 40px);
+    border: 1px solid var(--line);
+    border-radius: var(--sheet-radius);
+    background: var(--sheet);
+    box-shadow: 0 18px 48px rgb(21 35 49 / 8%);
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-bottom: 30px;
+}
+
+.login-brand .brand-mark {
+    margin: 0;
+}
+
+.login-brand .eyebrow {
+    margin: 0;
+    color: var(--copper-deep);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.login-card h1 {
+    margin: 0;
+    color: var(--ink-950);
+    font-size: clamp(29px, 5vw, 34px);
+    font-weight: 650;
+    letter-spacing: -0.035em;
+    line-height: 1.1;
+}
+
+.login-intro {
+    margin: 10px 0 26px;
+    color: var(--ink-700);
+    font-size: 14px;
+}
+
+.login-card form {
+    display: grid;
+    gap: 16px;
+}
+
+.validation-summary-valid {
+    display: none;
+}
+
+.validation-summary:not(.validation-summary-valid) {
+    padding: 10px 12px;
+    border: 1px solid #ddb9bd;
+    border-radius: var(--control-radius);
+    background: var(--rose-wash);
+    color: #7b343b;
+    font-size: 12px;
+}
+
+.validation-summary ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.login-field {
+    display: grid;
+    gap: 6px;
+}
+
+.login-field .form-label {
+    color: var(--ink-700);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.login-field .form-control {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 11px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--control-radius);
+    outline: 0;
+    background: #fff;
+    color: var(--ink-950);
+    font-size: 14px;
+}
+
+.login-field .form-control:focus {
+    border-color: var(--focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+
+.check-line {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--ink-700);
+    font-size: 12px;
+}
+
+.check-line input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--copper);
+}
+
+.login-submit {
+    width: 100%;
+}
+
+.login-note {
+    margin: 24px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-500);
+    font-size: 12px;
 }
 
 /* Shared page primitives */
