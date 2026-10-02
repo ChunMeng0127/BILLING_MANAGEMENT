@@ -45,7 +45,7 @@
 <a class="nav-link nav-overview @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
 @if (staff || firm || manager)
 {
-<details class="nav-group" data-nav-group="billing" @Html.Raw(billingOpen ? "open" : "")>
+<details class="nav-group" data-nav-group="billing">
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▥</span><span class="nav-group-label">Billing</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <div class="sidebar-nav nav-group-links">
 <a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming Billing</span></a>
@@ -60,7 +60,7 @@
 }
 @if (staff || manager || worker)
 {
-<details class="nav-group" data-nav-group="work" @Html.Raw(workOpen ? "open" : "")>
+<details class="nav-group" data-nav-group="work">
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">✓</span><span class="nav-group-label">Work Management</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <div class="sidebar-nav nav-group-links">
 <a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work Items</span></a>
@@ -75,7 +75,7 @@
 }
 @if (staff)
 {
-<details class="nav-group" data-nav-group="documents" @Html.Raw(documentOpen ? "open" : "")>
+<details class="nav-group" data-nav-group="documents">
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◫</span><span class="nav-group-label">Communication & Documents</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <div class="sidebar-nav nav-group-links">
 <a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
@@ -86,7 +86,7 @@
 }
 @if (staff || firm || manager)
 {
-<details class="nav-group" data-nav-group="directory" @Html.Raw(directoryOpen ? "open" : "")>
+<details class="nav-group" data-nav-group="directory">
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◎</span><span class="nav-group-label">Master Data</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <div class="sidebar-nav nav-group-links">
 @if (staff)
@@ -113,7 +113,7 @@
 }
 @if (User.IsInRole(AppRoles.Admin))
 {
-<details class="nav-group" data-nav-group="administration" @Html.Raw(administrationOpen ? "open" : "")>
+<details class="nav-group" data-nav-group="administration">
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⚙</span><span class="nav-group-label">Administration</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
 <div class="sidebar-nav nav-group-links">
 <a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User Management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User Management</span></a>
@@ -157,6 +157,7 @@ else
 }
 <script src="~/js/searchable-dropdown.js" asp-append-version="true"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
+<script src="~/js/frontend-skill-runtime.js" asp-append-version="true"></script>
 @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
