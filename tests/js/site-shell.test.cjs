@@ -7,16 +7,16 @@ const site = require(path.resolve(
   "../../src/BillingControl/wwwroot/js/site.js",
 ));
 
-test("sidebar uses a stable preference key and separates desktop from drawer layout", () => {
+test("sidebar uses the approved 900px compact breakpoint", () => {
   assert.equal(site.sidebarStorageKey, "billing-control.sidebar-collapsed");
   assert.equal(site.sidebarBreakpoint, 900);
   assert.equal(site.sidebarMode(1920), "desktop");
-  assert.equal(site.sidebarMode(900), "desktop");
-  assert.equal(site.sidebarMode(899), "mobile");
-  assert.equal(site.sidebarMode(390), "mobile");
+  assert.equal(site.sidebarMode(901), "desktop");
+  assert.equal(site.sidebarMode(900), "compact");
+  assert.equal(site.sidebarMode(390), "compact");
 });
 
-test("only an explicit saved preference collapses the desktop sidebar", () => {
+test("desktop collapse preference is explicit and reversible", () => {
   assert.equal(site.savedSidebarPreference("true"), true);
   assert.equal(site.savedSidebarPreference("false"), false);
   assert.equal(site.savedSidebarPreference(null), false);
@@ -25,19 +25,17 @@ test("only an explicit saved preference collapses the desktop sidebar", () => {
   assert.equal(site.desktopSidebarLabel(false), "Show navigation");
 });
 
-test("sidebar groups keep navigation compact", () => {
+test("navigation groups match the rebuilt information architecture", () => {
   assert.deepEqual(site.navGroupNames, [
-    "home",
     "billing",
     "work",
     "documents",
     "directory",
-    "reports",
     "administration",
   ]);
-  const home = { open: true };
   const billing = { open: true };
-  site.keepOneNavGroupOpen([home, billing], home);
-  assert.equal(home.open, true);
-  assert.equal(billing.open, false);
+  const work = { open: true };
+  site.keepOneNavGroupOpen([billing, work], billing);
+  assert.equal(billing.open, true);
+  assert.equal(work.open, false);
 });

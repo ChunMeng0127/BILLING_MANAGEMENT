@@ -6,6 +6,7 @@
 <title>@ViewData["Title"] · Billing Control</title>
 <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
 <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+<link rel="stylesheet" href="~/css/frontend-skill.css" asp-append-version="true" />
 </head>
 <body class="app-body @((ViewData["PageClass"] as string)?.Contains("table-page") == true ? "fixed-table-page" : "")">
 @{
@@ -17,74 +18,82 @@
     var masterKind = Context.Request.Query["kind"].ToString();
     var accountName = User.Identity?.Name;
     var accountInitial = string.IsNullOrWhiteSpace(accountName) ? "U" : accountName[..1].ToUpperInvariant();
-    var homeOpen = path == "/";
     var billingOpen = path == "/Billing" || path == "/Billing/Schedule" || path.StartsWith("/Invoices", StringComparison.Ordinal);
     var workOpen = path == "/Work" || path.StartsWith("/Progress", StringComparison.Ordinal) || path == "/Work/Assignments" || path == "/Payments";
     var documentOpen = path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) || path.StartsWith("/Contacts", StringComparison.Ordinal) || path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal);
     var directoryOpen = path == "/Masters" || path.StartsWith("/Engagements", StringComparison.Ordinal);
-    var reportsOpen = path == "/Home/Reports";
     var administrationOpen = path.StartsWith("/Users", StringComparison.Ordinal);
+    var sectionName = path == "/" ? "Overview"
+        : billingOpen ? "Billing"
+        : workOpen ? "Work Management"
+        : documentOpen ? "Communication & Documents"
+        : directoryOpen ? "Master Data"
+        : administrationOpen ? "Administration"
+        : path == "/Home/Reports" ? "Reports"
+        : "Billing Control";
 }
-@if (User.Identity?.IsAuthenticated == true) {
+@if (User.Identity?.IsAuthenticated == true)
+{
 <div class="app-frame">
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
 <div class="sidebar-panel">
-<div class="sidebar-panel-header">
-<div class="sidebar-panel-title"><strong>Navigation</strong><small>Billing Control</small></div>
-</div>
-<details class="nav-group" data-nav-group="home" @Html.Raw(homeOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⌂</span><span class="nav-group-label">Home</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Home">
-<a class="nav-link @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
-</nav>
-</details>
+<a class="brand" href="/" aria-label="Billing Control overview">
+<span class="brand-mark" aria-hidden="true">B</span>
+<span class="brand-copy"><strong>Billing Control</strong><small>LCM MGT workspace</small></span>
+</a>
+<nav class="primary-navigation" aria-label="Application">
+<a class="nav-link nav-overview @(path == "/" ? "active" : "")" href="/" title="Overview"><span class="nav-icon" aria-hidden="true">⌂</span><span class="nav-text">Overview</span></a>
 @if (staff || firm || manager)
 {
 <details class="nav-group" data-nav-group="billing" @Html.Raw(billingOpen ? "open" : "")>
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▥</span><span class="nav-group-label">Billing</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Billing">
-<a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming billing</span></a>
-<a class="nav-link @(path == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing records</span></a>
-<a class="nav-link @(path.StartsWith("/Invoices", StringComparison.Ordinal) ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a>
-</nav>
+<div class="sidebar-nav nav-group-links">
+<a class="nav-link @(path == "/Billing/Schedule" ? "active" : "")" href="/Billing/Schedule" title="Upcoming billing"><span class="nav-icon" aria-hidden="true">◷</span><span class="nav-text">Upcoming Billing</span></a>
+<a class="nav-link @(path == "/Billing" ? "active" : "")" href="/Billing" title="Billing records"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Billing Records</span></a>
+<a class="nav-link @(path.StartsWith("/Invoices", StringComparison.Ordinal) && path != "/Invoices/Receipt" ? "active" : "")" href="/Invoices" title="Invoices"><span class="nav-icon" aria-hidden="true">▧</span><span class="nav-text">Invoices</span></a>
+@if (staff)
+{
+<a class="nav-link @(path == "/Invoices/Receipt" ? "active" : "")" href="/Invoices/Receipt" title="Receipts"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Receipts</span></a>
+}
+</div>
 </details>
 }
 @if (staff || manager || worker)
 {
 <details class="nav-group" data-nav-group="work" @Html.Raw(workOpen ? "open" : "")>
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">✓</span><span class="nav-group-label">Work Management</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Work Management">
-<a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work items</span></a>
-<a class="nav-link @(path.StartsWith("/Progress", StringComparison.Ordinal) ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly progress</span></a>
+<div class="sidebar-nav nav-group-links">
+<a class="nav-link @(path == "/Work" ? "active" : "")" href="/Work" title="Work items"><span class="nav-icon" aria-hidden="true">✓</span><span class="nav-text">Work Items</span></a>
 @if (staff || worker)
 {
-<a class="nav-link @(path == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker assignments</span></a>
-<a class="nav-link @(path == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker payments</span></a>
+<a class="nav-link @(path == "/Work/Assignments" ? "active" : "")" href="/Work/Assignments" title="Worker assignments"><span class="nav-icon" aria-hidden="true">⊞</span><span class="nav-text">Worker Assignments</span></a>
+<a class="nav-link @(path == "/Payments" ? "active" : "")" href="/Payments" title="Worker payments"><span class="nav-icon" aria-hidden="true">$</span><span class="nav-text">Worker Payments</span></a>
 }
-</nav>
+<a class="nav-link @(path.StartsWith("/Progress", StringComparison.Ordinal) ? "active" : "")" href="/Progress" title="Weekly progress"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Weekly Progress</span></a>
+</div>
 </details>
 }
 @if (staff)
 {
 <details class="nav-group" data-nav-group="documents" @Html.Raw(documentOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">▤</span><span class="nav-group-label">Document Collection</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Document Collection">
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◫</span><span class="nav-group-label">Communication & Documents</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-nav nav-group-links">
 <a class="nav-link @(path.StartsWith("/DocumentRequirementTemplates", StringComparison.Ordinal) ? "active" : "")" href="/DocumentRequirementTemplates" title="Document Checklists"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-text">Document Checklists</span></a>
-<a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PICs"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PICs</span></a>
+<a class="nav-link @(path.StartsWith("/Contacts", StringComparison.Ordinal) ? "active" : "")" href="/Contacts" title="Contacts / PIC"><span class="nav-icon" aria-hidden="true">◌</span><span class="nav-text">Contacts / PIC</span></a>
 <a class="nav-link @(path.StartsWith("/WhatsAppConversations", StringComparison.Ordinal) ? "active" : "")" href="/WhatsAppConversations" title="WhatsApp Conversations"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">WhatsApp Conversations</span></a>
-</nav>
+</div>
 </details>
 }
 @if (staff || firm || manager)
 {
 <details class="nav-group" data-nav-group="directory" @Html.Raw(directoryOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◎</span><span class="nav-group-label">Directory</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Directory">
+<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◎</span><span class="nav-group-label">Master Data</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
+<div class="sidebar-nav nav-group-links">
 @if (staff)
 {
 @foreach (var kind in new[] { "Customers", "Services", "Firms", "Managers", "Workers" })
 {
-    var label = kind == "Firms" ? "Accounting firms" : kind;
+    var label = kind == "Firms" ? "Accounting Firms" : kind;
     var icon = kind switch { "Customers" => "◎", "Services" => "◇", "Firms" => "▣", "Managers" => "◉", _ => "♙" };
     <a class="nav-link @(path == "/Masters" && masterKind == kind ? "active" : "")" href="/Masters?kind=@kind" title="@label"><span class="nav-icon" aria-hidden="true">@icon</span><span class="nav-text">@label</span></a>
 }
@@ -94,51 +103,58 @@
 <a class="nav-link @(path == "/Masters" && masterKind == "Customers" ? "active" : "")" href="/Masters?kind=Customers" title="Customers"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-text">Customers</span></a>
 <a class="nav-link @(path == "/Masters" && masterKind == "Services" ? "active" : "")" href="/Masters?kind=Services" title="Services"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-text">Services</span></a>
 }
-@if (staff || firm || manager)
-{
 <a class="nav-link @(path.StartsWith("/Engagements", StringComparison.Ordinal) ? "active" : "")" href="/Engagements" title="Engagements"><span class="nav-icon" aria-hidden="true">◍</span><span class="nav-text">Engagements</span></a>
-}
-</nav>
+</div>
 </details>
 }
-<details class="nav-group" data-nav-group="reports" @Html.Raw(reportsOpen ? "open" : "")>
-<summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">◔</span><span class="nav-group-label">Reports</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Reports">
-<a class="nav-link @(path == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">▥</span><span class="nav-text">Reports</span></a>
-</nav>
-</details>
+@if (!worker)
+{
+<a class="nav-link @(path == "/Home/Reports" ? "active" : "")" href="/Home/Reports" title="Reports"><span class="nav-icon" aria-hidden="true">◔</span><span class="nav-text">Reports</span></a>
+}
 @if (User.IsInRole(AppRoles.Admin))
 {
 <details class="nav-group" data-nav-group="administration" @Html.Raw(administrationOpen ? "open" : "")>
 <summary class="nav-group-summary"><span class="nav-group-title"><span class="nav-group-icon" aria-hidden="true">⚙</span><span class="nav-group-label">Administration</span></span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>
-<nav class="sidebar-nav nav-group-links" aria-label="Administration">
-<a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User management</span></a>
-</nav>
+<div class="sidebar-nav nav-group-links">
+<a class="nav-link @(path.StartsWith("/Users", StringComparison.Ordinal) ? "active" : "")" href="/Users" title="User Management"><span class="nav-icon" aria-hidden="true">♧</span><span class="nav-text">User Management</span></a>
+</div>
 </details>
 }
+</nav>
 <div class="sidebar-foot"><span class="live-dot"></span><span class="nav-text">Internal accounting workspace</span></div>
 </div>
 </aside>
-<button class="sidebar-scrim" type="button" data-sidebar-scrim aria-label="Close navigation"></button>
-<div class="app-shell">
+<div class="app-shell" data-app-shell>
 <header class="topbar">
 <div class="topbar-leading">
 <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="true" aria-label="Hide navigation"><span aria-hidden="true">☰</span></button>
-<div class="topbar-context"><span class="topbar-kicker">Accounting operations</span><span class="topbar-page">@ViewData["Title"]</span></div>
+<div class="topbar-context" aria-label="Breadcrumb"><span class="breadcrumb-section">@sectionName</span><span class="breadcrumb-separator" aria-hidden="true">/</span><strong class="topbar-page">@ViewData["Title"]</strong></div>
 </div>
+<div class="topbar-actions">
+<button class="search-toggle" type="button" data-search-toggle aria-label="Search this page">⌕</button>
+<input class="topbar-search" type="search" data-global-search placeholder="Search this page…" autocomplete="off" aria-label="Search this page" />
 <div class="account">
-<a class="account-identity" href="/Account/Password"><span class="account-avatar" aria-hidden="true">@accountInitial</span><span class="account-copy"><strong>@accountName</strong><small>Account settings</small></span></a>
+<a class="account-identity" href="/Account/Password" title="Account settings"><span class="account-avatar" aria-hidden="true">@accountInitial</span><span class="account-copy"><strong>@accountName</strong><small>Account settings</small></span></a>
 <form asp-controller="Account" asp-action="Logout" method="post"><button class="btn btn-sm btn-outline-secondary">Sign out</button></form>
 </div>
+</div>
 </header>
+<div class="app-main-scroll" data-app-scroll>
 <main class="app-main @(ViewData["PageClass"] as string)">
-@if (TempData["Success"] is string success) { <div class="alert alert-success" role="status">@success</div> }
-@if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@error</div> }
-@RenderBody()</main>
-<footer class="app-footer"><span>Billing Control</span><span>MYR · Financial records retain their original snapshots</span></footer>
+<div class="toast-stack" data-toast-stack aria-live="polite">
+@if (TempData["Success"] is string success) { <div class="system-toast success" data-auto-toast><button type="button" data-toast-close aria-label="Close">×</button><strong>Success</strong><span>@success</span></div> }
+@if (TempData["Error"] is string error) { <div class="system-toast danger"><button type="button" data-toast-close aria-label="Close">×</button><strong>Action required</strong><span>@error</span></div> }
+</div>
+@RenderBody()
+</main>
 </div>
 </div>
-} else { <main class="login-shell">@RenderBody()</main> }
+</div>
+}
+else
+{
+<main class="login-shell">@RenderBody()</main>
+}
 <script src="~/js/searchable-dropdown.js" asp-append-version="true"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
 @await RenderSectionAsync("Scripts", required: false)

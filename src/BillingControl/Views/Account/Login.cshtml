@@ -1,23 +1,23 @@
 @model LoginForm
 @{ ViewData["Title"] = "Sign in"; }
 <div class="login-card">
-<div class="brand-mark">B</div>
-<p class="eyebrow">LCM MGT WORKSPACE</p>
-<h1>Welcome back.</h1>
-<p class="text-muted">Sign in to manage your work and billing.</p>
+<div class="brand-mark" aria-hidden="true">B</div>
+<p class="eyebrow">BILLING CONTROL</p>
+<h1>Sign in</h1>
+<p class="text-muted">Use your company account to continue.</p>
 <form method="post" asp-action="Login">
-<div asp-validation-summary="All" class="text-danger" role="alert">
-</div>
+<div asp-validation-summary="All" class="text-danger" role="alert"></div>
 <input asp-for="ReturnUrl" type="hidden" />
-<label asp-for="Email" class="form-label">
-</label>
-<input asp-for="Email" class="form-control" autocomplete="username" required />
-<label asp-for="Password" class="form-label">
-</label>
-<input asp-for="Password" class="form-control" autocomplete="current-password" required />
-<label class="check-line">
-<input asp-for="RememberMe" /> Remember me</label>
-<button class="btn btn-primary w-100">Sign in</button>
+<div class="floating-field">
+<label asp-for="Email"></label>
+<input asp-for="Email" class="form-control" autocomplete="username" required placeholder=" " />
+</div>
+<div class="floating-field mt-3">
+<label asp-for="Password"></label>
+<input asp-for="Password" class="form-control" autocomplete="current-password" required placeholder=" " />
+</div>
+<label class="check-line"><input asp-for="RememberMe" /> Remember me</label>
+<button class="btn btn-primary w-100" type="submit">Sign in</button>
 </form>
 <p class="login-note">Need access? Contact your workspace administrator.</p>
 </div>
